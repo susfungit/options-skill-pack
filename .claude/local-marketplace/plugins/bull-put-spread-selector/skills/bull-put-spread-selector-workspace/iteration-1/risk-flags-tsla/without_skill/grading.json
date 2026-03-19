@@ -1,0 +1,35 @@
+{
+  "eval_id": 3,
+  "eval_name": "risk-flags-tsla",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "trade_card_present",
+      "passed": false,
+      "evidence": "No ╔══╗ box trade card. Response uses tables instead of the structured card format."
+    },
+    {
+      "text": "flags_low_iv_rank",
+      "passed": true,
+      "evidence": "Risk flags table includes 'Low IV Environment — Medium — IV Rank ~6 means premiums are relatively compressed'."
+    },
+    {
+      "text": "flags_earnings_event",
+      "passed": false,
+      "evidence": "Only says 'Verify whether Tesla has earnings scheduled before April 30' — doesn't confirm the April 28 date. Chose April 30 expiry which straddles earnings, showing it didn't actually act on earnings knowledge."
+    },
+    {
+      "text": "avoids_or_warns_earnings_expiry",
+      "passed": false,
+      "evidence": "Chose April 30 expiry which directly straddles the April 28 earnings event. Does not warn that this specific expiry is dangerous for this reason."
+    },
+    {
+      "text": "has_full_metrics",
+      "passed": true,
+      "evidence": "Net credit $450, max profit $450, max loss $1,550, breakeven $350.50, PoP ~80-85%, ROR ~29% — all present."
+    }
+  ],
+  "pass_count": 2,
+  "total_count": 5,
+  "pass_rate": 0.4
+}

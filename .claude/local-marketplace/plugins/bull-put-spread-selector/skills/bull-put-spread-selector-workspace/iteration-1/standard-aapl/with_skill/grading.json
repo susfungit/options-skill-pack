@@ -1,0 +1,40 @@
+{
+  "eval_id": 1,
+  "eval_name": "standard-aapl",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "trade_card_present",
+      "passed": true,
+      "evidence": "Response contains the ╔══╗ box trade card at lines 60-74 with SELL $222.50 Put and BUY $200.00 Put clearly shown."
+    },
+    {
+      "text": "has_both_legs",
+      "passed": true,
+      "evidence": "SELL $222.50 Put @ $1.95 and BUY $200.00 Put @ $0.68 both present in trade card."
+    },
+    {
+      "text": "has_full_metrics",
+      "passed": true,
+      "evidence": "Max profit $127, max loss $2,123, breakeven $221.23, prob profit ~80%, return/risk 6.0% — all five present."
+    },
+    {
+      "text": "uses_default_20_delta",
+      "passed": true,
+      "evidence": "Explicitly states 'Delta target: 0.20 (20Δ)' in strike estimation section."
+    },
+    {
+      "text": "uses_35_45_dte",
+      "passed": true,
+      "evidence": "Target expiry May 1, 2026 at 43 DTE — within the 35–45 DTE window."
+    },
+    {
+      "text": "has_risk_checklist",
+      "passed": true,
+      "evidence": "Full structured risk checklist flags earnings on April 30 (⚠️) and IVR ~18.55 < 25 (⚠️)."
+    }
+  ],
+  "pass_count": 6,
+  "total_count": 6,
+  "pass_rate": 1.0
+}

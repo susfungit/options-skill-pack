@@ -1,0 +1,40 @@
+{
+  "eval_id": 1,
+  "eval_name": "standard-aapl",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "trade_card_present",
+      "passed": false,
+      "evidence": "No ╔══╗ box trade card. Response uses tables and plain text instead of the structured card format."
+    },
+    {
+      "text": "has_both_legs",
+      "passed": true,
+      "evidence": "Short Put $240 and Long Put $230 both clearly stated in the recommended trade table."
+    },
+    {
+      "text": "has_full_metrics",
+      "passed": true,
+      "evidence": "Net credit $2.30, max profit $230, max loss $770, breakeven $237.70, PoP ~68-72%, ROR ~29.9% — all present."
+    },
+    {
+      "text": "uses_default_20_delta",
+      "passed": false,
+      "evidence": "Short Strike Delta estimated at ~-0.25 (25Δ), not the 20Δ default. No mention of targeting 20-delta."
+    },
+    {
+      "text": "uses_35_45_dte",
+      "passed": false,
+      "evidence": "Chose April 17, 2026 expiry at ~29 DTE — outside the 35–45 DTE target window."
+    },
+    {
+      "text": "has_risk_checklist",
+      "passed": false,
+      "evidence": "Has a 'Trade Entry Checklist' but it's an entry checklist, not a structured risk signal checklist. Mentions earnings vaguely ('Apple typically reports Q2 late April/early May') without identifying or flagging the April 30 date within the window."
+    }
+  ],
+  "pass_count": 2,
+  "total_count": 6,
+  "pass_rate": 0.333
+}

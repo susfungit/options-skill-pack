@@ -1,0 +1,31 @@
+{
+  "eval_id": 1,
+  "eval_name": "standard-aapl",
+  "prompt": "Find me a bull put spread on AAPL.",
+  "assertions": [
+    {
+      "name": "trade_card_present",
+      "description": "Response contains the formatted box trade card with SELL and BUY legs shown"
+    },
+    {
+      "name": "has_both_legs",
+      "description": "Response explicitly shows both the short (SELL) put strike and the long (BUY) put strike"
+    },
+    {
+      "name": "has_full_metrics",
+      "description": "Response includes all five metrics: max profit, max loss, breakeven, probability of profit, and return on risk"
+    },
+    {
+      "name": "uses_default_20_delta",
+      "description": "Response targets ~20 delta for the short put since none was specified"
+    },
+    {
+      "name": "uses_35_45_dte",
+      "description": "Response targets an expiry in the 35–45 DTE window"
+    },
+    {
+      "name": "has_risk_checklist",
+      "description": "Response includes a risk signal checklist covering at least earnings and IV rank"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "eval_id": 3,
+  "eval_name": "risk-flags-tsla",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "trade_card_present",
+      "passed": true,
+      "evidence": "Response contains the ╔══╗ box trade card with SELL $345 Put and BUY $310 Put."
+    },
+    {
+      "text": "flags_low_iv_rank",
+      "passed": true,
+      "evidence": "Risk checklist flags 'IV Rank < 25? ⚠️ CAUTION — IVR ~5.88 — premium is very thin relative to TSLA's historical IV range'."
+    },
+    {
+      "text": "flags_earnings_event",
+      "passed": true,
+      "evidence": "Market data table lists 'Next Earnings: April 28, 2026 (After Close) — CONFIRMED' and warns it is the largest lurking risk."
+    },
+    {
+      "text": "avoids_or_warns_earnings_expiry",
+      "passed": true,
+      "evidence": "Explicitly chose April 25 expiry (3 days before earnings) and states 'May 1 or later expiry would straddle this event'. Both avoids AND warns."
+    },
+    {
+      "text": "has_full_metrics",
+      "passed": true,
+      "evidence": "Max profit $187, max loss $3,313, breakeven $343.13, PoP ~80%, ROR 5.64% — all present."
+    }
+  ],
+  "pass_count": 5,
+  "total_count": 5,
+  "pass_rate": 1.0
+}

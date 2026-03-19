@@ -1,0 +1,185 @@
+{
+  "metadata": {
+    "skill_name": "bull-put-spread-selector",
+    "skill_path": "/Users/sushant/python/options-skill-pack/.claude/local-marketplace/plugins/bull-put-spread-selector/skills/bull-put-spread-selector",
+    "executor_model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-19T00:00:00Z",
+    "evals_run": ["standard-aapl", "custom-delta-nvda", "risk-flags-tsla"],
+    "runs_per_configuration": 1
+  },
+
+  "runs": [
+    {
+      "eval_id": 1,
+      "eval_name": "standard-aapl",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 6,
+        "failed": 0,
+        "total": 6,
+        "time_seconds": 126.7,
+        "tokens": 21235,
+        "tool_calls": 12,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "trade_card_present", "passed": true, "evidence": "Box trade card present with SELL $222.50 Put and BUY $200.00 Put."},
+        {"text": "has_both_legs", "passed": true, "evidence": "SELL $222.50 Put @ $1.95 and BUY $200.00 Put @ $0.68 both present."},
+        {"text": "has_full_metrics", "passed": true, "evidence": "Max profit $127, max loss $2,123, breakeven $221.23, PoP ~80%, ROR 6.0%."},
+        {"text": "uses_default_20_delta", "passed": true, "evidence": "Explicitly states Delta target: 0.20 (20 delta)."},
+        {"text": "uses_35_45_dte", "passed": true, "evidence": "May 1 2026 expiry at 43 DTE — within the 35-45 DTE window."},
+        {"text": "has_risk_checklist", "passed": true, "evidence": "Structured checklist flags AAPL earnings April 30 and IVR 18.55 < 25."}
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "eval_name": "standard-aapl",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.333,
+        "passed": 2,
+        "failed": 4,
+        "total": 6,
+        "time_seconds": 111.5,
+        "tokens": 19579,
+        "tool_calls": 15,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "trade_card_present", "passed": false, "evidence": "No box card — uses tables and plain text only."},
+        {"text": "has_both_legs", "passed": true, "evidence": "Short Put $240 and Long Put $230 both stated."},
+        {"text": "has_full_metrics", "passed": true, "evidence": "Net credit $2.30, max profit $230, max loss $770, breakeven $237.70, PoP ~68-72%, ROR ~29.9%."},
+        {"text": "uses_default_20_delta", "passed": false, "evidence": "Short Strike Delta estimated ~-0.25 (25 delta), not 20 delta."},
+        {"text": "uses_35_45_dte", "passed": false, "evidence": "Chose April 17 at 29 DTE — outside the 35-45 DTE window."},
+        {"text": "has_risk_checklist", "passed": false, "evidence": "Entry checklist only; doesn't explicitly flag April 30 earnings as being within the expiry window."}
+      ],
+      "notes": ["Used ~25 delta and 29 DTE instead of 20 delta and 35-45 DTE defaults. Missed earnings flag."]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "custom-delta-nvda",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 108.2,
+        "tokens": 18691,
+        "tool_calls": 9,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "trade_card_present", "passed": true, "evidence": "Box card present with SELL $157.50 Put and BUY $140.00 Put."},
+        {"text": "respects_15_delta", "passed": true, "evidence": "Explicitly states the user requested a 15-delta short put and adjusts OTM% formula accordingly."},
+        {"text": "pop_near_85pct", "passed": true, "evidence": "Trade card shows Prob. profit: ~85%."},
+        {"text": "strike_further_otm", "passed": true, "evidence": "$157.50 strike is 14.0% below current $183.22 — well above the 10% OTM threshold."},
+        {"text": "has_full_metrics", "passed": true, "evidence": "Max profit $73, max loss $1,677, breakeven $156.77, PoP ~85%, ROR ~4.4%."}
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "custom-delta-nvda",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.6,
+        "passed": 3,
+        "failed": 2,
+        "total": 5,
+        "time_seconds": 133.9,
+        "tokens": 19851,
+        "tool_calls": 14,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "trade_card_present", "passed": false, "evidence": "No box card — uses tables and plain text."},
+        {"text": "respects_15_delta", "passed": true, "evidence": "Short Strike Delta confirmed -0.15 with full Black-Scholes derivation."},
+        {"text": "pop_near_85pct", "passed": true, "evidence": "States Probability of Profit: ~85%."},
+        {"text": "strike_further_otm", "passed": false, "evidence": "$162.50 strike is only 9.92% below $180.40 — just under the 10% threshold due to shorter 29 DTE."},
+        {"text": "has_full_metrics", "passed": true, "evidence": "Net credit $1.45, max profit $145, max loss $855, breakeven $161.05, PoP ~85%, ROR 17%."}
+      ],
+      "notes": ["Chose 29 DTE instead of 35-45 DTE, resulting in a slightly less OTM strike for the same delta."]
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "risk-flags-tsla",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 123.9,
+        "tokens": 21229,
+        "tool_calls": 12,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "trade_card_present", "passed": true, "evidence": "Box card present with SELL $345 Put and BUY $310 Put."},
+        {"text": "flags_low_iv_rank", "passed": true, "evidence": "Risk checklist: CAUTION — IVR ~5.88 — premium is very thin relative to TSLA's historical IV range."},
+        {"text": "flags_earnings_event", "passed": true, "evidence": "Market data table lists Next Earnings: April 28 2026 (After Close) — CONFIRMED. Warns about earnings throughout."},
+        {"text": "avoids_or_warns_earnings_expiry", "passed": true, "evidence": "Chose April 25 (3 days pre-earnings) and explicitly warns May 1 or later expiry would straddle this event."},
+        {"text": "has_full_metrics", "passed": true, "evidence": "Max profit $187, max loss $3,313, breakeven $343.13, PoP ~80%, ROR 5.64%."}
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "risk-flags-tsla",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.4,
+        "passed": 2,
+        "failed": 3,
+        "total": 5,
+        "time_seconds": 142.6,
+        "tokens": 20144,
+        "tool_calls": 14,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "trade_card_present", "passed": false, "evidence": "No box card — uses tables and plain text."},
+        {"text": "flags_low_iv_rank", "passed": true, "evidence": "Risk flags table: Low IV Environment — IV Rank ~6 means premiums are relatively compressed."},
+        {"text": "flags_earnings_event", "passed": false, "evidence": "Only says verify whether Tesla has earnings — doesn't confirm April 28 date. Chose April 30 which straddles earnings."},
+        {"text": "avoids_or_warns_earnings_expiry", "passed": false, "evidence": "Chose April 30 expiry which directly straddles April 28 earnings. No specific warning about this conflict."},
+        {"text": "has_full_metrics", "passed": true, "evidence": "Net credit $450, max profit $450, max loss $1,550, breakeven $350.50, PoP ~80-85%, ROR ~29%."}
+      ],
+      "notes": ["Chose April 30 expiry that straddles April 28 earnings — the key risk was missed."]
+    }
+  ],
+
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {"mean": 1.0, "stddev": 0.0, "min": 1.0, "max": 1.0},
+      "time_seconds": {"mean": 119.6, "stddev": 9.96, "min": 108.2, "max": 126.7},
+      "tokens": {"mean": 20385, "stddev": 1452, "min": 18691, "max": 21235}
+    },
+    "without_skill": {
+      "pass_rate": {"mean": 0.444, "stddev": 0.136, "min": 0.333, "max": 0.6},
+      "time_seconds": {"mean": 129.3, "stddev": 16.2, "min": 111.5, "max": 142.6},
+      "tokens": {"mean": 19858, "stddev": 283, "min": 19579, "max": 20144}
+    },
+    "delta": {
+      "pass_rate": "+0.556",
+      "time_seconds": "-9.7",
+      "tokens": "+527"
+    }
+  },
+
+  "notes": [
+    "trade_card_present fails 100% for without_skill and passes 100% for with_skill — the structured box format is the strongest skill signature and a reliable discriminator.",
+    "has_full_metrics passes for both configurations across all evals — not a useful discriminator for skill value. Both paths produce the numbers; the skill adds structure, DTE discipline, and risk awareness.",
+    "TSLA (eval 3) is the most discriminating eval: without_skill chose an earnings-straddling expiry (April 30 over April 28 earnings) while with_skill correctly dodged it. This is the highest-value skill behavior.",
+    "Skill runs slightly faster on average (-9.7s) despite the structured workflow, likely because step-by-step instructions reduce wasted exploration.",
+    "NVDA strike_further_otm borderline failure (9.92% vs 10%): caused by baseline choosing 29 DTE vs skill's 42 DTE. Same delta produces a less OTM strike at shorter DTE — illustrates why DTE discipline matters."
+  ]
+}
