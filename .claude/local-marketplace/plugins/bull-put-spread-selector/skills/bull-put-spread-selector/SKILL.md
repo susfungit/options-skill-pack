@@ -31,47 +31,63 @@ Collect the following. Ask for anything missing:
 
 ---
 
-## Step 2 — Fetch current market data
+## Step 2 — Fetch live option chain data
 
-Use **web search** to gather the following in parallel where possible:
+**Primary method: run the yfinance fetcher script.**
 
-### 2a. Stock price & trend
-Search: `[TICKER] stock price today`
-Extract: current price, 52-week range, recent trend (up/flat/down), any major upcoming events
-(earnings, FDA dates, Fed meetings within the expiry window — these spike IV and change the risk profile).
+The skill ships with `fetch_chain.py` in the same directory as this SKILL.md file.
+Run it via Bash before doing any web searches:
 
-### 2b. Implied Volatility & IV Rank/Percentile
-Search: `[TICKER] implied volatility IV rank options`
-Extract: current IV%, IV Rank (IVR) or IV Percentile (IVP) if available.
-- IVR > 50 → elevated IV → selling premium is more attractive → note this as a POSITIVE signal
-- IVR < 30 → low IV → premium is thin → flag this as a CAUTION
+```bash
+python3 /path/to/fetch_chain.py [TICKER] [TARGET_DELTA] [DTE_MIN] [DTE_MAX]
+```
 
-### 2c. Option chain data for the target expiry
-Search: `[TICKER] options chain [target expiry date] puts`
-Or fetch from a financial data site (Yahoo Finance, Barchart, MarketWatch options tab).
+Substitute the actual absolute path to `fetch_chain.py` — it lives alongside this SKILL.md file.
+Example for default parameters:
+```bash
+python3 "$(dirname "$0")/fetch_chain.py" AAPL 0.20 35 45
+```
 
-Target expiry: find the Friday closest to 35–45 calendar days from today.
-Today is {today's date — use current date awareness}.
+Or if the path is known (resolve it from the skill directory):
+```bash
+SKILL_DIR="/Users/sushant/python/options-skill-pack/.claude/local-marketplace/plugins/bull-put-spread-selector/skills/bull-put-spread-selector"
+python3 "$SKILL_DIR/fetch_chain.py" [TICKER] [TARGET_DELTA] 35 45
+```
 
-From the put chain, find:
-- The strike with delta closest to **−0.20** (short put candidate)
-  - Delta on puts is negative; look for the strike where |delta| ≈ 0.20
-  - If exact delta unavailable, use OTM% as a proxy: a 20Δ put is typically 8–12% below current price for 35–45 DTE, varying with IV
-- The long put: strike = short_strike × 0.90 (round to nearest listed strike)
-- Bid/ask for both legs; use the **mid-price** for estimates
+The script returns JSON with all fields pre-calculated:
+- `price`, `expiry`, `dte`
+- `short_put`: `strike`, `mid`, `bid`, `ask`, `delta`, `iv`
+- `long_put`: `strike`, `mid`, `bid`, `ask`
+- `net_credit`, `spread_width`, `max_profit`, `max_loss`, `breakeven`, `return_on_risk_pct`, `prob_profit_pct`
+- `delta_source`: `"live"` | `"estimated_bs"` | `"estimated_otm_pct"` — indicates data quality
 
-If live chain data is unavailable, use the **Black-Scholes approximation** in Step 3 below.
+**If `delta_source` is `"live"`**: use all values directly — no estimation needed.
+**If `delta_source` is `"estimated_bs"` or `"estimated_otm_pct"`**: label prices as `(est.)` in the trade card.
+**If the script errors**: fall back to web search + Black-Scholes (Step 3).
+
+### 2b. Supplemental data via web search (always run in parallel)
+
+Even when live chain data succeeds, use web search for context the script cannot provide:
+
+Search 1: `[TICKER] stock price earnings date dividend 2025 2026`
+Extract: upcoming earnings date, ex-dividend date, recent price trend, 52-week range
+
+Search 2: `[TICKER] IV rank implied volatility rank options`
+Extract: IV Rank (IVR) or IV Percentile — the script gives current IV% from the chain but not IVR.
+- IVR > 50 → elevated IV → selling premium is more attractive → POSITIVE signal
+- IVR < 30 → low IV → premium is thin → ⚠️ CAUTION
 
 ---
 
-## Step 3 — Calculate or estimate strikes when live data unavailable
+## Step 3 — Fallback: estimate strikes when live data unavailable
 
-When a live option chain cannot be retrieved, estimate using these rules:
+Use this **only if** the fetch_chain.py script fails or errors.
 
 ```
 Short put strike  ≈ stock_price × (1 - otm_pct)
   where otm_pct for 20Δ ≈ 0.85 × IV × sqrt(DTE/365)
   (e.g. stock=$100, IV=30%, DTE=42 → otm_pct ≈ 0.085 → strike ≈ $91.50 → round to nearest $0.50)
+  Note: this formula breaks down for very high IV (>100%) — use direct Black-Scholes in that case.
 
 Long put strike   = round(short_strike × 0.90, nearest listed strike)
 Spread width      = short_strike − long_strike
