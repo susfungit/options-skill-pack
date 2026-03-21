@@ -1,0 +1,35 @@
+{
+  "reviews": [
+    {
+      "run_id": "nvda-safe-zone-with_skill",
+      "feedback": "looks good",
+      "timestamp": "2026-03-21T14:25:25.667Z"
+    },
+    {
+      "run_id": "nvda-safe-zone-without_skill",
+      "feedback": "ok",
+      "timestamp": "2026-03-21T14:25:25.667Z"
+    },
+    {
+      "run_id": "c-earnings-risk-with_skill",
+      "feedback": "good",
+      "timestamp": "2026-03-21T14:25:25.667Z"
+    },
+    {
+      "run_id": "c-earnings-risk-without_skill",
+      "feedback": "good",
+      "timestamp": "2026-03-21T14:25:25.667Z"
+    },
+    {
+      "run_id": "aapl-safe-zone-with_skill",
+      "feedback": "nice",
+      "timestamp": "2026-03-21T14:25:25.667Z"
+    },
+    {
+      "run_id": "aapl-safe-zone-without_skill",
+      "feedback": "ok",
+      "timestamp": "2026-03-21T14:25:25.667Z"
+    }
+  ],
+  "status": "in_progress"
+}

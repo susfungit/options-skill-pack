@@ -1,0 +1,36 @@
+{
+  "eval_name": "nvda-safe-zone",
+  "configuration": "without_skill",
+  "assertions": [
+    {
+      "text": "status_card_present: Response contains the formatted box status card with SPREAD MONITOR header",
+      "passed": false,
+      "evidence": "Response uses plain markdown headers and a bullet list. No ASCII box card with SPREAD MONITOR header is present."
+    },
+    {
+      "text": "zone_classified: Response clearly states one of the five zones: SAFE, WATCH, WARNING, DANGER, or ACT NOW",
+      "passed": false,
+      "evidence": "Response says 'Status: SAFE / HEALTHY (Green)' but does not use the defined zone taxonomy (SAFE ZONE, WATCH, WARNING, DANGER, ACT NOW). The label 'HEALTHY' is not one of the five valid zones."
+    },
+    {
+      "text": "safe_zone_for_nvda: Response classifies NVDA spread as SAFE ZONE given stock is ~10% above the $155 short strike",
+      "passed": true,
+      "evidence": "Response identifies the position as 'SAFE / HEALTHY' with NVDA at $172.70 and the short strike $17.70 below (-10.25%), which is substantively correct even if the label is imprecise."
+    },
+    {
+      "text": "shows_buffer_pct: Response shows the percentage buffer between current stock price and the short strike",
+      "passed": true,
+      "evidence": "'Short strike ($155): $17.70 below current price (-10.25%)' explicitly states the percentage buffer."
+    },
+    {
+      "text": "shows_pnl: Response shows current P&L per contract (dollar amount) and loss% of max loss",
+      "passed": false,
+      "evidence": "Response states Max Profit ($198/contract) and Max Loss ($1,302/contract) but does not show current P&L (dollar gain/loss to date) or the current loss% of max loss. No current spread value or realized P&L figure is provided."
+    },
+    {
+      "text": "actionable_guidance: Response provides zone-appropriate guidance (for SAFE: no action needed, let theta work)",
+      "passed": true,
+      "evidence": "'Time decay (theta) is working in your favor' and 'Consider taking profit early if the spread decays to ~$0.99 (50% of credit)' — appropriate SAFE zone guidance is present."
+    }
+  ]
+}

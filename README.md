@@ -56,6 +56,56 @@ Identifies the optimal short put and long put strikes for a bull put spread on a
 
 ---
 
+### bull-put-spread-monitor
+
+Monitors an existing bull put spread position and classifies its current health into one of five zones.
+
+**Trigger phrases** — Claude will automatically use this skill when you say things like:
+- "check my NVDA $155/$140 spread"
+- "how is my put spread doing"
+- "is my position safe"
+- "should I be worried about my C spread"
+- "check status of my bull put spread"
+
+**What it does:**
+1. Fetches current stock price and live option prices via `check_position.py` using Yahoo Finance
+2. Calculates current P&L, cost-to-close, buffer to short strike, and % of max loss incurred
+3. Classifies the position into one of five zones based on the worst signal (price or P&L)
+4. Presents a structured status card + zone-appropriate action recommendation
+
+**Zones:**
+
+| Zone | Condition |
+|---|---|
+| 🟢 SAFE | Stock > 8% above short strike AND loss < 20% of max |
+| 🟡 WATCH | 4–8% buffer OR 20–40% of max loss |
+| 🟠 WARNING | 2–4% buffer OR 40–65% of max loss |
+| 🔴 DANGER | 0–2% buffer OR 65–85% of max loss |
+| 🚨 ACT NOW | Stock at/below short strike OR > 85% of max loss |
+
+**Required inputs:** ticker, short strike, long strike, original net credit, expiry date
+
+**Example output:**
+```
+╔══════════════════════════════════════════════╗
+║  SPREAD MONITOR — NVDA                       ║
+║  155/140 Put  ·  2026-05-01                  ║
+╠══════════════════════════════════════════════╣
+║  Status:  🟢 SAFE ZONE                       ║
+╠══════════════════════════════════════════════╣
+║  Stock now:     $172.70                      ║
+║  Short strike:  $155.00  (buffer: 10.25%)    ║
+║  Breakeven:     $153.02  (buffer: 11.40%)    ║
+║  DTE remaining: 41 days                      ║
+╠══════════════════════════════════════════════╣
+║  Current P&L:   $0.00  per contract          ║
+║  Loss % of max: 0.0%  of $1,302.00           ║
+║  Cost to close: $1.98  per share             ║
+╚══════════════════════════════════════════════╝
+```
+
+---
+
 ## Setup
 
 ```bash
@@ -81,13 +131,22 @@ options-skill-pack/
         ├── .claude-plugin/
         │   └── marketplace.json                  # local marketplace registry
         └── plugins/
-            └── bull-put-spread-selector/
+            ├── bull-put-spread-selector/
+            │   ├── .claude-plugin/
+            │   │   └── plugin.json               # plugin manifest
+            │   └── skills/
+            │       └── bull-put-spread-selector/
+            │           ├── SKILL.md              # skill instructions
+            │           ├── fetch_chain.py        # yfinance option chain fetcher
+            │           └── evals/
+            │               └── evals.json        # test cases & assertions
+            └── bull-put-spread-monitor/
                 ├── .claude-plugin/
                 │   └── plugin.json               # plugin manifest
                 └── skills/
-                    └── bull-put-spread-selector/
+                    └── bull-put-spread-monitor/
                         ├── SKILL.md              # skill instructions
-                        ├── fetch_chain.py        # yfinance option chain fetcher
+                        ├── check_position.py     # yfinance position checker
                         └── evals/
                             └── evals.json        # test cases & assertions
 ```
@@ -96,7 +155,7 @@ options-skill-pack/
 
 ## Evals
 
-The skill ships with 3 test cases covering:
+### bull-put-spread-selector — 3 test cases
 
 | Eval | Tests |
 |---|---|
@@ -110,6 +169,21 @@ The skill ships with 3 test cases covering:
 |---|---|---|
 | Pass rate | **100%** | 44% |
 | Avg time | 119.6s | 129.3s |
+
+### bull-put-spread-monitor — 3 test cases
+
+| Eval | Tests |
+|---|---|
+| `nvda-safe-zone` | SAFE ZONE classification, live P&L, buffer%, theta guidance |
+| `c-earnings-risk` | Earnings event flagging within expiry window, action plan |
+| `aapl-safe-zone` | Large buffer, profit-already-accrued P&L display |
+
+**Benchmark results (iteration 1):**
+
+| | with_skill | without_skill |
+|---|---|---|
+| Pass rate | **100%** | 50% |
+| Avg time | 70.7s | 100.7s |
 
 ---
 

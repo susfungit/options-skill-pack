@@ -1,0 +1,13 @@
+{
+  "eval_id": 2,
+  "eval_name": "c-earnings-risk",
+  "prompt": "How is my Citigroup spread doing? I have a $99/$93 put spread on C, collected $1.14 credit, expires May 1 2026. Should I be worried about the earnings?",
+  "assertions": [
+    {"name": "status_card_present", "description": "Response contains the formatted box status card"},
+    {"name": "zone_classified", "description": "Response clearly states one of the five zones"},
+    {"name": "flags_earnings_risk", "description": "Response mentions the Citigroup earnings event (~April 14 2026) as a risk factor for this position"},
+    {"name": "shows_buffer_pct", "description": "Response shows the % buffer between current stock price and the $99 short strike"},
+    {"name": "shows_pnl", "description": "Response shows current P&L and cost to close the spread"},
+    {"name": "actionable_guidance", "description": "Response gives a concrete suggestion — either hold with awareness of earnings or close/roll before April 14"}
+  ]
+}

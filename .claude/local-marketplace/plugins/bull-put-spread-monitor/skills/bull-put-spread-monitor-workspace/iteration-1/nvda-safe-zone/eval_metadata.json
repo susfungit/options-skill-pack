@@ -1,0 +1,13 @@
+{
+  "eval_id": 1,
+  "eval_name": "nvda-safe-zone",
+  "prompt": "Check my NVDA bull put spread: I sold the $155 put and bought the $140 put for $1.98 credit, expires May 1 2026.",
+  "assertions": [
+    {"name": "status_card_present", "description": "Response contains the formatted box status card with SPREAD MONITOR header"},
+    {"name": "zone_classified", "description": "Response clearly states one of the five zones: SAFE, WATCH, WARNING, DANGER, or ACT NOW"},
+    {"name": "safe_zone_for_nvda", "description": "Response classifies NVDA spread as SAFE ZONE given stock is ~10% above the $155 short strike"},
+    {"name": "shows_buffer_pct", "description": "Response shows the percentage buffer between current stock price and the short strike"},
+    {"name": "shows_pnl", "description": "Response shows current P&L per contract (dollar amount) and loss% of max loss"},
+    {"name": "actionable_guidance", "description": "Response provides zone-appropriate guidance (for SAFE: no action needed, let theta work)"}
+  ]
+}

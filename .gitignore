@@ -1,3 +1,14 @@
 # Claude Code project settings (contains machine-specific absolute paths)
 # Run setup.sh to regenerate for your machine
 .claude/settings.json
+
+# Skill eval workspaces (generated during development, not part of the skill)
+**/*-workspace/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store

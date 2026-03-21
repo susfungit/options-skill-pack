@@ -1,0 +1,101 @@
+{
+  "skill_name": "bull-put-spread-monitor",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Check my NVDA bull put spread: I sold the $155 put and bought the $140 put for $1.98 credit, expires May 1 2026.",
+      "expected_output": "A status card showing SAFE ZONE (NVDA is currently ~$172, giving ~10% buffer above the $155 short strike). Should show buffer%, current P&L, loss% of max, cost to close, and 'let theta work' guidance.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "status_card_present",
+          "description": "Response contains the formatted box status card with SPREAD MONITOR header"
+        },
+        {
+          "name": "zone_classified",
+          "description": "Response clearly states one of the five zones: SAFE, WATCH, WARNING, DANGER, or ACT NOW"
+        },
+        {
+          "name": "safe_zone_for_nvda",
+          "description": "Response classifies NVDA spread as SAFE ZONE given stock is ~10% above the $155 short strike"
+        },
+        {
+          "name": "shows_buffer_pct",
+          "description": "Response shows the percentage buffer between current stock price and the short strike"
+        },
+        {
+          "name": "shows_pnl",
+          "description": "Response shows current P&L per contract (dollar amount) and loss% of max loss"
+        },
+        {
+          "name": "actionable_guidance",
+          "description": "Response provides zone-appropriate guidance (for SAFE: no action needed, let theta work)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "How is my Citigroup spread doing? I have a $99/$93 put spread on C, collected $1.14 credit, expires May 1 2026. Should I be worried about the earnings?",
+      "expected_output": "Status card for C spread. C is at ~$109.52, giving ~9.6% buffer above $99 short strike — likely SAFE or WATCH. Should flag the April 14 earnings as a risk factor within the expiry window, even though the buffer looks comfortable. Cost to close and P&L should be shown.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "status_card_present",
+          "description": "Response contains the formatted box status card"
+        },
+        {
+          "name": "zone_classified",
+          "description": "Response clearly states one of the five zones"
+        },
+        {
+          "name": "flags_earnings_risk",
+          "description": "Response mentions the Citigroup earnings event (~April 14 2026) as a risk factor for this position"
+        },
+        {
+          "name": "shows_buffer_pct",
+          "description": "Response shows the % buffer between current stock price and the $99 short strike"
+        },
+        {
+          "name": "shows_pnl",
+          "description": "Response shows current P&L and cost to close the spread"
+        },
+        {
+          "name": "actionable_guidance",
+          "description": "Response gives a concrete suggestion — either hold with awareness of earnings or close/roll before April 14"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Check my AAPL spread status — sold the $185 put, bought the $170 put, got $2.10 credit, expires May 1 2026.",
+      "expected_output": "Status card for AAPL. AAPL is currently around $220+, giving a very large buffer (>15%) above the $185 short strike. Should be SAFE ZONE with strong theta decay in the trader's favor. P&L should show significant profit already accrued.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "status_card_present",
+          "description": "Response contains the formatted box status card"
+        },
+        {
+          "name": "zone_classified",
+          "description": "Response clearly states one of the five zones"
+        },
+        {
+          "name": "safe_zone_for_aapl",
+          "description": "Response classifies as SAFE ZONE given the large buffer between AAPL price and $185 short strike"
+        },
+        {
+          "name": "shows_buffer_pct",
+          "description": "Response shows the percentage buffer — should be notably large (>10%)"
+        },
+        {
+          "name": "shows_pnl",
+          "description": "Response shows current P&L, which should be positive (profit) given the comfortable buffer"
+        },
+        {
+          "name": "actionable_guidance",
+          "description": "Response gives zone-appropriate guidance for a healthy SAFE ZONE position"
+        }
+      ]
+    }
+  ]
+}
