@@ -25,6 +25,16 @@
       },
       "source": "./plugins/bull-put-spread-monitor",
       "category": "finance"
+    },
+    {
+      "name": "iron-condor-selector",
+      "description": "Identifies the optimal strikes for an iron condor (sell put + buy put + sell call + buy call) for a given stock.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/iron-condor-selector",
+      "category": "finance"
     }
   ]
 }

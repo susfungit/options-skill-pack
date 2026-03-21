@@ -56,6 +56,61 @@ Identifies the optimal short put and long put strikes for a bull put spread on a
 
 ---
 
+### iron-condor-selector
+
+Identifies the optimal strikes for an iron condor (sell put + buy put + sell call + buy call) for any stock.
+
+**Trigger phrases** — Claude will automatically use this skill when you say things like:
+- "iron condor on AAPL"
+- "neutral options trade on SPY"
+- "range-bound strategy on NVDA"
+- "sell premium on both sides of TSLA"
+- "set up an iron condor with 20-delta strikes"
+
+**What it does:**
+1. Fetches live option chain data for both puts and calls via `fetch_iron_condor.py`
+2. Supplements with web search for earnings dates and IV Rank
+3. Selects short put and short call at 16Δ (default), long wings 10% beyond
+4. Calculates total credit, max profit, max loss, profit zone, PoP, and return on risk
+5. Runs a risk checklist (earnings, IV rank, trend, dividends, put/call skew)
+6. Presents a structured trade card + prose rationale
+
+**Parameters** (defaults shown):
+
+| Parameter | Default | Example override |
+|---|---|---|
+| Expiry | 35–45 DTE | "30 DTE", "May 16 expiry" |
+| Short strike delta | 16Δ each side | "20-delta short strikes" |
+| Wing width | 10% beyond short strikes | — |
+| Contracts | 1 | "5 contracts" |
+
+**Example output:**
+```
+╔══════════════════════════════════════════════════════╗
+║  IRON CONDOR — AAPL                                  ║
+║  Expiry: 2026-05-01  ·  DTE: 41 days                ║
+╠══════════════════════════════════════════════════════╣
+║  PUT SIDE:                                           ║
+║    SELL  $220 Put   @ $2.79 (est.)                   ║
+║    BUY   $200 Put   @ $1.15 (est.)                   ║
+║    Credit: $1.64  ·  Width: $20                      ║
+╠══════════════════════════════════════════════════════╣
+║  CALL SIDE:                                          ║
+║    SELL  $275 Call  @ $1.43 (est.)                    ║
+║    BUY   $300 Call  @ $0.21 (est.)                    ║
+║    Credit: $1.22  ·  Width: $25                      ║
+╠══════════════════════════════════════════════════════╣
+║  Total credit:   $2.86  per share                    ║
+║  Max profit:     $286  per contract                  ║
+║  Max loss:       $2,214  per contract                ║
+║  Profit zone:    $217.14 – $277.86                   ║
+║  Prob. profit:   ~71%                                ║
+║  Return/risk:    12.9%                               ║
+╚══════════════════════════════════════════════════════╝
+```
+
+---
+
 ### bull-put-spread-monitor
 
 Monitors an existing bull put spread position and classifies its current health into one of five zones.
@@ -320,13 +375,22 @@ options-skill-pack/
             │           ├── fetch_chain.py        # yfinance option chain fetcher
             │           └── evals/
             │               └── evals.json        # test cases & assertions
-            └── bull-put-spread-monitor/
+            ├── bull-put-spread-monitor/
+            │   ├── .claude-plugin/
+            │   │   └── plugin.json               # plugin manifest
+            │   └── skills/
+            │       └── bull-put-spread-monitor/
+            │           ├── SKILL.md              # skill instructions
+            │           ├── check_position.py     # yfinance position checker
+            │           └── evals/
+            │               └── evals.json        # test cases & assertions
+            └── iron-condor-selector/
                 ├── .claude-plugin/
                 │   └── plugin.json               # plugin manifest
                 └── skills/
-                    └── bull-put-spread-monitor/
+                    └── iron-condor-selector/
                         ├── SKILL.md              # skill instructions
-                        ├── check_position.py     # yfinance position checker
+                        ├── fetch_iron_condor.py  # yfinance 4-leg chain fetcher
                         └── evals/
                             └── evals.json        # test cases & assertions
 ```
@@ -349,6 +413,21 @@ options-skill-pack/
 |---|---|---|
 | Pass rate | **100%** | 44% |
 | Avg time | 119.6s | 129.3s |
+
+### iron-condor-selector — 3 test cases
+
+| Eval | Tests |
+|---|---|
+| `standard-aapl` | Default 16Δ, 4-leg trade card, profit zone, risk checklist |
+| `custom-delta-nvda` | 20Δ override, PoP ~60%, tighter strikes |
+| `range-bound-spy` | Implicit intent triggering ("neutral", "range-bound"), strategy rationale |
+
+**Benchmark results (iteration 1):**
+
+| | with_skill | without_skill |
+|---|---|---|
+| Pass rate | **100%** | 69% |
+| Avg time | 78.4s | 140.3s |
 
 ### bull-put-spread-monitor — 3 test cases
 

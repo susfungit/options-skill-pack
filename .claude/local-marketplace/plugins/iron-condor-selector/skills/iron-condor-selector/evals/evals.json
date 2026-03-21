@@ -1,0 +1,93 @@
+{
+  "skill_name": "iron-condor-selector",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Set up an iron condor on AAPL.",
+      "expected_output": "A complete trade card with all four legs (short put, long put, short call, long call), total credit, max profit, max loss, profit zone (breakeven low to high), probability of profit, and return on risk. Should use ~16 delta short strikes and ~35-45 DTE expiry by default. Should include a risk checklist.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "trade_card_present",
+          "description": "Response contains the formatted iron condor trade card with all four legs shown"
+        },
+        {
+          "name": "has_four_legs",
+          "description": "Response explicitly shows SELL put, BUY put, SELL call, BUY call with strikes and prices"
+        },
+        {
+          "name": "has_profit_zone",
+          "description": "Response shows the profit zone as a price range (breakeven low to breakeven high)"
+        },
+        {
+          "name": "has_full_metrics",
+          "description": "Response includes total credit, max profit, max loss, probability of profit, and return on risk"
+        },
+        {
+          "name": "uses_default_16_delta",
+          "description": "Response targets ~16 delta for both short strikes since no custom delta was specified"
+        },
+        {
+          "name": "has_risk_checklist",
+          "description": "Response includes a risk signal checklist covering at least earnings and IV rank"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I want an iron condor on NVDA with 20-delta short strikes.",
+      "expected_output": "Trade card using 20-delta (not the default 16-delta) for both short strikes. Strikes should be closer to the money than a 16-delta condor. Should explicitly acknowledge the 20-delta override. Probability of profit should be ~60%.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "trade_card_present",
+          "description": "Response contains the formatted iron condor trade card"
+        },
+        {
+          "name": "respects_20_delta",
+          "description": "Response uses 20-delta for both short strikes, not the default 16-delta"
+        },
+        {
+          "name": "pop_near_60pct",
+          "description": "Probability of profit is stated as approximately 60% (consistent with 1 - 0.20 - 0.20)"
+        },
+        {
+          "name": "has_four_legs",
+          "description": "Response shows all four legs with strikes and prices"
+        },
+        {
+          "name": "has_full_metrics",
+          "description": "Response includes total credit, max profit, max loss, profit zone, and return on risk"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Find me a neutral options trade on SPY, I think it's going to stay range-bound for the next month.",
+      "expected_output": "Should trigger the iron condor selector since the user wants a range-bound/neutral strategy. Trade card for SPY with ~16 delta defaults. Should explain why an iron condor fits a range-bound outlook.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "iron_condor_selected",
+          "description": "Response identifies an iron condor as the appropriate strategy for a range-bound outlook"
+        },
+        {
+          "name": "trade_card_present",
+          "description": "Response contains the formatted trade card with all four legs"
+        },
+        {
+          "name": "explains_range_fit",
+          "description": "Response explains why an iron condor fits the user's range-bound thesis"
+        },
+        {
+          "name": "has_profit_zone",
+          "description": "Response shows the profit zone and relates it to the range-bound expectation"
+        },
+        {
+          "name": "has_full_metrics",
+          "description": "Response includes total credit, max profit, max loss, probability of profit"
+        }
+      ]
+    }
+  ]
+}

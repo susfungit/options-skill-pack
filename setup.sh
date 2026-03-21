@@ -11,7 +11,8 @@ cat > "$SETTINGS_FILE" <<EOF
 {
   "enabledPlugins": {
     "bull-put-spread-selector@options-skill-pack": true,
-    "bull-put-spread-monitor@options-skill-pack": true
+    "bull-put-spread-monitor@options-skill-pack": true,
+    "iron-condor-selector@options-skill-pack": true
   },
   "extraKnownMarketplaces": {
     "options-skill-pack": {

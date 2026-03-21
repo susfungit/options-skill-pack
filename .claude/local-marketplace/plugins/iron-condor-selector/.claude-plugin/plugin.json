@@ -1,0 +1,5 @@
+{
+  "name": "iron-condor-selector",
+  "version": "1.0.0",
+  "description": "Identifies the optimal strikes for an iron condor on any stock."
+}
