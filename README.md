@@ -108,15 +108,133 @@ Monitors an existing bull put spread position and classifies its current health 
 
 ## Setup
 
-```bash
-# 1. Install Python dependencies
-pip install yfinance pytz
+### 1. Install dependencies and initialise
 
-# 2. Generate .claude/settings.json with the correct absolute path for this machine
-bash setup.sh
+```bash
+pip install yfinance pytz
+bash setup.sh   # generates .claude/settings.json with the correct path for this machine
 ```
 
-`setup.sh` must be run once after cloning — it writes the marketplace path into `.claude/settings.json` so Claude Code can locate the skill.
+### 2. Configure the portfolio monitor
+
+Run the setup script — it creates your local config files and prints instructions for each notification channel:
+
+```bash
+# macOS / Linux
+bash setup_monitor.sh
+
+# Windows
+setup_monitor.bat
+```
+
+This copies `portfolio.example.json` → `portfolio.json` and `monitor_config.example.json` → `monitor_config.json` (both gitignored — your trades and credentials are never committed).
+
+**`portfolio.json`** — add your open bull put spreads:
+
+```json
+[
+  {
+    "label": "NVDA May spread",
+    "ticker": "NVDA",
+    "short_strike": 155,
+    "long_strike": 140,
+    "net_credit": 1.98,
+    "expiry": "2026-05-01",
+    "contracts": 1
+  }
+]
+```
+
+**`monitor_config.json`** — enable and configure notification channels:
+
+| Channel | What you need |
+|---|---|
+| `macos` | Nothing — works out of the box on macOS |
+| `email` | Gmail app password (Google Account → Security → App Passwords) |
+| `pushover` | $5 one-time Pushover app + free API account at pushover.net |
+
+For SMS via email: set `to` to your carrier's email-to-SMS gateway (e.g. `5551234567@vtext.com` for Verizon).
+
+### 3. Run the monitor
+
+```bash
+# Alert mode — notifies only WATCH zone or worse
+claude -p "$(cat <<'EOF'
+Read portfolio.json and check each bull put spread using the bull-put-spread-monitor skill.
+Mode: alert — only notify positions in WATCH, WARNING, DANGER, or ACT NOW zone.
+If all positions are SAFE, send one brief macOS notification only.
+Send notifications per the channels enabled in monitor_config.json.
+Append a JSON summary of all results with timestamp to monitor.log.
+EOF
+)" --allowedTools Bash,Read,Write
+
+# Summary mode — full daily summary of all positions
+claude -p "$(cat <<'EOF'
+Read portfolio.json and check each bull put spread using the bull-put-spread-monitor skill.
+Mode: summary — send a notification for every position regardless of zone.
+Send notifications per the channels enabled in monitor_config.json.
+Append a JSON summary of all results with timestamp to monitor.log.
+EOF
+)" --allowedTools Bash,Read,Write
+```
+
+### 4. Schedule it (optional)
+
+The commands above can be scheduled to run automatically. Run them from the project root directory.
+
+**macOS — launchd (runs even when terminal is closed)**
+
+Create `~/Library/LaunchAgents/com.options-monitor.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.options-monitor</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-c</string>
+    <string>cd /ABSOLUTE/PATH/TO/options-skill-pack && /Users/sushant/.local/bin/claude -p "Read portfolio.json and check each bull put spread using the bull-put-spread-monitor skill. Mode: alert — notify WATCH or worse only. Send notifications per monitor_config.json. Append results to monitor.log." --allowedTools Bash,Read,Write</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>9</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>15</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+
+  <key>StandardOutPath</key><string>/tmp/options-monitor.log</string>
+  <key>StandardErrorPath</key><string>/tmp/options-monitor.log</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>
+```
+
+Replace `/ABSOLUTE/PATH/TO/options-skill-pack` with your actual path, then:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.options-monitor.plist
+
+# Test immediately (without waiting for scheduled time):
+launchctl start com.options-monitor
+
+# Remove:
+launchctl unload ~/Library/LaunchAgents/com.options-monitor.plist
+```
+
+**Windows — Task Scheduler**
+
+1. Open Task Scheduler → Create Basic Task
+2. Trigger: Daily, repeat every day at 9:30 AM (add a second task for 3:00 PM)
+3. Action: Start a program
+   - Program: `cmd.exe`
+   - Arguments: `/c cd /d C:\path\to\options-skill-pack && claude -p "Read portfolio.json..." --allowedTools Bash,Read,Write`
+4. Set "Start in" to your project folder path
 
 ---
 
@@ -124,7 +242,14 @@ bash setup.sh
 
 ```
 options-skill-pack/
-├── setup.sh                                      # one-time setup script
+├── setup.sh                                      # one-time Claude Code setup (skills path)
+├── setup_monitor.sh                              # first-time monitor setup (macOS/Linux)
+├── setup_monitor.bat                             # first-time monitor setup (Windows)
+├── portfolio.example.json                        # template — copied to portfolio.json by setup_monitor
+├── monitor_config.example.json                   # template — copied to monitor_config.json by setup_monitor
+├── portfolio.json                                # your positions — gitignored, never committed
+├── monitor_config.json                           # your notification credentials — gitignored
+├── monitor.log                                   # run log — gitignored
 └── .claude/
     ├── settings.json                             # activates skills for this project
     └── local-marketplace/

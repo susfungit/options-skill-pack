@@ -1,0 +1,20 @@
+{
+  "notifications": {
+    "macos": {
+      "enabled": true
+    },
+    "email": {
+      "enabled": false,
+      "smtp_host": "smtp.gmail.com",
+      "smtp_port": 587,
+      "username": "you@gmail.com",
+      "password": "your-app-password",
+      "to": "you@gmail.com"
+    },
+    "pushover": {
+      "enabled": false,
+      "user_key": "YOUR_USER_KEY",
+      "api_token": "YOUR_API_TOKEN"
+    }
+  }
+}

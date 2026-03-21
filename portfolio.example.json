@@ -1,0 +1,20 @@
+[
+  {
+    "label": "NVDA May spread",
+    "ticker": "NVDA",
+    "short_strike": 155,
+    "long_strike": 140,
+    "net_credit": 1.98,
+    "expiry": "2026-05-01",
+    "contracts": 1
+  },
+  {
+    "label": "C May spread",
+    "ticker": "C",
+    "short_strike": 99,
+    "long_strike": 93,
+    "net_credit": 1.14,
+    "expiry": "2026-05-01",
+    "contracts": 1
+  }
+]
