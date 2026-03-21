@@ -49,14 +49,14 @@ echo.
 echo Next steps:
 echo   1. Edit portfolio.json      - add your positions
 echo   2. Edit monitor_config.json - configure notification channels
-echo   3. Run the monitor ^(from this directory^):
+echo   3. Run the monitor ^(see README.md for the full command^):
 echo.
-echo   Alert mode:
-echo   claude -p "Read portfolio.json and check each bull put spread using the bull-put-spread-monitor skill. Mode: alert. Send notifications per monitor_config.json. Append results to monitor.log." --allowedTools Bash,Read,Write
+echo   The monitor uses "claude -p" to check positions and "notify.py"
+echo   to send notifications. Credentials in monitor_config.json are
+echo   handled by notify.py only - they never reach Claude.
 echo.
-echo   Summary mode:
-echo   claude -p "Read portfolio.json and check each bull put spread using the bull-put-spread-monitor skill. Mode: summary. Send notifications per monitor_config.json. Append results to monitor.log." --allowedTools Bash,Read,Write
-echo.
-echo   See README.md for scheduling instructions.
+echo   See README.md for:
+echo     - The exact claude -p commands ^(alert + summary mode^)
+echo     - Scheduling instructions ^(macOS launchd / Windows Task Scheduler^)
 echo.
 pause

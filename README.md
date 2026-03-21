@@ -160,22 +160,55 @@ For SMS via email: set `to` to your carrier's email-to-SMS gateway (e.g. `555123
 ```bash
 # Alert mode — notifies only WATCH zone or worse
 claude -p "$(cat <<'EOF'
-Read portfolio.json and check each bull put spread using the bull-put-spread-monitor skill.
-Mode: alert — only notify positions in WATCH, WARNING, DANGER, or ACT NOW zone.
-If all positions are SAFE, send one brief macOS notification only.
-Send notifications per the channels enabled in monitor_config.json.
-Append a JSON summary of all results with timestamp to monitor.log.
+Read portfolio.json and check each bull put spread position.
+For each position run:
+  python3 check_position.py TICKER SHORT_STRIKE LONG_STRIKE NET_CREDIT EXPIRY
+
+The check_position.py script is at:
+  .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py
+
+Classify each into a zone:
+  SAFE: buffer > 8% AND loss < 20%
+  WATCH: buffer 4-8% OR loss 20-40%
+  WARNING: buffer 2-4% OR loss 40-65%
+  DANGER: buffer 0-2% OR loss 65-85%
+  ACT NOW: buffer <= 0 OR loss > 85%
+
+Collect all results into a JSON array with fields:
+  label, ticker, zone, stock_price, buffer_pct, pnl_per_contract, loss_pct_of_max, dte, cost_to_close
+
+Then run:
+  python3 notify.py --mode alert --results '<the JSON array>'
+
+IMPORTANT: Do NOT read monitor_config.json — the notification script handles credentials internally.
 EOF
-)" --allowedTools Bash,Read,Write
+)" --allowedTools Bash,Read
 
 # Summary mode — full daily summary of all positions
 claude -p "$(cat <<'EOF'
-Read portfolio.json and check each bull put spread using the bull-put-spread-monitor skill.
-Mode: summary — send a notification for every position regardless of zone.
-Send notifications per the channels enabled in monitor_config.json.
-Append a JSON summary of all results with timestamp to monitor.log.
+Read portfolio.json and check each bull put spread position.
+For each position run:
+  python3 check_position.py TICKER SHORT_STRIKE LONG_STRIKE NET_CREDIT EXPIRY
+
+The check_position.py script is at:
+  .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py
+
+Classify each into a zone:
+  SAFE: buffer > 8% AND loss < 20%
+  WATCH: buffer 4-8% OR loss 20-40%
+  WARNING: buffer 2-4% OR loss 40-65%
+  DANGER: buffer 0-2% OR loss 65-85%
+  ACT NOW: buffer <= 0 OR loss > 85%
+
+Collect all results into a JSON array with fields:
+  label, ticker, zone, stock_price, buffer_pct, pnl_per_contract, loss_pct_of_max, dte, cost_to_close
+
+Then run:
+  python3 notify.py --mode summary --results '<the JSON array>'
+
+IMPORTANT: Do NOT read monitor_config.json — the notification script handles credentials internally.
 EOF
-)" --allowedTools Bash,Read,Write
+)" --allowedTools Bash,Read
 ```
 
 ### 4. Schedule it (optional)
@@ -199,7 +232,7 @@ Create `~/Library/LaunchAgents/com.options-monitor.plist`:
   <array>
     <string>/bin/bash</string>
     <string>-c</string>
-    <string>cd /ABSOLUTE/PATH/TO/options-skill-pack && /Users/sushant/.local/bin/claude -p "Read portfolio.json and check each bull put spread using the bull-put-spread-monitor skill. Mode: alert — notify WATCH or worse only. Send notifications per monitor_config.json. Append results to monitor.log." --allowedTools Bash,Read,Write</string>
+    <string>cd /ABSOLUTE/PATH/TO/options-skill-pack && claude -p "Read portfolio.json, run check_position.py for each position, classify zones, then run: python3 notify.py --mode alert --results JSON. Do NOT read monitor_config.json." --allowedTools Bash,Read</string>
   </array>
 
   <key>StartCalendarInterval</key>
@@ -233,7 +266,7 @@ launchctl unload ~/Library/LaunchAgents/com.options-monitor.plist
 2. Trigger: Daily, repeat every day at 9:30 AM (add a second task for 3:00 PM)
 3. Action: Start a program
    - Program: `cmd.exe`
-   - Arguments: `/c cd /d C:\path\to\options-skill-pack && claude -p "Read portfolio.json..." --allowedTools Bash,Read,Write`
+   - Arguments: `/c cd /d C:\path\to\options-skill-pack && claude -p "Read portfolio.json, run check_position.py for each position, classify zones, then run: python3 notify.py --mode alert --results JSON. Do NOT read monitor_config.json." --allowedTools Bash,Read`
 4. Set "Start in" to your project folder path
 
 ---
@@ -245,6 +278,7 @@ options-skill-pack/
 ├── setup.sh                                      # one-time Claude Code setup (skills path)
 ├── setup_monitor.sh                              # first-time monitor setup (macOS/Linux)
 ├── setup_monitor.bat                             # first-time monitor setup (Windows)
+├── notify.py                                     # notification sender (credentials stay in-process)
 ├── portfolio.example.json                        # template — copied to portfolio.json by setup_monitor
 ├── monitor_config.example.json                   # template — copied to monitor_config.json by setup_monitor
 ├── portfolio.json                                # your positions — gitignored, never committed

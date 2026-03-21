@@ -1,0 +1,5 @@
+{
+  "name": "bull-put-spread-monitor",
+  "version": "1.0.0",
+  "description": "Monitors bull put spread positions and classifies health zones."
+}
