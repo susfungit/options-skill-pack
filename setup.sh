@@ -14,7 +14,8 @@ cat > "$SETTINGS_FILE" <<EOF
     "bull-put-spread-monitor@options-skill-pack": true,
     "iron-condor-selector@options-skill-pack": true,
     "iron-condor-monitor@options-skill-pack": true,
-    "spread-roller@options-skill-pack": true
+    "spread-roller@options-skill-pack": true,
+    "covered-call-selector@options-skill-pack": true
   },
   "extraKnownMarketplaces": {
     "options-skill-pack": {

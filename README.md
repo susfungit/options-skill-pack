@@ -200,6 +200,57 @@ Monitors an existing iron condor position and classifies its health into one of 
 
 ---
 
+### covered-call-selector
+
+Identifies the optimal call strike to sell for a covered call on a given stock.
+
+**Trigger phrases** — Claude will automatically use this skill when you say things like:
+- "covered call on AAPL"
+- "sell calls against my shares"
+- "what call should I sell on NVDA"
+- "write a call on MSFT"
+- "generate income from my stock"
+- "yield on my shares"
+
+**What it does:**
+1. Fetches live call option chain data via `fetch_covered_call.py` using Yahoo Finance
+2. Supplements with web search for earnings dates, IV Rank, and ex-dividend dates
+3. Selects the call strike near 30Δ (default) in the 30–45 DTE window
+4. Calculates premium, static return, annualized return, downside protection, called-away return, breakeven
+5. Runs a risk checklist (earnings, IV rank, ex-dividend, trend)
+6. Presents a structured trade card + prose rationale
+7. If cost basis provided, shows effective cost basis and called-away P&L
+
+**Parameters** (defaults shown):
+
+| Parameter | Default | Example override |
+|---|---|---|
+| Expiry | 30–45 DTE | "60 days out", "May expiry" |
+| Short call delta | 30Δ | "sell a 15-delta call" |
+| Contracts | 1 (100 shares) | "3 contracts" |
+| Cost basis | *(optional)* | "I bought at $150" |
+
+**Example output:**
+```
+╔══════════════════════════════════════════════════════╗
+║  COVERED CALL — AAPL                                  ║
+║  Expiry: Apr 24, 2026  ·  DTE: 34 days               ║
+╠══════════════════════════════════════════════════════╣
+║  SELL  $260 Call   @ $3.33                            ║
+║  per 100 shares owned                                ║
+╠══════════════════════════════════════════════════════╣
+║  Premium:              $3.33 per share ($333 total)   ║
+║  Static return:        1.34%                          ║
+║  Annualized return:    14.4%                          ║
+║  Downside protection:  1.34%                          ║
+║  Called-away return:   6.19%                          ║
+║  Breakeven:            $244.66                        ║
+║  Prob. of assignment:  ~30%                           ║
+╚══════════════════════════════════════════════════════╝
+```
+
+---
+
 ### spread-roller
 
 Finds roll targets for bull put spreads and iron condors when a position needs to be rolled out or diagonally adjusted.
@@ -491,13 +542,22 @@ options-skill-pack/
             │           ├── check_iron_condor.py  # yfinance 4-leg position checker
             │           └── evals/
             │               └── evals.json        # test cases & assertions
-            └── spread-roller/
+            ├── spread-roller/
+            │   ├── .claude-plugin/
+            │   │   └── plugin.json               # plugin manifest
+            │   └── skills/
+            │       └── spread-roller/
+            │           ├── SKILL.md              # skill instructions
+            │           ├── roll_spread.py        # yfinance roll target scanner
+            │           └── evals/
+            │               └── evals.json        # test cases & assertions
+            └── covered-call-selector/
                 ├── .claude-plugin/
                 │   └── plugin.json               # plugin manifest
                 └── skills/
-                    └── spread-roller/
+                    └── covered-call-selector/
                         ├── SKILL.md              # skill instructions
-                        ├── roll_spread.py        # yfinance roll target scanner
+                        ├── fetch_covered_call.py # yfinance covered call fetcher
                         └── evals/
                             └── evals.json        # test cases & assertions
 ```
@@ -564,6 +624,21 @@ options-skill-pack/
 |---|---|---|
 | Pass rate | **100%** | 25% |
 | Avg time | 70.4s | 40.4s |
+
+### covered-call-selector — 3 test cases
+
+| Eval | Tests |
+|---|---|
+| `standard-aapl` | Default 30Δ, 30-45 DTE, trade card with all yield metrics, risk checklist |
+| `conservative-msft` | 15Δ override, lower premium, ~15% prob of assignment |
+| `with-cost-basis-nvda` | Cost basis adjustment, effective cost basis, called-away P&L |
+
+**Benchmark results (iteration 1):**
+
+| | with_skill | without_skill |
+|---|---|---|
+| Pass rate | **100%** | 31% |
+| Avg time | 56.2s | 36.8s |
 
 ### bull-put-spread-monitor — 3 test cases
 

@@ -55,6 +55,16 @@
       },
       "source": "./plugins/spread-roller",
       "category": "finance"
+    },
+    {
+      "name": "covered-call-selector",
+      "description": "Identifies the optimal call strike to sell for a covered call on a given stock.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/covered-call-selector",
+      "category": "finance"
     }
   ]
 }

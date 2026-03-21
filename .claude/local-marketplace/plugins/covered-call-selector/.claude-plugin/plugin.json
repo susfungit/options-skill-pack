@@ -1,0 +1,5 @@
+{
+  "name": "covered-call-selector",
+  "version": "1.0.0",
+  "description": "Identifies the optimal call strike to sell for a covered call on a given stock."
+}

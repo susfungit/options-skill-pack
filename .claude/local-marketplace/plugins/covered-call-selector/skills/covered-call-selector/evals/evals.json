@@ -1,0 +1,93 @@
+{
+  "skill_name": "covered-call-selector",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Sell a covered call on AAPL.",
+      "expected_output": "A trade card with the call strike, premium, static return, annualized return, downside protection, called-away return, breakeven, and probability of assignment. Should use ~30 delta and 30-45 DTE by default. Should include a risk checklist.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "trade_card_present",
+          "description": "Response contains a formatted trade card showing the SELL call leg"
+        },
+        {
+          "name": "has_call_strike",
+          "description": "Response shows the specific call strike to sell with its premium"
+        },
+        {
+          "name": "has_yield_metrics",
+          "description": "Response includes static return, annualized return, and downside protection percentages"
+        },
+        {
+          "name": "has_called_away_return",
+          "description": "Response shows the called-away return (max return if assigned)"
+        },
+        {
+          "name": "uses_default_30_delta",
+          "description": "Response targets ~30 delta for the short call since no override was specified"
+        },
+        {
+          "name": "has_risk_checklist",
+          "description": "Response includes risk signals covering at least earnings and IV rank"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I want to sell a 15-delta call on MSFT. I want it to be very unlikely I get called away.",
+      "expected_output": "Trade card using 15-delta (not the default 30-delta) short call. Strike should be further OTM. Probability of assignment should be ~15%. Should acknowledge the conservative intent.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "trade_card_present",
+          "description": "Response contains a formatted trade card"
+        },
+        {
+          "name": "respects_15_delta",
+          "description": "Response uses 15-delta for the short call, not the default 30-delta"
+        },
+        {
+          "name": "prob_called_near_15pct",
+          "description": "Probability of assignment is stated as approximately 15%"
+        },
+        {
+          "name": "acknowledges_conservative",
+          "description": "Response acknowledges that the lower delta means less premium but lower chance of being called"
+        },
+        {
+          "name": "has_yield_metrics",
+          "description": "Response includes static return, annualized return, and downside protection"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Write a call on NVDA, I bought my shares at $150.",
+      "expected_output": "Trade card for NVDA covered call plus cost basis analysis showing effective cost basis after premium and called-away P&L relative to the $150 entry price.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "trade_card_present",
+          "description": "Response contains a formatted trade card for NVDA"
+        },
+        {
+          "name": "shows_cost_basis_adjustment",
+          "description": "Response shows the effective cost basis after subtracting the premium from the $150 entry"
+        },
+        {
+          "name": "shows_called_away_pnl",
+          "description": "Response calculates the P&L if shares are called away relative to the $150 cost basis"
+        },
+        {
+          "name": "has_yield_metrics",
+          "description": "Response includes static return and annualized return"
+        },
+        {
+          "name": "has_risk_checklist",
+          "description": "Response includes risk signals covering at least earnings"
+        }
+      ]
+    }
+  ]
+}
