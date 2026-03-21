@@ -1,20 +1,30 @@
 [
   {
-    "label": "NVDA May spread",
+    "label": "NVDA May bull put",
+    "strategy": "bull-put-spread",
     "ticker": "NVDA",
-    "short_strike": 155,
-    "long_strike": 140,
+    "legs": [
+      { "type": "put", "action": "sell", "strike": 155, "price": 3.35 },
+      { "type": "put", "action": "buy", "strike": 140, "price": 1.37 }
+    ],
     "net_credit": 1.98,
     "expiry": "2026-05-01",
-    "contracts": 1
+    "contracts": 1,
+    "opened": "2026-03-21",
+    "status": "open"
   },
   {
-    "label": "C May spread",
+    "label": "C May bull put",
+    "strategy": "bull-put-spread",
     "ticker": "C",
-    "short_strike": 99,
-    "long_strike": 93,
+    "legs": [
+      { "type": "put", "action": "sell", "strike": 99, "price": 2.50 },
+      { "type": "put", "action": "buy", "strike": 93, "price": 1.36 }
+    ],
     "net_credit": 1.14,
     "expiry": "2026-05-01",
-    "contracts": 1
+    "contracts": 1,
+    "opened": "2026-03-21",
+    "status": "open"
   }
 ]

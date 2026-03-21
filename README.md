@@ -129,21 +129,48 @@ setup_monitor.bat
 
 This copies `portfolio.example.json` → `portfolio.json` and `monitor_config.example.json` → `monitor_config.json` (both gitignored — your trades and credentials are never committed).
 
-**`portfolio.json`** — add your open bull put spreads:
+**`portfolio.json`** — add your open positions:
 
 ```json
 [
   {
-    "label": "NVDA May spread",
+    "label": "NVDA May bull put",
+    "strategy": "bull-put-spread",
     "ticker": "NVDA",
-    "short_strike": 155,
-    "long_strike": 140,
+    "legs": [
+      { "type": "put", "action": "sell", "strike": 155, "price": 3.35 },
+      { "type": "put", "action": "buy", "strike": 140, "price": 1.37 }
+    ],
     "net_credit": 1.98,
     "expiry": "2026-05-01",
-    "contracts": 1
+    "contracts": 1,
+    "opened": "2026-03-21",
+    "status": "open"
   }
 ]
 ```
+
+| Field | Required | Description |
+|---|---|---|
+| `label` | yes | Human-readable name for the position |
+| `strategy` | yes | Strategy type (`bull-put-spread`, future: `iron-condor`, `covered-call`, etc.) |
+| `ticker` | yes | Stock symbol |
+| `legs` | yes | Array of option legs — works for any number of legs |
+| `legs[].type` | yes | `"put"` or `"call"` |
+| `legs[].action` | yes | `"buy"` or `"sell"` |
+| `legs[].strike` | yes | Strike price |
+| `legs[].price` | no | Entry price per leg |
+| `net_credit` | yes | Net credit received per share |
+| `expiry` | yes | Expiry date (YYYY-MM-DD) |
+| `contracts` | no | Number of contracts (default: 1) |
+| `opened` | no | Date position was opened |
+| `status` | yes | `"open"` or `"closed"` — closed positions are skipped by the monitor |
+
+**Managing positions** — just ask Claude in an interactive session:
+- `"add my AAPL $220/$210 put spread, $1.85 credit, expires June 20"`
+- `"close the NVDA position"`
+- `"update the C spread — I rolled to July expiry"`
+- `"show my portfolio"`
 
 **`monitor_config.json`** — enable and configure notification channels:
 
@@ -160,12 +187,9 @@ For SMS via email: set `to` to your carrier's email-to-SMS gateway (e.g. `555123
 ```bash
 # Alert mode — notifies only WATCH zone or worse
 claude -p "$(cat <<'EOF'
-Read portfolio.json and check each bull put spread position.
-For each position run:
-  python3 check_position.py TICKER SHORT_STRIKE LONG_STRIKE NET_CREDIT EXPIRY
-
-The check_position.py script is at:
-  .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py
+Read portfolio.json. Skip any positions where status is "closed".
+For each open bull-put-spread position, extract the sell leg strike and buy leg strike from the legs array, then run:
+  python3 .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py TICKER SELL_STRIKE BUY_STRIKE NET_CREDIT EXPIRY
 
 Classify each into a zone:
   SAFE: buffer > 8% AND loss < 20%
@@ -186,12 +210,9 @@ EOF
 
 # Summary mode — full daily summary of all positions
 claude -p "$(cat <<'EOF'
-Read portfolio.json and check each bull put spread position.
-For each position run:
-  python3 check_position.py TICKER SHORT_STRIKE LONG_STRIKE NET_CREDIT EXPIRY
-
-The check_position.py script is at:
-  .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py
+Read portfolio.json. Skip any positions where status is "closed".
+For each open bull-put-spread position, extract the sell leg strike and buy leg strike from the legs array, then run:
+  python3 .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py TICKER SELL_STRIKE BUY_STRIKE NET_CREDIT EXPIRY
 
 Classify each into a zone:
   SAFE: buffer > 8% AND loss < 20%
