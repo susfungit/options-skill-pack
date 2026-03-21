@@ -35,6 +35,16 @@
       },
       "source": "./plugins/iron-condor-selector",
       "category": "finance"
+    },
+    {
+      "name": "iron-condor-monitor",
+      "description": "Monitors iron condor positions and classifies health into SAFE/WATCH/WARNING/DANGER/ACT NOW zones.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/iron-condor-monitor",
+      "category": "finance"
     }
   ]
 }

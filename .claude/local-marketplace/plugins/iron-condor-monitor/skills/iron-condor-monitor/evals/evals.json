@@ -1,0 +1,101 @@
+{
+  "skill_name": "iron-condor-monitor",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Check my AAPL iron condor: sold $220 put / bought $200 put / sold $275 call / bought $300 call, total credit $2.86, expires May 1 2026.",
+      "expected_output": "Status card showing SAFE ZONE. AAPL is ~$248, giving ~11% put buffer and ~11% call buffer. Both sides comfortable. Should show both buffers, worst buffer, P&L, and 'let theta work' guidance.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "status_card_present",
+          "description": "Response contains the formatted iron condor status card with IRON CONDOR MONITOR header"
+        },
+        {
+          "name": "zone_classified",
+          "description": "Response clearly states one of the five zones: SAFE, WATCH, WARNING, DANGER, or ACT NOW"
+        },
+        {
+          "name": "safe_zone_for_aapl",
+          "description": "Response classifies as SAFE ZONE given both buffers are >8%"
+        },
+        {
+          "name": "shows_both_buffers",
+          "description": "Response shows both put buffer % and call buffer %, plus identifies which is worse"
+        },
+        {
+          "name": "shows_pnl",
+          "description": "Response shows current P&L per contract and loss% of max loss"
+        },
+        {
+          "name": "actionable_guidance",
+          "description": "Response provides zone-appropriate guidance (for SAFE: no action, let theta work)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "How is my NVDA iron condor? I have: sold $155 put / bought $140 put / sold $195 call / bought $215 call, $3.48 credit, expires May 1 2026.",
+      "expected_output": "Status card for NVDA. Stock at ~$172.70, put buffer ~11.4%, call buffer ~12.9%. Both comfortable — SAFE ZONE. Should identify which side is under more pressure (put side is closer).",
+      "files": [],
+      "assertions": [
+        {
+          "name": "status_card_present",
+          "description": "Response contains the formatted status card"
+        },
+        {
+          "name": "zone_classified",
+          "description": "Response clearly states one of the five zones"
+        },
+        {
+          "name": "shows_both_buffers",
+          "description": "Response shows both put and call buffer percentages"
+        },
+        {
+          "name": "identifies_worse_side",
+          "description": "Response identifies which side (put or call) has the smaller buffer"
+        },
+        {
+          "name": "shows_pnl",
+          "description": "Response shows current P&L and cost to close"
+        },
+        {
+          "name": "actionable_guidance",
+          "description": "Response provides concrete action suggestion appropriate to the zone"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Is my SPY condor in trouble? Sold $595 put / bought $535 put / sold $691 call / bought $760 call, got $6.77 credit, expires April 30 2026.",
+      "expected_output": "Status card for SPY. Should check both sides, show buffers, classify zone, and address the user's concern about whether the condor is 'in trouble'. Should include profit zone range.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "status_card_present",
+          "description": "Response contains the formatted status card"
+        },
+        {
+          "name": "zone_classified",
+          "description": "Response clearly states one of the five zones"
+        },
+        {
+          "name": "addresses_concern",
+          "description": "Response directly addresses whether the condor is 'in trouble' based on the zone and metrics"
+        },
+        {
+          "name": "shows_both_buffers",
+          "description": "Response shows put and call buffer percentages"
+        },
+        {
+          "name": "shows_profit_zone",
+          "description": "Response shows the profit zone range (breakeven low to breakeven high)"
+        },
+        {
+          "name": "actionable_guidance",
+          "description": "Response provides zone-appropriate guidance"
+        }
+      ]
+    }
+  ]
+}

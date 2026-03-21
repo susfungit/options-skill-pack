@@ -161,6 +161,45 @@ Monitors an existing bull put spread position and classifies its current health 
 
 ---
 
+### iron-condor-monitor
+
+Monitors an existing iron condor position and classifies its health into one of five zones. Uses **two-sided buffer logic** — the worse side (put or call) determines the zone.
+
+**Trigger phrases:**
+- "check my AAPL iron condor"
+- "how is my condor doing"
+- "is my iron condor safe"
+- "is my SPY condor in trouble"
+
+**What it does:**
+1. Fetches current stock price and option prices for all 4 legs via `check_iron_condor.py`
+2. Calculates put buffer (above short put) and call buffer (below short call)
+3. Uses the **worse buffer** + loss% to classify zone
+4. Presents a two-sided status card + zone-appropriate guidance
+
+**Example output:**
+```
+╔═══════════════════════════════════════════════════════╗
+║  IRON CONDOR MONITOR — NVDA                           ║
+║  155/140 · 195/215  ·  2026-05-01                     ║
+╠═══════════════════════════════════════════════════════╣
+║  Status:  🟢 SAFE ZONE                                ║
+╠═══════════════════════════════════════════════════════╣
+║  Stock now:        $172.70                             ║
+║  Put buffer:       10.25% above $155                   ║
+║  Call buffer:      12.91% below $195                   ║
+║  Worst buffer:     10.25% (put side)                   ║
+║  DTE remaining:    41 days                             ║
+╠═══════════════════════════════════════════════════════╣
+║  Current P&L:      $0.00  per contract                 ║
+║  Loss % of max:    0.0%  of $1,652.00                  ║
+║  Cost to close:    $3.48  per share                    ║
+║  Profit zone:      $151.52 – $198.48                   ║
+╚═══════════════════════════════════════════════════════╝
+```
+
+---
+
 ## Setup
 
 ### 1. Install dependencies and initialise
@@ -243,8 +282,11 @@ For SMS via email: set `to` to your carrier's email-to-SMS gateway (e.g. `555123
 # Alert mode — notifies only WATCH zone or worse
 claude -p "$(cat <<'EOF'
 Read portfolio.json. Skip any positions where status is "closed".
-For each open bull-put-spread position, extract the sell leg strike and buy leg strike from the legs array, then run:
-  python3 .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py TICKER SELL_STRIKE BUY_STRIKE NET_CREDIT EXPIRY
+For each open position, check strategy type and run the appropriate script:
+  If strategy is "bull-put-spread": extract sell/buy put strikes from legs, then run:
+    python3 .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py TICKER SELL_STRIKE BUY_STRIKE NET_CREDIT EXPIRY
+  If strategy is "iron-condor": extract all 4 strikes from legs, then run:
+    python3 .claude/local-marketplace/plugins/iron-condor-monitor/skills/iron-condor-monitor/check_iron_condor.py TICKER SHORT_PUT LONG_PUT SHORT_CALL LONG_CALL NET_CREDIT EXPIRY
 
 Classify each into a zone:
   SAFE: buffer > 8% AND loss < 20%
@@ -266,8 +308,11 @@ EOF
 # Summary mode — full daily summary of all positions
 claude -p "$(cat <<'EOF'
 Read portfolio.json. Skip any positions where status is "closed".
-For each open bull-put-spread position, extract the sell leg strike and buy leg strike from the legs array, then run:
-  python3 .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py TICKER SELL_STRIKE BUY_STRIKE NET_CREDIT EXPIRY
+For each open position, check strategy type and run the appropriate script:
+  If strategy is "bull-put-spread": extract sell/buy put strikes from legs, then run:
+    python3 .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py TICKER SELL_STRIKE BUY_STRIKE NET_CREDIT EXPIRY
+  If strategy is "iron-condor": extract all 4 strikes from legs, then run:
+    python3 .claude/local-marketplace/plugins/iron-condor-monitor/skills/iron-condor-monitor/check_iron_condor.py TICKER SHORT_PUT LONG_PUT SHORT_CALL LONG_CALL NET_CREDIT EXPIRY
 
 Classify each into a zone:
   SAFE: buffer > 8% AND loss < 20%
@@ -384,13 +429,22 @@ options-skill-pack/
             │           ├── check_position.py     # yfinance position checker
             │           └── evals/
             │               └── evals.json        # test cases & assertions
-            └── iron-condor-selector/
+            ├── iron-condor-selector/
+            │   ├── .claude-plugin/
+            │   │   └── plugin.json               # plugin manifest
+            │   └── skills/
+            │       └── iron-condor-selector/
+            │           ├── SKILL.md              # skill instructions
+            │           ├── fetch_iron_condor.py  # yfinance 4-leg chain fetcher
+            │           └── evals/
+            │               └── evals.json        # test cases & assertions
+            └── iron-condor-monitor/
                 ├── .claude-plugin/
                 │   └── plugin.json               # plugin manifest
                 └── skills/
-                    └── iron-condor-selector/
+                    └── iron-condor-monitor/
                         ├── SKILL.md              # skill instructions
-                        ├── fetch_iron_condor.py  # yfinance 4-leg chain fetcher
+                        ├── check_iron_condor.py  # yfinance 4-leg position checker
                         └── evals/
                             └── evals.json        # test cases & assertions
 ```
@@ -428,6 +482,20 @@ options-skill-pack/
 |---|---|---|
 | Pass rate | **100%** | 69% |
 | Avg time | 78.4s | 140.3s |
+
+### iron-condor-monitor — 3 test cases
+
+| Eval | Tests |
+|---|---|
+| `aapl-safe-zone` | SAFE zone, dual buffer display, both sides comfortable |
+| `nvda-put-pressure` | Identifies worse side (put closer), correct buffer comparison |
+| `spy-in-trouble` | WATCH zone (call buffer 6.5%), addresses user concern, profit zone |
+
+**Benchmark results (iteration 1):**
+
+| | with_skill | without_skill |
+|---|---|---|
+| Pass rate | **94%** | 56% |
 
 ### bull-put-spread-monitor — 3 test cases
 

@@ -1,0 +1,5 @@
+{
+  "name": "iron-condor-monitor",
+  "version": "1.0.0",
+  "description": "Monitors iron condor positions and classifies health into SAFE/WATCH/WARNING/DANGER/ACT NOW zones."
+}
