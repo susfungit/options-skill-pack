@@ -1,0 +1,5 @@
+{
+  "name": "spread-roller",
+  "version": "1.0.0",
+  "description": "Finds roll targets for bull put spreads and iron condors — shows close cost, calendar and diagonal roll candidates ranked by net credit."
+}

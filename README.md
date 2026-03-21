@@ -200,6 +200,50 @@ Monitors an existing iron condor position and classifies its health into one of 
 
 ---
 
+### spread-roller
+
+Finds roll targets for bull put spreads and iron condors when a position needs to be rolled out or diagonally adjusted.
+
+**Trigger phrases** — Claude will automatically use this skill when you say things like:
+- "roll my NVDA put spread"
+- "roll the put side of my iron condor"
+- "find roll targets for my spread"
+- "my spread is in danger, what can I do?"
+- "should I roll or close?"
+- "roll down and out"
+
+**What it does:**
+1. Prices the cost to close your current spread via `roll_spread.py` using Yahoo Finance
+2. Scans 3 future expiries (~2, 4, and 6 weeks out from current expiry)
+3. Evaluates 3 roll types per expiry: calendar (same strikes), defensive diagonal (1 strike further OTM), aggressive diagonal (reset to target delta)
+4. Ranks all candidates by net roll credit (best first)
+5. Presents a comparison card with close cost, roll candidates, and a recommendation
+6. For iron condors, rolls one side at a time and flags asymmetry
+
+**Parameters** (defaults shown):
+
+| Parameter | Default | Example override |
+|---|---|---|
+| Target delta | 0.20 (put spread), 0.16 (condor) | "roll to 15-delta" |
+| Roll side (condor) | — | "roll the put side" |
+
+**Example output:**
+```
+╔════════════════════════════════════════════════════════════════╗
+║  ROLL ANALYSIS — NVDA put spread                              ║
+║  Current: 155/140 · Expiry 2026-05-01 · 41d remaining         ║
+╠════════════════════════════════════════════════════════════════╣
+║  Close now:  $1.98 debit  →  P&L: $0.00 (breakeven)           ║
+╠════════════════════════════════════════════════════════════════╣
+║  #  Type         Expiry      Strikes    Net Roll   PoP   RoR  ║
+║  1  Def Diag     2026-06-18  154/138    +$1.37cr   74%   26%  ║
+║  2  Calendar     2026-06-18  155/140    +$1.34cr   74%   28%  ║
+║  3  Agg Diag     2026-06-18  146/130    +$0.53cr   81%   19%  ║
+╚════════════════════════════════════════════════════════════════╝
+```
+
+---
+
 ## Setup
 
 ### 1. Install dependencies and initialise
@@ -438,13 +482,22 @@ options-skill-pack/
             │           ├── fetch_iron_condor.py  # yfinance 4-leg chain fetcher
             │           └── evals/
             │               └── evals.json        # test cases & assertions
-            └── iron-condor-monitor/
+            ├── iron-condor-monitor/
+            │   ├── .claude-plugin/
+            │   │   └── plugin.json               # plugin manifest
+            │   └── skills/
+            │       └── iron-condor-monitor/
+            │           ├── SKILL.md              # skill instructions
+            │           ├── check_iron_condor.py  # yfinance 4-leg position checker
+            │           └── evals/
+            │               └── evals.json        # test cases & assertions
+            └── spread-roller/
                 ├── .claude-plugin/
                 │   └── plugin.json               # plugin manifest
                 └── skills/
-                    └── iron-condor-monitor/
+                    └── spread-roller/
                         ├── SKILL.md              # skill instructions
-                        ├── check_iron_condor.py  # yfinance 4-leg position checker
+                        ├── roll_spread.py        # yfinance roll target scanner
                         └── evals/
                             └── evals.json        # test cases & assertions
 ```
@@ -496,6 +549,21 @@ options-skill-pack/
 | | with_skill | without_skill |
 |---|---|---|
 | Pass rate | **94%** | 56% |
+
+### spread-roller — 3 test cases
+
+| Eval | Tests |
+|---|---|
+| `bull-put-roll` | Close cost, 6 ranked candidates (calendar + diagonal), net roll credit, recommendation |
+| `iron-condor-put-roll` | Put-side-only roll, close cost, asymmetry warning, recommendation |
+| `danger-zone-implicit` | Implicit trigger from "danger zone" context, close option alongside rolls, urgency |
+
+**Benchmark results (iteration 1):**
+
+| | with_skill | without_skill |
+|---|---|---|
+| Pass rate | **100%** | 25% |
+| Avg time | 70.4s | 40.4s |
 
 ### bull-put-spread-monitor — 3 test cases
 

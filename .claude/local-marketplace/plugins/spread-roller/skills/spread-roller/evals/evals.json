@@ -1,0 +1,93 @@
+{
+  "skill_name": "spread-roller",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Roll my NVDA 155/140 bull put spread. I received $1.98 credit, expires May 1 2026.",
+      "expected_output": "Roll analysis showing the close cost for the current 155/140 spread, followed by ranked roll candidates (calendar, defensive diagonal, aggressive diagonal) at future expiries. Should include net roll credit/debit for each, new breakevens, PoP, and a recommendation based on roll quality.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "shows_close_cost",
+          "description": "Response shows the current cost to close the 155/140 spread (net debit to close)"
+        },
+        {
+          "name": "has_roll_candidates",
+          "description": "Response shows at least 2 roll candidates with different expiries or roll types (calendar, diagonal)"
+        },
+        {
+          "name": "has_net_roll_credit",
+          "description": "Each roll candidate shows the net roll credit or debit (new credit minus close cost)"
+        },
+        {
+          "name": "has_new_metrics",
+          "description": "Roll candidates include new breakeven, probability of profit, and return on risk"
+        },
+        {
+          "name": "has_recommendation",
+          "description": "Response includes a recommendation on which roll is best or whether to close instead"
+        },
+        {
+          "name": "comparison_format",
+          "description": "Response presents candidates in a comparison format (table or card) for easy decision-making"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I need to roll the put side of my AAPL iron condor. Strikes are 220/200 puts and 275/300 calls. Total credit was $2.86, expiry May 1 2026.",
+      "expected_output": "Roll analysis for just the put side (220/200) of the iron condor. Should show close cost for the put spread, roll candidates for the put side only, and note that the call side (275/300) stays open. Should flag that rolling one side makes the condor asymmetric.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "rolls_put_side_only",
+          "description": "Response correctly identifies that only the put side (220/200) is being rolled, not the call side"
+        },
+        {
+          "name": "shows_close_cost",
+          "description": "Response shows the cost to close the put spread (220/200)"
+        },
+        {
+          "name": "has_roll_candidates",
+          "description": "Response shows roll candidates for the put side at future expiries"
+        },
+        {
+          "name": "notes_asymmetry",
+          "description": "Response mentions that rolling one side makes the iron condor asymmetric or changes the risk profile"
+        },
+        {
+          "name": "has_recommendation",
+          "description": "Response includes guidance on best roll option or whether to close the whole condor"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "My SPY 550/530 put spread is in the danger zone. Credit was $2.10, expires April 17 2026. What can I do?",
+      "expected_output": "Should trigger the roller skill since the user has a spread in danger and is asking what to do. Show roll options as a way to manage the position. Should also mention closing as an alternative. Should convey urgency given the danger zone context.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "triggers_roller",
+          "description": "Response uses the spread roller to find roll targets rather than just giving generic advice"
+        },
+        {
+          "name": "shows_close_option",
+          "description": "Response presents closing the position as one option alongside rolling"
+        },
+        {
+          "name": "has_roll_candidates",
+          "description": "Response shows concrete roll candidates with strikes, expiries, and credits"
+        },
+        {
+          "name": "conveys_urgency",
+          "description": "Response acknowledges the danger zone status and conveys appropriate urgency"
+        },
+        {
+          "name": "has_recommendation",
+          "description": "Response gives a clear recommendation (close, roll, or specific roll candidate)"
+        }
+      ]
+    }
+  ]
+}

@@ -45,6 +45,16 @@
       },
       "source": "./plugins/iron-condor-monitor",
       "category": "finance"
+    },
+    {
+      "name": "spread-roller",
+      "description": "Finds roll targets for bull put spreads and iron condors — shows close cost, calendar and diagonal roll candidates ranked by net credit.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/spread-roller",
+      "category": "finance"
     }
   ]
 }
