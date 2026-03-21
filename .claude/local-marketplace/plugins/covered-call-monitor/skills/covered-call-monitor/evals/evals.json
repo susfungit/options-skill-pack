@@ -1,0 +1,89 @@
+{
+  "skill_name": "covered-call-monitor",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Check my AAPL covered call, sold $260 call for $3.33, expires Apr 24 2026.",
+      "expected_output": "Status card showing AAPL stock price, buffer to $260 strike, call P&L, zone classification (likely SAFE since AAPL is well below $260). Should include current call value, delta, time value.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "status_card_present",
+          "description": "Response contains a formatted status card with zone classification"
+        },
+        {
+          "name": "zone_classified",
+          "description": "Response clearly states one of the five zones (SAFE, WATCH, WARNING, DANGER, ACT NOW)"
+        },
+        {
+          "name": "has_buffer_pct",
+          "description": "Response shows the buffer percentage between stock price and the $260 strike"
+        },
+        {
+          "name": "has_call_pnl",
+          "description": "Response shows current P&L on the call (premium received vs current call value)"
+        },
+        {
+          "name": "has_actionable_guidance",
+          "description": "Response provides zone-appropriate action guidance"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "How is my NVDA $185 call doing? Premium was $3.27, expires Apr 24 2026. I bought my shares at $150.",
+      "expected_output": "Status card with zone classification plus cost basis section showing effective cost basis ($146.73) and called-away P&L relative to $150 entry.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "status_card_present",
+          "description": "Response contains a formatted status card with zone classification"
+        },
+        {
+          "name": "zone_classified",
+          "description": "Response clearly states one of the five zones"
+        },
+        {
+          "name": "shows_cost_basis",
+          "description": "Response shows effective cost basis after premium ($150 - $3.27 = $146.73)"
+        },
+        {
+          "name": "shows_called_away_pnl",
+          "description": "Response shows the P&L if shares are called away at $185 relative to $150 cost basis"
+        },
+        {
+          "name": "has_actionable_guidance",
+          "description": "Response provides guidance that considers whether being called away is acceptable given the cost basis"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Will my shares get called away? I sold the $560 call on SPY for $4.50, expires Apr 17 2026.",
+      "expected_output": "Should trigger the monitor, show SPY's current position relative to $560 strike, and directly answer the assignment question based on buffer and delta.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "triggers_monitor",
+          "description": "Response uses the covered call monitor to fetch live data rather than giving generic advice"
+        },
+        {
+          "name": "answers_assignment_question",
+          "description": "Response directly answers whether assignment is likely based on current stock price vs $560 strike"
+        },
+        {
+          "name": "has_buffer_pct",
+          "description": "Response shows the buffer percentage between SPY and the $560 strike"
+        },
+        {
+          "name": "zone_classified",
+          "description": "Response clearly states one of the five zones"
+        },
+        {
+          "name": "has_actionable_guidance",
+          "description": "Response provides a concrete suggestion based on the zone"
+        }
+      ]
+    }
+  ]
+}

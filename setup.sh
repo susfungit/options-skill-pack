@@ -15,7 +15,8 @@ cat > "$SETTINGS_FILE" <<EOF
     "iron-condor-selector@options-skill-pack": true,
     "iron-condor-monitor@options-skill-pack": true,
     "spread-roller@options-skill-pack": true,
-    "covered-call-selector@options-skill-pack": true
+    "covered-call-selector@options-skill-pack": true,
+    "covered-call-monitor@options-skill-pack": true
   },
   "extraKnownMarketplaces": {
     "options-skill-pack": {

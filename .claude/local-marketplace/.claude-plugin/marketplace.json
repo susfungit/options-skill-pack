@@ -65,6 +65,16 @@
       },
       "source": "./plugins/covered-call-selector",
       "category": "finance"
+    },
+    {
+      "name": "covered-call-monitor",
+      "description": "Monitors covered call positions and classifies health into SAFE/WATCH/WARNING/DANGER/ACT NOW zones.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/covered-call-monitor",
+      "category": "finance"
     }
   ]
 }

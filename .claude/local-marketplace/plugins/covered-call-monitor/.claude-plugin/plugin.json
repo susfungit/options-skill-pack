@@ -1,0 +1,5 @@
+{
+  "name": "covered-call-monitor",
+  "version": "1.0.0",
+  "description": "Monitors covered call positions and classifies health into SAFE/WATCH/WARNING/DANGER/ACT NOW zones."
+}

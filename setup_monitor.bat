@@ -14,8 +14,9 @@ if exist portfolio.json (
   copy portfolio.example.json portfolio.json >nul
   echo [OK] Created portfolio.json from template
   echo.
-  echo   Edit portfolio.json to add your open bull put spread positions.
-  echo   Each entry needs: ticker, short_strike, long_strike, net_credit, expiry
+  echo   Edit portfolio.json to add your open positions.
+  echo   Supported strategies: bull-put-spread, iron-condor, covered-call
+  echo   See README.md for the full schema and examples.
   echo.
 )
 

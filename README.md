@@ -295,6 +295,59 @@ Finds roll targets for bull put spreads and iron condors when a position needs t
 
 ---
 
+### covered-call-monitor
+
+Monitors an existing covered call position and classifies its health into one of five zones. Answers the key question: "will my shares get called away?"
+
+**Trigger phrases:**
+- "check my AAPL covered call"
+- "how is my call doing"
+- "will my shares get called away"
+- "is my covered call safe"
+- "covered call status"
+
+**What it does:**
+1. Fetches current stock price and call option price via `check_covered_call.py`
+2. Calculates buffer to strike, call P&L, intrinsic/time value, current delta
+3. Classifies zone based on buffer and call value relative to original credit
+4. If cost basis provided: shows effective cost basis and called-away P&L
+5. Presents a status card + zone-appropriate guidance
+
+**Zones:**
+
+| Zone | Condition |
+|---|---|
+| 🟢 SAFE | Stock > 8% below strike AND call value < 1.5× credit |
+| 🟡 WATCH | 4–8% buffer OR call value 1.5–2× credit |
+| 🟠 WARNING | 2–4% buffer OR call value 2–3× credit |
+| 🔴 DANGER | 0–2% buffer OR call value 3–5× credit |
+| 🚨 ACT NOW | Stock at/above strike OR call value > 5× credit |
+
+**Note:** Unlike put spreads, being called away on a covered call is often a fine outcome — the user keeps the premium plus stock gains up to the strike.
+
+**Required inputs:** ticker, short call strike, premium received, expiry date, (optional) cost basis
+
+**Example output:**
+```
+╔══════════════════════════════════════════════════════╗
+║  COVERED CALL MONITOR — AAPL                          ║
+║  SELL $260 Call  ·  2026-04-24                        ║
+╠══════════════════════════════════════════════════════╣
+║  Status:  🟡 WATCH ZONE                               ║
+╠══════════════════════════════════════════════════════╣
+║  Stock now:        $247.99                            ║
+║  Call strike:      $260  (buffer: 4.84%)              ║
+║  Call delta:       0.295                              ║
+║  DTE remaining:    34 days                            ║
+╠══════════════════════════════════════════════════════╣
+║  Current P&L:      $0  per contract (on call)         ║
+║  Call value now:   $3.33  (was $3.33 at open)         ║
+║  Max profit:       $333  (if expires OTM)             ║
+╚══════════════════════════════════════════════════════╝
+```
+
+---
+
 ## Setup
 
 ### 1. Install dependencies and initialise
@@ -342,7 +395,7 @@ This copies `portfolio.example.json` → `portfolio.json` and `monitor_config.ex
 | Field | Required | Description |
 |---|---|---|
 | `label` | yes | Human-readable name for the position |
-| `strategy` | yes | Strategy type (`bull-put-spread`, future: `iron-condor`, `covered-call`, etc.) |
+| `strategy` | yes | Strategy type: `bull-put-spread`, `iron-condor`, `covered-call` |
 | `ticker` | yes | Stock symbol |
 | `legs` | yes | Array of option legs — works for any number of legs |
 | `legs[].type` | yes | `"put"` or `"call"` |
@@ -353,6 +406,7 @@ This copies `portfolio.example.json` → `portfolio.json` and `monitor_config.ex
 | `expiry` | yes | Expiry date (YYYY-MM-DD) |
 | `contracts` | no | Number of contracts (default: 1) |
 | `opened` | no | Date position was opened |
+| `cost_basis` | no | Stock purchase price per share (used by covered-call monitor for P&L) |
 | `status` | yes | `"open"` or `"closed"` — closed positions are skipped by the monitor |
 
 **Managing positions** — just ask Claude in an interactive session:
@@ -551,13 +605,22 @@ options-skill-pack/
             │           ├── roll_spread.py        # yfinance roll target scanner
             │           └── evals/
             │               └── evals.json        # test cases & assertions
-            └── covered-call-selector/
+            ├── covered-call-selector/
+            │   ├── .claude-plugin/
+            │   │   └── plugin.json               # plugin manifest
+            │   └── skills/
+            │       └── covered-call-selector/
+            │           ├── SKILL.md              # skill instructions
+            │           ├── fetch_covered_call.py # yfinance covered call fetcher
+            │           └── evals/
+            │               └── evals.json        # test cases & assertions
+            └── covered-call-monitor/
                 ├── .claude-plugin/
                 │   └── plugin.json               # plugin manifest
                 └── skills/
-                    └── covered-call-selector/
+                    └── covered-call-monitor/
                         ├── SKILL.md              # skill instructions
-                        ├── fetch_covered_call.py # yfinance covered call fetcher
+                        ├── check_covered_call.py # yfinance covered call checker
                         └── evals/
                             └── evals.json        # test cases & assertions
 ```
@@ -639,6 +702,21 @@ options-skill-pack/
 |---|---|---|
 | Pass rate | **100%** | 31% |
 | Avg time | 56.2s | 36.8s |
+
+### covered-call-monitor — 3 test cases
+
+| Eval | Tests |
+|---|---|
+| `aapl-safe-zone` | Zone classification, buffer%, call P&L, actionable guidance |
+| `nvda-cost-basis` | Zone + cost basis adjustment, effective cost basis, called-away P&L |
+| `spy-assignment-question` | Implicit trigger, answers "will I get called away?", buffer + delta |
+
+**Benchmark results (iteration 1):**
+
+| | with_skill | without_skill |
+|---|---|---|
+| Pass rate | **100%** | 13% |
+| Avg time | 51.3s | 33.0s |
 
 ### bull-put-spread-monitor — 3 test cases
 
