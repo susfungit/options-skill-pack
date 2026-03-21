@@ -18,13 +18,14 @@ Identifies the optimal short put and long put strikes for a bull put spread on a
 - "set up a credit spread on SPY"
 
 **What it does:**
-1. Fetches current stock price, IV, IV Rank, and upcoming events via web search
-2. Locates the target expiry (35–45 DTE by default)
-3. Selects the short put strike near 20Δ and long put 10% below
-4. Calculates max profit, max loss, breakeven, PoP, and return on risk
-5. Runs a risk checklist (earnings, IV rank, trend, dividends, spread width)
-6. Presents a structured trade card + prose rationale
-7. Offers to plot an interactive P&L curve
+1. Fetches live option chain data (price, strikes, bid/ask, IV, delta) via `fetch_chain.py` using Yahoo Finance
+2. Supplements with web search for earnings dates, IV Rank, and price trend
+3. Locates the target expiry (35–45 DTE by default)
+4. Selects the short put strike near 20Δ and long put 10% below
+5. Calculates max profit, max loss, breakeven, PoP, and return on risk
+6. Runs a risk checklist (earnings, IV rank, trend, dividends, spread width)
+7. Presents a structured trade card + prose rationale
+8. Offers to plot an interactive P&L curve
 
 **Parameters** (defaults shown):
 
@@ -55,10 +56,25 @@ Identifies the optimal short put and long put strikes for a bull put spread on a
 
 ---
 
+## Setup
+
+```bash
+# 1. Install Python dependencies
+pip install yfinance pytz
+
+# 2. Generate .claude/settings.json with the correct absolute path for this machine
+bash setup.sh
+```
+
+`setup.sh` must be run once after cloning — it writes the marketplace path into `.claude/settings.json` so Claude Code can locate the skill.
+
+---
+
 ## Project structure
 
 ```
 options-skill-pack/
+├── setup.sh                                      # one-time setup script
 └── .claude/
     ├── settings.json                             # activates skills for this project
     └── local-marketplace/
@@ -71,6 +87,7 @@ options-skill-pack/
                 └── skills/
                     └── bull-put-spread-selector/
                         ├── SKILL.md              # skill instructions
+                        ├── fetch_chain.py        # yfinance option chain fetcher
                         └── evals/
                             └── evals.json        # test cases & assertions
 ```

@@ -48,10 +48,9 @@ Example for default parameters:
 python3 "$(dirname "$0")/fetch_chain.py" AAPL 0.20 35 45
 ```
 
-Or if the path is known (resolve it from the skill directory):
+Or resolve the path dynamically from the project root:
 ```bash
-SKILL_DIR="/Users/sushant/python/options-skill-pack/.claude/local-marketplace/plugins/bull-put-spread-selector/skills/bull-put-spread-selector"
-python3 "$SKILL_DIR/fetch_chain.py" [TICKER] [TARGET_DELTA] 35 45
+python3 "$(git rev-parse --show-toplevel)/.claude/local-marketplace/plugins/bull-put-spread-selector/skills/bull-put-spread-selector/fetch_chain.py" [TICKER] [TARGET_DELTA] 35 45
 ```
 
 The script returns JSON with all fields pre-calculated:

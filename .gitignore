@@ -1,0 +1,3 @@
+# Claude Code project settings (contains machine-specific absolute paths)
+# Run setup.sh to regenerate for your machine
+.claude/settings.json

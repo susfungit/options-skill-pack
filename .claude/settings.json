@@ -6,7 +6,7 @@
     "options-skill-pack": {
       "source": {
         "source": "directory",
-        "path": "/Users/sushant/python/options-skill-pack/.claude/local-marketplace"
+        "path": "./.claude/local-marketplace"
       }
     }
   }

@@ -1,5 +1,6 @@
 {
   "name": "bull-put-spread-selector",
+  "version": "1.0.1",
   "description": "Identifies the optimal strikes for a bull put spread (sell put + buy put) for a given stock.",
   "author": {
     "name": "sushant"

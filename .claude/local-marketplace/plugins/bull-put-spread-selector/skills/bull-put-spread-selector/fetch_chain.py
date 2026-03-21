@@ -15,7 +15,8 @@ Outputs JSON to stdout. Errors output JSON with an "error" key.
 import sys
 import json
 import math
-from datetime import date, datetime
+from datetime import date, datetime, time
+import pytz
 
 try:
     import yfinance as yf
@@ -76,6 +77,20 @@ def option_mid(row):
         return round((bid + ask) / 2, 2)
     last = float(row.get("lastPrice", 0) or 0)
     return round(last, 2) if last > 0 else 0.0
+
+
+def is_market_open():
+    """Check if US equity market is currently open (Mon–Fri 9:30–16:00 ET)."""
+    try:
+        et = pytz.timezone("America/New_York")
+        now = datetime.now(et)
+        if now.weekday() >= 5:  # Saturday=5, Sunday=6
+            return False
+        market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+        market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+        return market_open <= now <= market_close
+    except Exception:
+        return False  # pytz not available, can't determine
 
 
 def find_best_expiry(expirations, dte_min, dte_max):
@@ -170,7 +185,14 @@ def main():
     short_mid = float(short_row["mid_price"])
     short_bid = round(float(short_row.get("bid", 0) or 0), 2)
     short_ask = round(float(short_row.get("ask", 0) or 0), 2)
-    price_source = "bid_ask_mid" if (short_bid > 0 and short_ask > 0) else "last_price"
+    live = is_market_open()
+    has_bid_ask = (short_bid > 0 and short_ask > 0)
+    if live and has_bid_ask:
+        price_source = "live_bid_ask_mid"
+    elif has_bid_ask:
+        price_source = "prev_close_bid_ask_mid"
+    else:
+        price_source = "last_trade_price"
 
     # Long put: nearest listed strike ~10% below short
     long_target = short_strike * 0.90
