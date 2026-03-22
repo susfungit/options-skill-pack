@@ -1,6 +1,10 @@
 # options-skill-pack
 
-A collection of Claude Code skills for options trading strategy. Skills are scoped to this project — they activate automatically when Claude Code is launched from this directory.
+Options trading toolkit — 7 skills for Claude Code + a self-hosted web chat app with portfolio management. Find spreads, monitor positions, evaluate rolls, and track your portfolio with AI-powered analysis.
+
+**Two ways to use:**
+- **Claude Code** — skills activate automatically in this project directory
+- **Web App** — chat UI + portfolio dashboard, run locally with your own Claude API key
 
 ---
 
@@ -348,6 +352,40 @@ Monitors an existing covered call position and classifies its health into one of
 
 ---
 
+## Usage
+
+There are two ways to use the options skill pack:
+
+### Option A: Claude Code (skills)
+
+Use skills directly in Claude Code. Skills trigger automatically based on what you type.
+
+### Option B: Web Chat App
+
+A standalone chat interface powered by Claude API. Run locally with your own API key.
+
+```bash
+pip install -r app/requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-your-key-here
+python3 -m uvicorn app.main:app
+```
+
+Open http://localhost:8000 and start chatting. Same tools and reasoning as the skills, rendered as a chat UI with markdown.
+
+**Requires:** Python 3.10+, an [Anthropic API key](https://console.anthropic.com) with credits.
+
+### Option C: Docker (alternative)
+
+```bash
+cp app/.env.example app/.env
+# Edit app/.env — add your ANTHROPIC_API_KEY
+docker compose up
+```
+
+Open http://localhost:8000. Same as Option B but no Python setup needed — just Docker.
+
+---
+
 ## Setup
 
 ### 1. Install dependencies and initialise
@@ -545,6 +583,18 @@ launchctl unload ~/Library/LaunchAgents/com.options-monitor.plist
 
 ```
 options-skill-pack/
+├── app/                                          # Web chat app (Option B)
+│   ├── main.py                                   # FastAPI server + Claude API integration
+│   ├── tools.py                                  # Tool definitions + script executors
+│   ├── prompts.py                                # System prompt + per-skill guidance
+│   ├── requirements.txt                          # Python dependencies
+│   ├── .env.example                              # API key template
+│   └── static/                                   # Chat UI
+│       ├── index.html
+│       ├── style.css
+│       └── app.js
+├── Dockerfile                                    # Docker build (Option C)
+├── docker-compose.yml                            # Docker compose (Option C)
 ├── setup.sh                                      # one-time Claude Code setup (skills path)
 ├── setup_monitor.sh                              # first-time monitor setup (macOS/Linux)
 ├── setup_monitor.bat                             # first-time monitor setup (Windows)

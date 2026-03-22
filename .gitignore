@@ -18,3 +18,12 @@ __pycache__/
 portfolio.json
 monitor_config.json
 monitor.log
+
+# App — API key (copy from .env.example)
+app/.env
+
+# Playwright MCP logs
+.playwright-mcp/
+
+# Screenshots (dev artifacts)
+*.png
