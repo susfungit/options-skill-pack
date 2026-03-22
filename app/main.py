@@ -3,6 +3,7 @@
 import os
 import json
 import uuid
+from datetime import datetime
 from enum import Enum
 from typing import Optional
 
@@ -320,6 +321,46 @@ async def analyze_compare(req: CompareRequest):
         "covered_call": cc,
         "market_context": market_ctx,
     }
+
+
+# ── Chain viewer (no Claude, no tokens) ─────────────────────────────────────
+
+import re
+import subprocess
+
+_TICKER_RE = re.compile(r"^[A-Z]{1,5}$")
+
+
+class ChainRequest(BaseModel):
+    ticker: str
+    expiry: str
+    side: str = "both"
+
+
+@app.post("/api/chain")
+async def get_chain(req: ChainRequest):
+    """Fetch the full option chain for a ticker + expiry."""
+    import asyncio
+
+    ticker = req.ticker.upper()
+    if not _TICKER_RE.match(ticker):
+        raise HTTPException(status_code=400, detail="Invalid ticker format")
+    try:
+        datetime.strptime(req.expiry, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid expiry format (YYYY-MM-DD)")
+    if req.side not in ("puts", "calls", "both"):
+        raise HTTPException(status_code=400, detail="side must be puts, calls, or both")
+
+    script = os.path.join(os.path.dirname(__file__), "fetch_chain_view.py")
+    result = await asyncio.to_thread(
+        subprocess.run,
+        ["python3", script, ticker, req.expiry, req.side],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail=result.stderr.strip() or "Chain fetch failed")
+    return json.loads(result.stdout.strip())
 
 
 # ── Portfolio helpers ────────────────────────────────────────────────────────

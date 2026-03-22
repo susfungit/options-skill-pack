@@ -65,7 +65,7 @@ Open **http://localhost:8000**.
 
 - **Chat** — AI-powered chat with all 7 skills available as tools. Toggle the AI switch off to run scripts without spending API tokens (Check and Analyze still work).
 - **Portfolio** — Add, edit, check, close, and delete option positions. "Check All" runs monitors for every open position and classifies each into a zone (SAFE → ACT NOW). After each check, positions show actionable suggestions — profit-taking at 50%/75% of max profit, gamma risk warnings near expiry, and defensive guidance based on zone.
-- **Analyzer** — Run selector scripts directly (no AI tokens). Pick a ticker and strategy, or use "Compare All" to run all 3 selectors in parallel with market context. Auto-suggests the best strategy based on 20-day trend and ATM IV level.
+- **Analyzer** — Run selector scripts directly (no AI tokens). Pick a ticker and strategy, or use "Compare All" to run all 3 selectors in parallel with market context. Auto-suggests the best strategy based on 20-day trend and ATM IV level. After each analysis, click "View Chain" to see the full option chain for that expiry — recommended strikes are highlighted.
 
 **Requirements:** Python 3.10+, an [Anthropic API key](https://console.anthropic.com) with credits.
 

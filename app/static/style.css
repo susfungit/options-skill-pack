@@ -1401,6 +1401,131 @@ body {
   vertical-align: middle;
 }
 
+/* ── Chain Viewer ──────────────────────────────────────────────────────── */
+
+#az-chain-container {
+  margin: 0 24px 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.az-chain-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--bg-elevated);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.az-chain-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.az-chain-close:hover {
+  color: var(--text-primary);
+}
+
+.az-chain-section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 8px 16px 4px;
+  color: var(--text-muted);
+}
+
+.az-chain-scroll {
+  overflow-x: auto;
+}
+
+.az-chain-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.az-chain-table th {
+  text-align: right;
+  padding: 5px 10px;
+  font-weight: 600;
+  font-size: 10px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.az-chain-table td {
+  text-align: right;
+  padding: 3px 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.az-chain-table td.chain-strike {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.az-chain-table tbody tr:hover {
+  background: var(--bg-elevated);
+}
+
+.az-chain-highlight {
+  background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+
+.az-chain-highlight td.chain-strike {
+  color: var(--accent);
+}
+
+.az-chain-loading,
+.az-chain-error,
+.az-chain-empty {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 16px;
+  text-align: center;
+}
+
+.az-chain-error {
+  color: var(--pnl-negative);
+}
+
+.btn-view-chain {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  padding: 6px 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  margin-right: 8px;
+}
+
+.btn-view-chain:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
 /* ── Responsive ─────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {

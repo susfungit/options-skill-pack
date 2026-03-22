@@ -825,6 +825,7 @@ function renderCompareResult(data) {
           <div class="az-cm"><span class="az-cm-val">${bps.dte}d</span><span class="az-cm-lbl">DTE</span></div>
         </div>
         <div class="az-compare-actions">
+          <button class="btn-view-chain" onclick="viewChain('bull-put-spread', lastAnalysis && lastAnalysis.data ? lastAnalysis.data['bull-put-spread'] : null)">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('bull-put-spread')">Add to Portfolio</button>
         </div>
         `}
@@ -845,6 +846,7 @@ function renderCompareResult(data) {
           <div class="az-cm"><span class="az-cm-val">${ic.dte}d</span><span class="az-cm-lbl">DTE</span></div>
         </div>
         <div class="az-compare-actions">
+          <button class="btn-view-chain" onclick="viewChain('iron-condor', lastAnalysis && lastAnalysis.data ? lastAnalysis.data['iron-condor'] : null)">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('iron-condor')">Add to Portfolio</button>
         </div>
         `}
@@ -864,6 +866,7 @@ function renderCompareResult(data) {
           <div class="az-cm"><span class="az-cm-val">${cc.dte}d</span><span class="az-cm-lbl">DTE</span></div>
         </div>
         <div class="az-compare-actions">
+          <button class="btn-view-chain" onclick="viewChain('covered-call', lastAnalysis && lastAnalysis.data ? lastAnalysis.data['covered-call'] : null)">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('covered-call')">Add to Portfolio</button>
         </div>
         `}
@@ -975,6 +978,7 @@ function renderAnalysisResult(strategy, d) {
           </div>
         </div>
         <div class="az-actions">
+          <button class="btn-view-chain" onclick="viewChain()">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
         </div>
       </div>`;
@@ -1055,6 +1059,7 @@ function renderAnalysisResult(strategy, d) {
           </div>
         </div>
         <div class="az-actions">
+          <button class="btn-view-chain" onclick="viewChain()">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
         </div>
       </div>`;
@@ -1106,6 +1111,7 @@ function renderAnalysisResult(strategy, d) {
           </div>
         </div>
         <div class="az-actions">
+          <button class="btn-view-chain" onclick="viewChain()">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
         </div>
       </div>`;
@@ -1152,4 +1158,103 @@ function addAnalysisToPortfolio() {
   }
 
   document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+
+// ── Chain Viewer ────────────────────────────────────────────────────────────
+
+function extractHighlightStrikes(strategy, data) {
+  const strikes = new Set();
+  if (strategy === 'bull-put-spread') {
+    strikes.add(data.short_put.strike);
+    strikes.add(data.long_put.strike);
+  } else if (strategy === 'iron-condor') {
+    strikes.add(data.put_side.short_put.strike);
+    strikes.add(data.put_side.long_put.strike);
+    strikes.add(data.call_side.short_call.strike);
+    strikes.add(data.call_side.long_call.strike);
+  } else if (strategy === 'covered-call') {
+    strikes.add(data.short_call.strike);
+  }
+  return strikes;
+}
+
+function renderChainTable(chain, side, highlights) {
+  const container = document.getElementById('az-chain-container');
+
+  function buildTable(rows, label) {
+    if (!rows || rows.length === 0) return `<div class="az-chain-empty">No ${esc(label)} data available</div>`;
+    let html = `<div class="az-chain-section">
+      <div class="az-chain-section-label">${esc(label)}</div>
+      <div class="az-chain-scroll">
+      <table class="az-chain-table">
+        <thead><tr>
+          <th>Strike</th><th>Bid</th><th>Ask</th><th>Mid</th>
+          <th>Vol</th><th>OI</th><th>IV%</th><th>Delta</th>
+        </tr></thead><tbody>`;
+    for (const r of rows) {
+      const hl = highlights.has(r.strike) ? ' class="az-chain-highlight"' : '';
+      html += `<tr${hl}>
+        <td class="chain-strike">${r.strike.toFixed(1)}</td>
+        <td>${r.bid.toFixed(2)}</td><td>${r.ask.toFixed(2)}</td>
+        <td>${r.mid.toFixed(2)}</td>
+        <td>${r.volume}</td><td>${r.open_interest.toLocaleString()}</td>
+        <td>${r.iv_pct.toFixed(1)}</td><td>${r.delta.toFixed(3)}</td>
+      </tr>`;
+    }
+    html += '</tbody></table></div></div>';
+    return html;
+  }
+
+  let body = '';
+  if (side === 'puts' || side === 'both') body += buildTable(chain.puts, 'PUTS');
+  if (side === 'calls' || side === 'both') body += buildTable(chain.calls, 'CALLS');
+
+  container.innerHTML = `
+    <div class="az-chain-header">
+      <span>Option Chain &mdash; ${esc(chain.ticker)} ${esc(chain.expiry)} &middot; ${chain.dte} DTE</span>
+      <button class="az-chain-close" onclick="document.getElementById('az-chain-container').remove()">&times;</button>
+    </div>
+    ${body}`;
+}
+
+async function viewChain(strategyOverride, dataOverride) {
+  const strategy = strategyOverride || (lastAnalysis && lastAnalysis.strategy);
+  const data = dataOverride || (lastAnalysis && lastAnalysis.data);
+  if (!strategy || !data || data.error) return;
+
+  const sideMap = {
+    'bull-put-spread': 'puts',
+    'covered-call': 'calls',
+    'iron-condor': 'both',
+  };
+  const side = sideMap[strategy] || 'both';
+  const ticker = data.ticker;
+  const expiry = data.expiry;
+  const highlights = extractHighlightStrikes(strategy, data);
+
+  // Toggle off if already showing
+  const existing = document.getElementById('az-chain-container');
+  if (existing) { existing.remove(); return; }
+
+  // Show loading
+  const resultsEl = document.getElementById('az-results');
+  const loadingDiv = document.createElement('div');
+  loadingDiv.id = 'az-chain-container';
+  loadingDiv.innerHTML = '<div class="az-chain-loading">Loading option chain...</div>';
+  resultsEl.appendChild(loadingDiv);
+
+  try {
+    const resp = await fetch('/api/chain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticker, expiry, side }),
+    });
+    const chain = await resp.json();
+    if (chain.error) throw new Error(chain.error);
+    if (chain.detail) throw new Error(chain.detail);
+    renderChainTable(chain, side, highlights);
+  } catch (err) {
+    loadingDiv.innerHTML = `<div class="az-chain-error">${esc(err.message)}</div>`;
+  }
 }
