@@ -164,6 +164,7 @@ function renderPortfolio() {
     const zoneUpdated = p.zone_updated ? formatTimeAgo(p.zone_updated) : null;
     const pnl = p.pnl_per_contract;
     const buffer = p.buffer_pct;
+    const suggestion = p.suggestion || null;
 
     return `
       <div class="position-card ${isClosed ? 'closed' : ''} ${zone ? 'zone-' + zoneClass : ''}" style="animation-delay: ${i * 0.05}s" id="card-${i}">
@@ -205,6 +206,7 @@ function renderPortfolio() {
             <div class="metric-label">DTE</div>
           </div>
         </div>
+        ${suggestion && !isClosed ? `<div class="card-suggestion ${zoneClass}">${esc(suggestion)}</div>` : ''}
         <div class="card-actions">
           <button class="card-btn" onclick="editPosition(${i})">Edit</button>
           ${!isClosed ? `<button class="card-btn" onclick="checkPosition(${i})">Check</button>` : ''}
@@ -725,11 +727,12 @@ function clearAnalysis() {
 }
 
 function renderCompareResult(data) {
-  lastAnalysis = null; // Compare mode doesn't use single "Add to Portfolio"
+  lastAnalysis = null;
   const results = document.getElementById('az-results');
   const bps = data.bull_put_spread;
   const ic = data.iron_condor;
   const cc = data.covered_call;
+  const mc = data.market_context;
   const ticker = data.ticker;
   const price = bps.price || ic.price || cc.stock_price || 0;
 
@@ -747,15 +750,42 @@ function renderCompareResult(data) {
   const bestReturn = returns.reduce((a, b) => a.val > b.val ? a : b).strategy;
   const bestProb = probs.reduce((a, b) => a.val > b.val ? a : b).strategy;
 
+  // Suggestion strategy key (e.g. "bull-put-spread") or null
+  const suggested = mc && !mc.error && mc.suggestion ? mc.suggestion.strategy : null;
+  const strategyToKey = { 'Bull Put Spread': 'bull-put-spread', 'Iron Condor': 'iron-condor', 'Covered Call': 'covered-call' };
+
+  // Market context bar
+  let contextHtml = '';
+  if (mc && !mc.error) {
+    const t = mc.trend;
+    const trendIcon = t.classification === 'bullish' ? '\u2197' : t.classification === 'bearish' ? '\u2198' : '\u2192';
+    const sign5d = t.change_5d_pct >= 0 ? '+' : '';
+    const sign20d = t.change_20d_pct >= 0 ? '+' : '';
+    contextHtml = `
+      <div class="az-market-context">
+        <span class="az-mc-badge az-trend-${t.classification}">${trendIcon} ${t.classification.toUpperCase()}</span>
+        <span class="az-mc-detail">5d: ${sign5d}${t.change_5d_pct}% &middot; 20d: ${sign20d}${t.change_20d_pct}% &middot; 52w: ${t.percentile_52w}%ile</span>
+        <span class="az-mc-sep"></span>
+        <span class="az-iv-badge">IV: ${mc.iv.atm_iv_pct != null ? mc.iv.atm_iv_pct + '%' : 'N/A'} ${mc.iv.level.toUpperCase()}</span>
+        <span class="az-mc-sep"></span>
+        ${suggested
+          ? `<span class="az-suggestion-badge">\u2605 ${esc(mc.suggestion.label)}</span>`
+          : `<span class="az-mc-badge az-trend-bearish">\u26A0 ${esc(mc.suggestion.label)}</span>`
+        }
+        <span class="az-mc-reason">${esc(mc.suggestion.reason)}</span>
+      </div>`;
+  }
+
   results.innerHTML = `
     <div class="az-compare-header">
       <span class="az-ticker">${esc(ticker)}</span>
       <span class="az-price">$${price.toFixed(2)}</span>
       <span class="az-strategy-label" style="margin-left:12px;margin-bottom:0;">STRATEGY COMPARISON</span>
     </div>
+    ${contextHtml}
     <div class="az-compare-grid">
-      <div class="az-compare-card">
-        <div class="az-compare-title">Bull Put Spread</div>
+      <div class="az-compare-card ${suggested === 'bull-put-spread' ? 'az-suggested' : ''}">
+        <div class="az-compare-title">Bull Put Spread${suggested === 'bull-put-spread' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}</div>
         ${bps.error ? `<div class="az-error">${esc(bps.error)}</div>` : `
         <div class="az-compare-legs">
           <span class="leg-action sell">SELL</span> $${bps.short_put.strike}P
@@ -774,8 +804,8 @@ function renderCompareResult(data) {
         </div>
         `}
       </div>
-      <div class="az-compare-card">
-        <div class="az-compare-title">Iron Condor</div>
+      <div class="az-compare-card ${suggested === 'iron-condor' ? 'az-suggested' : ''}">
+        <div class="az-compare-title">Iron Condor${suggested === 'iron-condor' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}</div>
         ${ic.error ? `<div class="az-error">${esc(ic.error)}</div>` : `
         <div class="az-compare-legs">
           <span class="leg-action sell">SELL</span> $${ic.put_side.short_put.strike}P / $${ic.call_side.short_call.strike}C
@@ -794,8 +824,8 @@ function renderCompareResult(data) {
         </div>
         `}
       </div>
-      <div class="az-compare-card">
-        <div class="az-compare-title">Covered Call</div>
+      <div class="az-compare-card ${suggested === 'covered-call' ? 'az-suggested' : ''}">
+        <div class="az-compare-title">Covered Call${suggested === 'covered-call' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}</div>
         ${cc.error ? `<div class="az-error">${esc(cc.error)}</div>` : `
         <div class="az-compare-legs">
           <span class="leg-action sell">SELL</span> $${cc.short_call.strike}C @ $${cc.premium_per_share.toFixed(2)}
@@ -845,6 +875,16 @@ function buildCompareChatPrompt(data) {
   }
   if (!cc.error) {
     prompt += `Covered Call: sell $${cc.short_call.strike}C, premium $${cc.premium_per_share}, ${cc.annualized_return_pct}% annualized, ${cc.prob_called_pct}% prob called, ${cc.dte} DTE\n`;
+  }
+  if (data.market_context && !data.market_context.error) {
+    const mc = data.market_context;
+    const t = mc.trend;
+    const sign5d = t.change_5d_pct >= 0 ? '+' : '';
+    const sign20d = t.change_20d_pct >= 0 ? '+' : '';
+    prompt += `\nMarket Context:\n`;
+    prompt += `- Trend: ${t.classification} (5d: ${sign5d}${t.change_5d_pct}%, 20d: ${sign20d}${t.change_20d_pct}%, 52w percentile: ${t.percentile_52w}%)\n`;
+    prompt += `- ATM IV: ${mc.iv.atm_iv_pct}% (${mc.iv.level})\n`;
+    prompt += `- Auto-suggestion: ${mc.suggestion.label} \u2014 ${mc.suggestion.reason}\n`;
   }
   prompt += `\nWhich strategy fits best for ${ticker} given current conditions? Consider risk/reward, probability, and market outlook.`;
   return prompt;

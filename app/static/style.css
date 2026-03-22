@@ -617,6 +617,22 @@ body {
   margin-top: 4px;
 }
 
+.card-suggestion {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 10px;
+  margin-top: 10px;
+  border-radius: 6px;
+  border-left: 3px solid var(--zone-safe);
+  background: rgba(52, 211, 153, 0.06);
+  color: var(--text-secondary);
+}
+
+.card-suggestion.watch { border-left-color: var(--zone-watch); background: rgba(251, 191, 36, 0.06); }
+.card-suggestion.warning { border-left-color: var(--zone-warning); background: rgba(251, 146, 60, 0.06); }
+.card-suggestion.danger { border-left-color: var(--zone-danger); background: rgba(248, 113, 113, 0.06); }
+.card-suggestion.act { border-left-color: var(--zone-danger); background: rgba(248, 113, 113, 0.1); color: var(--zone-danger); font-weight: 500; }
+
 .card-actions {
   display: flex;
   gap: 8px;
@@ -1225,6 +1241,95 @@ body {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
+}
+
+/* ── Market Context Bar ────────────────────────────────────────────────── */
+
+.az-market-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  margin: 0 24px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.az-mc-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.az-trend-bullish { background: rgba(52, 211, 153, 0.15); color: var(--zone-safe); }
+.az-trend-bearish { background: rgba(248, 113, 113, 0.15); color: var(--zone-danger); }
+.az-trend-neutral { background: rgba(251, 191, 36, 0.15); color: var(--zone-watch); }
+
+.az-iv-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.az-mc-detail {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.az-mc-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
+
+.az-suggestion-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.az-mc-reason {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.az-compare-card.az-suggested {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+}
+
+.az-suggested-tag {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--accent);
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */

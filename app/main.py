@@ -158,9 +158,129 @@ class CompareRequest(BaseModel):
     dte_max: Optional[int] = None
 
 
+# ── Market context for compare mode ──────────────────────────────────────────
+
+def _suggest_strategy(trend: str, iv_level: str) -> dict:
+    """Rules-based strategy suggestion from trend + IV level."""
+    if trend == "bearish":
+        return {
+            "strategy": None,
+            "label": "Wait",
+            "reason": "Bearish trend detected \u2014 consider waiting or hedging",
+        }
+    if trend == "bullish":
+        if iv_level == "low":
+            return {
+                "strategy": "covered-call",
+                "label": "Covered Call",
+                "reason": "Bullish trend with low IV \u2014 sell calls on owned stock for income",
+            }
+        return {
+            "strategy": "bull-put-spread",
+            "label": "Bull Put Spread",
+            "reason": "Bullish trend with elevated IV \u2014 fat put premiums below support",
+        }
+    # neutral
+    if iv_level == "low":
+        return {
+            "strategy": "covered-call",
+            "label": "Covered Call",
+            "reason": "Neutral market with low IV \u2014 covered calls capture what premium exists",
+        }
+    return {
+        "strategy": "iron-condor",
+        "label": "Iron Condor",
+        "reason": "Range-bound market with elevated IV \u2014 ideal for iron condor premium",
+    }
+
+
+def _fetch_market_context(ticker: str) -> dict:
+    """Fetch trend + IV context for a ticker using yfinance. No Claude tokens."""
+    try:
+        import yfinance as yf
+        from datetime import datetime
+
+        tk = yf.Ticker(ticker)
+
+        # --- Price trend ---
+        hist = tk.history(period="1y")
+        if hist.empty or len(hist) < 2:
+            return {"error": f"No price history for {ticker}"}
+
+        current_price = float(hist["Close"].iloc[-1])
+        high_52w = float(hist["Close"].max())
+        low_52w = float(hist["Close"].min())
+        pct_range = high_52w - low_52w
+        percentile_52w = round((current_price - low_52w) / pct_range * 100) if pct_range > 0 else 50
+
+        # 5-day and 20-day changes
+        change_5d = round((current_price / float(hist["Close"].iloc[-6]) - 1) * 100, 1) if len(hist) >= 6 else 0
+        change_20d = round((current_price / float(hist["Close"].iloc[-21]) - 1) * 100, 1) if len(hist) >= 21 else 0
+
+        if change_20d > 3:
+            classification = "bullish"
+        elif change_20d < -3:
+            classification = "bearish"
+        else:
+            classification = "neutral"
+
+        # --- ATM IV from nearest expiry ---
+        atm_iv_pct = None
+        iv_level = "moderate"
+        try:
+            expirations = tk.options
+            if expirations:
+                chain = tk.option_chain(expirations[0])
+                all_strikes = []
+                for df in [chain.puts, chain.calls]:
+                    if not df.empty:
+                        df = df[df["impliedVolatility"] > 0].copy()
+                        if not df.empty:
+                            df["dist"] = (df["strike"] - current_price).abs()
+                            nearest = df.nsmallest(2, "dist")
+                            all_strikes.append(nearest["impliedVolatility"].mean())
+                if all_strikes:
+                    atm_iv = sum(all_strikes) / len(all_strikes)
+                    atm_iv_pct = round(atm_iv * 100, 1)
+        except Exception:
+            pass  # IV is optional — suggestion still works with trend alone
+
+        if atm_iv_pct is not None:
+            if atm_iv_pct < 20:
+                iv_level = "low"
+            elif atm_iv_pct < 40:
+                iv_level = "moderate"
+            elif atm_iv_pct < 60:
+                iv_level = "high"
+            else:
+                iv_level = "very_high"
+
+        suggestion = _suggest_strategy(classification, iv_level)
+
+        return {
+            "current_price": round(current_price, 2),
+            "trend": {
+                "change_5d_pct": change_5d,
+                "change_20d_pct": change_20d,
+                "high_52w": round(high_52w, 2),
+                "low_52w": round(low_52w, 2),
+                "percentile_52w": percentile_52w,
+                "classification": classification,
+            },
+            "iv": {
+                "atm_iv_pct": atm_iv_pct,
+                "level": iv_level,
+            },
+            "suggestion": suggestion,
+        }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.post("/api/analyze/compare")
 async def analyze_compare(req: CompareRequest):
-    """Run all 3 selectors in parallel and return results."""
+    """Run all 3 selectors + market context in parallel and return results."""
     import asyncio
 
     ticker = req.ticker.upper()
@@ -174,10 +294,11 @@ async def analyze_compare(req: CompareRequest):
         result_json = await asyncio.to_thread(execute_tool, tool_name, dict(base_input))
         return json.loads(result_json)
 
-    bps, ic, cc = await asyncio.gather(
+    bps, ic, cc, market_ctx = await asyncio.gather(
         run_tool("find_bull_put_spread"),
         run_tool("find_iron_condor"),
         run_tool("find_covered_call"),
+        asyncio.to_thread(_fetch_market_context, ticker),
     )
 
     return {
@@ -185,6 +306,7 @@ async def analyze_compare(req: CompareRequest):
         "bull_put_spread": bps,
         "iron_condor": ic,
         "covered_call": cc,
+        "market_context": market_ctx,
     }
 
 
@@ -372,6 +494,44 @@ def _classify_zone_covered_call(buffer_pct: float, call_value: float, credit: fl
     return "SAFE"
 
 
+def _position_suggestion(zone: str, strategy: str, pnl: float, net_credit: float,
+                         contracts: int, dte: int, buffer_pct: float) -> str | None:
+    """Rules-based suggestion for an open position. Returns a short action hint."""
+    max_profit = net_credit * 100 * contracts
+    profit_pct = (pnl / max_profit * 100) if max_profit > 0 else 0
+
+    # Profit-taking (only when position is profitable)
+    if pnl > 0:
+        if profit_pct >= 75:
+            return "Close candidate \u2014 captured 75%+ of max profit"
+        if profit_pct >= 50:
+            return "Consider closing \u2014 captured 50%+ of max profit"
+        if dte <= 14 and profit_pct >= 25:
+            return "Near expiry with profit \u2014 close to avoid gamma risk"
+
+    # Covered call specific
+    if strategy == "covered-call" and buffer_pct is not None and buffer_pct <= 2:
+        return "Shares may be called away \u2014 close call to keep shares or let assign"
+
+    # Zone-based defensive suggestions
+    if zone == "ACT NOW":
+        return "Close immediately or roll defensively"
+    if zone == "DANGER":
+        return "Roll or close to limit further loss"
+    if zone == "WARNING":
+        return "Consider rolling or reducing position size"
+    if zone == "WATCH":
+        if dte <= 7:
+            return "Expiry imminent \u2014 decide: close, roll, or let expire"
+        return "Monitor closely \u2014 prepare roll if it deteriorates"
+
+    # Safe with low DTE
+    if zone == "SAFE" and dte <= 7 and pnl >= 0:
+        return "Expiring soon in profit \u2014 let expire or close to lock in"
+
+    return None
+
+
 def _check_single_position(p: dict) -> dict:
     """Run the monitor script for a single position and return zone data."""
     from datetime import datetime, timezone
@@ -401,7 +561,12 @@ def _check_single_position(p: dict) -> dict:
                 data.get("loss_pct_of_max", 0),
                 data.get("dte", 30),
             )
-            return {
+            suggestion = _position_suggestion(
+                zone, strategy, data.get("pnl_per_contract", 0),
+                net_credit, p.get("contracts", 1), data.get("dte", 30),
+                data.get("buffer_pct", 0),
+            )
+            result = {
                 "zone": zone,
                 "zone_updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "buffer_pct": data.get("buffer_pct"),
@@ -409,6 +574,9 @@ def _check_single_position(p: dict) -> dict:
                 "stock_price": data.get("stock_price"),
                 "loss_pct_of_max": data.get("loss_pct_of_max"),
             }
+            if suggestion:
+                result["suggestion"] = suggestion
+            return result
 
         elif strategy == "iron-condor":
             sp = next(l for l in p["legs"] if l["type"] == "put" and l["action"] == "sell")
@@ -433,7 +601,12 @@ def _check_single_position(p: dict) -> dict:
                 data.get("loss_pct_of_max", 0),
                 data.get("dte", 30),
             )
-            return {
+            suggestion = _position_suggestion(
+                zone, strategy, data.get("pnl_per_contract", 0),
+                net_credit, p.get("contracts", 1), data.get("dte", 30),
+                data.get("worst_buffer_pct", 0),
+            )
+            result = {
                 "zone": zone,
                 "zone_updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "buffer_pct": data.get("worst_buffer_pct"),
@@ -442,6 +615,9 @@ def _check_single_position(p: dict) -> dict:
                 "stock_price": data.get("stock_price"),
                 "loss_pct_of_max": data.get("loss_pct_of_max"),
             }
+            if suggestion:
+                result["suggestion"] = suggestion
+            return result
 
         elif strategy == "covered-call":
             call = next(l for l in p["legs"] if l["type"] == "call")
@@ -465,13 +641,21 @@ def _check_single_position(p: dict) -> dict:
                 net_credit,
                 data.get("dte", 30),
             )
-            return {
+            suggestion = _position_suggestion(
+                zone, strategy, data.get("pnl_per_contract", 0),
+                net_credit, p.get("contracts", 1), data.get("dte", 30),
+                data.get("buffer_pct", 0),
+            )
+            result = {
                 "zone": zone,
                 "zone_updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "buffer_pct": data.get("buffer_pct"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
             }
+            if suggestion:
+                result["suggestion"] = suggestion
+            return result
 
         else:
             return {"zone": "UNKNOWN", "zone_error": f"Unsupported strategy: {strategy}"}

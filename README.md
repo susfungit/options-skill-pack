@@ -370,7 +370,17 @@ export ANTHROPIC_API_KEY=sk-ant-your-key-here
 python3 -m uvicorn app.main:app
 ```
 
-Open http://localhost:8000 and start chatting. Same tools and reasoning as the skills, rendered as a chat UI with markdown.
+Open http://localhost:8000. The app has two main areas:
+
+**Chat Sidebar** — AI-powered chat with all 7 skills available. Toggle the **AI switch** off to run scripts without spending API tokens (Check and Analyze still work, just no AI interpretation).
+
+**Portfolio Tab** — Add, edit, check, close, and delete option positions. "Check All" runs monitors for every open position and updates zone status. After each check, positions show **actionable suggestions** — profit-taking hints at 50%/75% of max profit, gamma risk warnings near expiry, and defensive guidance (roll, close) based on zone. Positions use UUID-based IDs.
+
+**Analyzer Tab** — Run selector scripts directly (no AI tokens used):
+- Pick a ticker and strategy (bull put spread, iron condor, or covered call)
+- View results with bid/ask prices, metrics, and an "Add to Portfolio" button
+- **Compare All** mode runs all 3 selectors in parallel, highlights the best return and probability, and **auto-suggests** the best strategy based on trend (20-day price change) and IV level (ATM implied volatility) — no AI tokens needed
+- When AI is on, results are also sent to chat for interpretation with enriched market context
 
 **Requires:** Python 3.10+, an [Anthropic API key](https://console.anthropic.com) with credits.
 
