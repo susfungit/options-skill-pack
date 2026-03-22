@@ -40,6 +40,7 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'portfolio') loadPortfolio();
+    if (tab.dataset.tab === 'profile') loadProfile();
   });
 });
 
@@ -638,10 +639,6 @@ document.getElementById('az-ticker').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') runAnalysis();
 });
 
-function onStrategyChange(value) {
-  document.getElementById('az-delta-group').style.display = value === 'compare' ? 'none' : 'block';
-}
-
 async function runAnalysis() {
   const ticker = document.getElementById('az-ticker').value.trim().toUpperCase();
   const strategy = document.getElementById('az-strategy').value;
@@ -650,7 +647,7 @@ async function runAnalysis() {
 
   const btn = document.getElementById('btn-analyze');
   btn.disabled = true;
-  btn.textContent = 'Analyzing...';
+  btn.textContent = 'Searching...';
   document.getElementById('az-empty').style.display = 'none';
   document.getElementById('az-results').innerHTML = '<div class="az-loading">Fetching live option chain data...</div>';
 
@@ -661,7 +658,7 @@ async function runAnalysis() {
   }
 
   btn.disabled = false;
-  btn.textContent = 'Analyze';
+  btn.textContent = 'Find Trade';
 }
 
 async function runSingleAnalysis(ticker, strategy, btn) {
@@ -1257,4 +1254,122 @@ async function viewChain(strategyOverride, dataOverride) {
   } catch (err) {
     loadingDiv.innerHTML = `<div class="az-chain-error">${esc(err.message)}</div>`;
   }
+}
+
+
+// ── Profile ─────────────────────────────────────────────────────────────────
+
+let cachedProfile = null;
+
+async function loadProfile() {
+  try {
+    const res = await fetch('/api/profile');
+    const profile = await res.json();
+    cachedProfile = profile;
+
+    // Personal
+    document.getElementById('pf-name').value = profile.name || '';
+    const nameEl = document.getElementById('user-name');
+    nameEl.textContent = profile.name || '';
+
+    const sd = profile.strategy_defaults || {};
+    const bps = sd['bull-put-spread'] || {};
+    const ic = sd['iron-condor'] || {};
+    const cc = sd['covered-call'] || {};
+
+    document.getElementById('pf-bps-delta').value = bps.delta ?? '';
+    document.getElementById('pf-bps-dte-min').value = bps.dte_min ?? '';
+    document.getElementById('pf-bps-dte-max').value = bps.dte_max ?? '';
+    document.getElementById('pf-bps-width').value = bps.spread_width ?? '';
+    document.getElementById('pf-ic-delta').value = ic.delta ?? '';
+    document.getElementById('pf-ic-dte-min').value = ic.dte_min ?? '';
+    document.getElementById('pf-ic-dte-max').value = ic.dte_max ?? '';
+    document.getElementById('pf-cc-delta').value = cc.delta ?? '';
+    document.getElementById('pf-cc-dte-min').value = cc.dte_min ?? '';
+    document.getElementById('pf-cc-dte-max').value = cc.dte_max ?? '';
+
+    const pr = profile.profit_rules || {};
+    document.getElementById('pf-close-pct').value = pr.close_pct ?? '';
+    document.getElementById('pf-consider-pct').value = pr.consider_pct ?? '';
+    document.getElementById('pf-near-pct').value = pr.near_expiry_pct ?? '';
+    document.getElementById('pf-near-dte').value = pr.near_expiry_dte ?? '';
+
+    updateAnalyzerPlaceholders();
+  } catch (err) {
+    console.error('Failed to load profile:', err);
+  }
+}
+
+async function saveProfile() {
+  const btn = document.querySelector('.btn-save-profile');
+  const statusEl = document.getElementById('profile-status');
+  btn.disabled = true;
+  statusEl.textContent = '';
+
+  const body = {
+    name: document.getElementById('pf-name').value.trim(),
+    strategy_defaults: {
+      'bull-put-spread': {
+        delta: parseFloat(document.getElementById('pf-bps-delta').value) || 0.20,
+        dte_min: parseInt(document.getElementById('pf-bps-dte-min').value) || 35,
+        dte_max: parseInt(document.getElementById('pf-bps-dte-max').value) || 45,
+        spread_width: parseFloat(document.getElementById('pf-bps-width').value) || 10,
+      },
+      'iron-condor': {
+        delta: parseFloat(document.getElementById('pf-ic-delta').value) || 0.16,
+        dte_min: parseInt(document.getElementById('pf-ic-dte-min').value) || 35,
+        dte_max: parseInt(document.getElementById('pf-ic-dte-max').value) || 45,
+      },
+      'covered-call': {
+        delta: parseFloat(document.getElementById('pf-cc-delta').value) || 0.30,
+        dte_min: parseInt(document.getElementById('pf-cc-dte-min').value) || 30,
+        dte_max: parseInt(document.getElementById('pf-cc-dte-max').value) || 45,
+      },
+    },
+    profit_rules: {
+      close_pct: parseInt(document.getElementById('pf-close-pct').value) || 75,
+      consider_pct: parseInt(document.getElementById('pf-consider-pct').value) || 50,
+      near_expiry_pct: parseInt(document.getElementById('pf-near-pct').value) || 25,
+      near_expiry_dte: parseInt(document.getElementById('pf-near-dte').value) || 14,
+    },
+  };
+
+  try {
+    const res = await fetch('/api/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    cachedProfile = await res.json();
+    document.getElementById('user-name').textContent = cachedProfile.name || '';
+    statusEl.textContent = 'Saved';
+    statusEl.className = 'profile-status success';
+    updateAnalyzerPlaceholders();
+    setTimeout(() => { statusEl.textContent = ''; }, 2000);
+  } catch (err) {
+    statusEl.textContent = 'Save failed';
+    statusEl.className = 'profile-status error';
+  }
+  btn.disabled = false;
+}
+
+function updateAnalyzerPlaceholders() {
+  if (!cachedProfile) return;
+  const strategy = document.getElementById('az-strategy').value;
+  const sd = cachedProfile.strategy_defaults || {};
+
+  const strategyKey = strategy === 'compare' ? 'bull-put-spread' : strategy;
+  const defaults = sd[strategyKey] || {};
+
+  document.getElementById('az-dte-min').placeholder = defaults.dte_min ?? '35';
+  document.getElementById('az-dte-max').placeholder = defaults.dte_max ?? '45';
+  document.getElementById('az-delta').placeholder = defaults.delta ?? 'auto';
+}
+
+// Load profile on startup and update placeholders when strategy changes
+document.addEventListener('DOMContentLoaded', () => loadProfile());
+
+function onStrategyChange(value) {
+  document.getElementById('az-delta-group').style.display = value === 'compare' ? 'none' : 'block';
+  updateAnalyzerPlaceholders();
 }

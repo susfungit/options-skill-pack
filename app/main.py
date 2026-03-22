@@ -1,5 +1,6 @@
 """FastAPI app for the Options Skill Pack."""
 
+import copy
 import os
 import json
 import uuid
@@ -22,6 +23,22 @@ app = FastAPI(title="Options Skill Pack")
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORTFOLIO_PATH = os.path.join(PROJECT_ROOT, "portfolio.json")
+PROFILE_PATH = os.path.join(PROJECT_ROOT, "profile.json")
+
+DEFAULT_PROFILE = {
+    "name": "",
+    "strategy_defaults": {
+        "bull-put-spread": {"delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10},
+        "iron-condor": {"delta": 0.16, "dte_min": 35, "dte_max": 45},
+        "covered-call": {"delta": 0.30, "dte_min": 30, "dte_max": 45},
+    },
+    "profit_rules": {
+        "close_pct": 75,
+        "consider_pct": 50,
+        "near_expiry_pct": 25,
+        "near_expiry_dte": 14,
+    },
+}
 
 # ── Claude API client ────────────────────────────────────────────────────────
 
@@ -145,6 +162,7 @@ class AnalyzeRequest(BaseModel):
     target_delta: Optional[float] = Field(None, gt=0, lt=1)
     dte_min: Optional[int] = Field(None, ge=1, le=365)
     dte_max: Optional[int] = Field(None, ge=1, le=365)
+    spread_width: Optional[float] = Field(None, gt=0, le=50)
 
 
 @app.post("/api/analyze")
@@ -154,12 +172,26 @@ async def analyze(req: AnalyzeRequest):
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {req.strategy}")
 
     tool_input = {"ticker": req.ticker.upper()}
+
+    # Apply profile defaults, then override with explicit request values
+    profile = _read_profile()
+    defaults = profile["strategy_defaults"].get(req.strategy.value, {})
     if req.target_delta is not None:
         tool_input["target_delta"] = req.target_delta
+    elif "delta" in defaults:
+        tool_input["target_delta"] = defaults["delta"]
     if req.dte_min is not None:
         tool_input["dte_min"] = req.dte_min
+    elif "dte_min" in defaults:
+        tool_input["dte_min"] = defaults["dte_min"]
     if req.dte_max is not None:
         tool_input["dte_max"] = req.dte_max
+    elif "dte_max" in defaults:
+        tool_input["dte_max"] = defaults["dte_max"]
+    if req.spread_width is not None:
+        tool_input["spread_width"] = req.spread_width
+    elif "spread_width" in defaults:
+        tool_input["spread_width"] = defaults["spread_width"]
 
     result_json = execute_tool(tool_name, tool_input)
     return json.loads(result_json)
@@ -173,8 +205,8 @@ class CompareRequest(BaseModel):
 
 # ── Market context for compare mode ──────────────────────────────────────────
 
-def _suggest_strategy(trend: str, iv_level: str) -> dict:
-    """Rules-based strategy suggestion from trend + IV level."""
+def _suggest_strategy(trend: str, iv_level: str, percentile_52w: int = 50) -> dict:
+    """Rules-based strategy suggestion from trend + IV level + 52-week position."""
     if trend == "bearish":
         return {
             "strategy": None,
@@ -199,6 +231,13 @@ def _suggest_strategy(trend: str, iv_level: str) -> dict:
             "strategy": "covered-call",
             "label": "Covered Call",
             "reason": "Neutral market with low IV \u2014 covered calls capture what premium exists",
+        }
+    # Neutral + elevated IV: consider 52-week position
+    if percentile_52w <= 35:
+        return {
+            "strategy": "bull-put-spread",
+            "label": "Bull Put Spread",
+            "reason": "Near 52-week lows with elevated IV \u2014 sell puts below support for rich premiums",
         }
     return {
         "strategy": "iron-condor",
@@ -268,7 +307,7 @@ def _fetch_market_context(ticker: str) -> dict:
             else:
                 iv_level = "very_high"
 
-        suggestion = _suggest_strategy(classification, iv_level)
+        suggestion = _suggest_strategy(classification, iv_level, percentile_52w)
 
         return {
             "current_price": round(current_price, 2),
@@ -297,11 +336,18 @@ async def analyze_compare(req: CompareRequest):
     import asyncio
 
     ticker = req.ticker.upper()
+    profile = _read_profile()
+    bps_defaults = profile["strategy_defaults"].get("bull-put-spread", {})
+
     base_input = {"ticker": ticker}
     if req.dte_min is not None:
         base_input["dte_min"] = req.dte_min
+    elif "dte_min" in bps_defaults:
+        base_input["dte_min"] = bps_defaults["dte_min"]
     if req.dte_max is not None:
         base_input["dte_max"] = req.dte_max
+    elif "dte_max" in bps_defaults:
+        base_input["dte_max"] = bps_defaults["dte_max"]
 
     async def run_tool(tool_name):
         result_json = await asyncio.to_thread(execute_tool, tool_name, dict(base_input))
@@ -375,6 +421,52 @@ def _read_portfolio() -> list[dict]:
 def _write_portfolio(data: list[dict]):
     with open(PORTFOLIO_PATH, "w") as f:
         json.dump(data, f, indent=2)
+
+
+# ── Profile helpers ──────────────────────────────────────────────────────────
+
+
+def _read_profile() -> dict:
+    """Return saved profile merged over defaults (so new fields always exist)."""
+    profile = copy.deepcopy(DEFAULT_PROFILE)
+    if os.path.exists(PROFILE_PATH):
+        with open(PROFILE_PATH, "r") as f:
+            saved = json.load(f)
+        for key in profile:
+            if key in saved and isinstance(profile[key], dict):
+                profile[key].update(saved[key])
+            elif key in saved:
+                profile[key] = saved[key]
+    return profile
+
+
+def _write_profile(data: dict):
+    with open(PROFILE_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+@app.get("/api/profile")
+async def get_profile():
+    return _read_profile()
+
+
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    strategy_defaults: Optional[dict] = None
+    profit_rules: Optional[dict] = None
+
+
+@app.put("/api/profile")
+async def update_profile(req: ProfileUpdate):
+    profile = _read_profile()
+    if req.name is not None:
+        profile["name"] = req.name
+    if req.strategy_defaults is not None:
+        profile["strategy_defaults"] = req.strategy_defaults
+    if req.profit_rules is not None:
+        profile["profit_rules"] = req.profit_rules
+    _write_profile(profile)
+    return profile
 
 
 def _find_position(portfolio: list[dict], pos_id: str) -> tuple[int, dict]:
@@ -519,8 +611,6 @@ def _classify_zone_spread(buffer_pct: float, loss_pct: float, dte: int) -> str:
     else:
         thresholds = [(8, 20), (4, 40), (2, 65), (0, 85)]
 
-    if buffer_pct > thresholds[0][0] and loss_pct < thresholds[0][1]:
-        return "SAFE"
     if buffer_pct <= 0 or loss_pct > 85:
         return "ACT NOW"
     if buffer_pct <= thresholds[3][0] or loss_pct > thresholds[3][1]:
@@ -529,7 +619,9 @@ def _classify_zone_spread(buffer_pct: float, loss_pct: float, dte: int) -> str:
         return "WARNING"
     if buffer_pct <= thresholds[1][0] or loss_pct > thresholds[1][1]:
         return "WATCH"
-    return "SAFE"
+    if buffer_pct > thresholds[0][0] and loss_pct < thresholds[0][1]:
+        return "SAFE"
+    return "WATCH"
 
 
 def _classify_zone_covered_call(buffer_pct: float, call_value: float, credit: float, dte: int) -> str:
@@ -550,16 +642,23 @@ def _classify_zone_covered_call(buffer_pct: float, call_value: float, credit: fl
 def _position_suggestion(zone: str, strategy: str, pnl: float, net_credit: float,
                          contracts: int, dte: int, buffer_pct: float) -> str | None:
     """Rules-based suggestion for an open position. Returns a short action hint."""
+    profile = _read_profile()
+    rules = profile["profit_rules"]
+    close_pct = rules.get("close_pct", 75)
+    consider_pct = rules.get("consider_pct", 50)
+    near_expiry_pct = rules.get("near_expiry_pct", 25)
+    near_expiry_dte = rules.get("near_expiry_dte", 14)
+
     max_profit = net_credit * 100 * contracts
     profit_pct = (pnl / max_profit * 100) if max_profit > 0 else 0
 
     # Profit-taking (only when position is profitable)
     if pnl > 0:
-        if profit_pct >= 75:
-            return "Close candidate \u2014 captured 75%+ of max profit"
-        if profit_pct >= 50:
-            return "Consider closing \u2014 captured 50%+ of max profit"
-        if dte <= 14 and profit_pct >= 25:
+        if profit_pct >= close_pct:
+            return f"Close candidate \u2014 captured {close_pct}%+ of max profit"
+        if profit_pct >= consider_pct:
+            return f"Consider closing \u2014 captured {consider_pct}%+ of max profit"
+        if dte <= near_expiry_dte and profit_pct >= near_expiry_pct:
             return "Near expiry with profit \u2014 close to avoid gamma risk"
 
     # Covered call specific

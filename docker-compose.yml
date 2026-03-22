@@ -8,6 +8,7 @@ services:
         required: false
     volumes:
       - ./portfolio.json:/app/portfolio.json
+      - ./profile.json:/app/profile.json
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/portfolio')"]
       interval: 30s

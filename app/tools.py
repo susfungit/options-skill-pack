@@ -22,6 +22,7 @@ TOOLS = [
                 "target_delta": {"type": "number", "description": "Target delta for short put (default 0.20 = 20 delta)"},
                 "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 35)"},
                 "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
+                "spread_width": {"type": "number", "description": "Spread width as % below short strike for long put (default 10)"},
             },
             "required": ["ticker"],
         },
@@ -149,6 +150,8 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
             args.append(str(tool_input["dte_min"]))
         if "dte_max" in tool_input:
             args.append(str(tool_input["dte_max"]))
+        if "spread_width" in tool_input:
+            args.append(str(tool_input["spread_width"]))
         return args
 
     if tool_name == "find_iron_condor":

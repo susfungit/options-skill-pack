@@ -88,6 +88,30 @@
           "description": "Response includes max profit, max loss, breakeven, probability of profit, and return on risk"
         }
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "Find me a bull put spread on MSFT with a tight 5% spread width.",
+      "expected_output": "Trade card for MSFT using a 5% spread width instead of the default 10%. The long put should be approximately 5% below the short put strike rather than 10%. Should include all standard metrics and acknowledge the tighter spread width.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "trade_card_present",
+          "description": "Response contains the formatted box trade card with SELL and BUY legs shown"
+        },
+        {
+          "name": "uses_5pct_width",
+          "description": "Long put strike is approximately 5% below the short put strike, not the default 10%"
+        },
+        {
+          "name": "has_full_metrics",
+          "description": "Response includes max profit, max loss, breakeven, probability of profit, and return on risk"
+        },
+        {
+          "name": "narrower_spread_noted",
+          "description": "Response acknowledges the tighter spread width and its implications (lower max loss but also lower credit)"
+        }
+      ]
     }
   ]
 }

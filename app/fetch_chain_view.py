@@ -142,8 +142,8 @@ def fetch_chain(ticker_str, expiry_str, side="both"):
                 "bid": round(float(row.get("bid", 0) or 0), 2),
                 "ask": round(float(row.get("ask", 0) or 0), 2),
                 "mid": mid,
-                "volume": int(row.get("volume", 0) or 0),
-                "open_interest": int(row.get("openInterest", 0) or 0),
+                "volume": int(row.get("volume", 0) or 0) if not math.isnan(row.get("volume", 0) or 0) else 0,
+                "open_interest": int(row.get("openInterest", 0) or 0) if not math.isnan(row.get("openInterest", 0) or 0) else 0,
                 "iv_pct": round(iv * 100, 1),
                 "delta": delta,
             })

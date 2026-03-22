@@ -26,7 +26,7 @@ Collect the following. Ask for anything missing:
 | Ticker symbol | Required — ask |
 | Expiry preference | ~6 weeks out (look for 35–45 DTE) |
 | Short put delta target | 0.20 (20Δ) |
-| Spread width method | Long put = 10% below short strike |
+| Spread width % | 10 (long put placed 10% below short strike) |
 | Number of contracts | 1 (for display; scales linearly) |
 
 ---
@@ -39,18 +39,18 @@ The skill ships with `fetch_chain.py` in the same directory as this SKILL.md fil
 Run it via Bash before doing any web searches:
 
 ```bash
-python3 /path/to/fetch_chain.py [TICKER] [TARGET_DELTA] [DTE_MIN] [DTE_MAX]
+python3 /path/to/fetch_chain.py [TICKER] [TARGET_DELTA] [DTE_MIN] [DTE_MAX] [SPREAD_WIDTH]
 ```
 
 Substitute the actual absolute path to `fetch_chain.py` — it lives alongside this SKILL.md file.
 Example for default parameters:
 ```bash
-python3 "$(dirname "$0")/fetch_chain.py" AAPL 0.20 35 45
+python3 "$(dirname "$0")/fetch_chain.py" AAPL 0.20 35 45 10
 ```
 
 Or resolve the path dynamically from the project root:
 ```bash
-python3 "$(git rev-parse --show-toplevel)/.claude/local-marketplace/plugins/bull-put-spread-selector/skills/bull-put-spread-selector/fetch_chain.py" [TICKER] [TARGET_DELTA] 35 45
+python3 "$(git rev-parse --show-toplevel)/.claude/local-marketplace/plugins/bull-put-spread-selector/skills/bull-put-spread-selector/fetch_chain.py" [TICKER] [TARGET_DELTA] 35 45 [SPREAD_WIDTH]
 ```
 
 The script returns JSON with all fields pre-calculated:
@@ -88,7 +88,7 @@ Short put strike  ≈ stock_price × (1 - otm_pct)
   (e.g. stock=$100, IV=30%, DTE=42 → otm_pct ≈ 0.085 → strike ≈ $91.50 → round to nearest $0.50)
   Note: this formula breaks down for very high IV (>100%) — use direct Black-Scholes in that case.
 
-Long put strike   = round(short_strike × 0.90, nearest listed strike)
+Long put strike   = round(short_strike × (1 - spread_width_pct/100), nearest listed strike)
 Spread width      = short_strike − long_strike
 
 Net credit estimate (mid):

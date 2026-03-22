@@ -64,8 +64,9 @@ Open **http://localhost:8000**.
 **The app has three tabs:**
 
 - **Chat** — AI-powered chat with all 7 skills available as tools. Toggle the AI switch off to run scripts without spending API tokens (Check and Analyze still work).
-- **Portfolio** — Add, edit, check, close, and delete option positions. "Check All" runs monitors for every open position and classifies each into a zone (SAFE → ACT NOW). After each check, positions show actionable suggestions — profit-taking at 50%/75% of max profit, gamma risk warnings near expiry, and defensive guidance based on zone.
-- **Analyzer** — Run selector scripts directly (no AI tokens). Pick a ticker and strategy, or use "Compare All" to run all 3 selectors in parallel with market context. Auto-suggests the best strategy based on 20-day trend and ATM IV level. After each analysis, click "View Chain" to see the full option chain for that expiry — recommended strikes are highlighted.
+- **Portfolio** — Add, edit, check, close, and delete option positions. "Check All" runs monitors for every open position and classifies each into a zone (SAFE → ACT NOW). After each check, positions show actionable suggestions — profit-taking thresholds are configurable in the Profile tab, with gamma risk warnings near expiry and defensive guidance based on zone.
+- **Analyzer** — Run selector scripts directly (no AI tokens). Pick a ticker and strategy, click "Find Trade", or use "Compare All" to run all 3 selectors in parallel with market context. Auto-suggests the best strategy based on 20-day trend, ATM IV level, and 52-week price position. After each analysis, click "View Chain" to see the full option chain for that expiry — recommended strikes are highlighted.
+- **Profile** — Configure your name (displayed in the sidebar), strategy defaults (delta, DTE range, spread width), and profit-taking rules. Settings persist server-side in `profile.json` and pre-fill the Analyzer inputs.
 
 **Requirements:** Python 3.10+, an [Anthropic API key](https://console.anthropic.com) with credits.
 
@@ -95,7 +96,7 @@ docker compose up
 
 Open **http://localhost:8000**. Same UI as Option 2.
 
-Portfolio data persists via a volume mount to `portfolio.json` in the project root. The container runs as a non-root user and includes a healthcheck on `/api/portfolio`.
+Portfolio and profile data persist via volume mounts to `portfolio.json` and `profile.json` in the project root. The container runs as a non-root user and includes a healthcheck on `/api/portfolio`.
 
 To rebuild after pulling updates:
 
@@ -136,7 +137,7 @@ Identifies the optimal short put and long put strikes for a bull put spread on a
 |---|---|---|
 | Expiry | 35–45 DTE | "30 DTE", "May 16 expiry" |
 | Short put delta | 20Δ | "sell a 15-delta put" |
-| Spread width | Long put = 10% below short | — |
+| Spread width | 10% below short strike | "5% spread width", "tight spread" |
 | Contracts | 1 | "5 contracts" |
 
 **Example output:**
@@ -467,6 +468,7 @@ options-skill-pack/
 ├── setup_monitor.bat                             # Monitor setup (Windows)
 ├── notify.py                                     # Notification sender (creds stay in-process)
 ├── portfolio.example.json                        # Template → portfolio.json
+├── profile.example.json                          # Template → profile.json
 ├── monitor_config.example.json                   # Template → monitor_config.json
 └── .claude/local-marketplace/plugins/
     ├── bull-put-spread-selector/                  # Find optimal put spread strikes
@@ -482,7 +484,7 @@ options-skill-pack/
 
 ## Evals
 
-Each skill has 3 test cases. Benchmark results (with_skill vs without_skill):
+Benchmark results (with_skill vs without_skill):
 
 | Skill | With skill | Without skill |
 |---|---|---|
@@ -501,6 +503,7 @@ Each skill has 3 test cases. Benchmark results (with_skill vs without_skill):
 - **No authentication** — the web app is designed for local/private use. Do not expose to the public internet without adding auth.
 - **API key** — stored in `app/.env` (gitignored). Never committed to the repo.
 - **Portfolio data** — `portfolio.json` is gitignored. In Docker, it's persisted via volume mount.
+- **Profile data** — `profile.json` is gitignored. Contains strategy defaults and preferences only (no secrets).
 - **Monitor credentials** — `monitor_config.json` is gitignored. `notify.py` reads it directly; credentials never reach Claude.
 - **Docker** — container runs as non-root user. Healthcheck enabled.
 - **Input validation** — ticker format validated (1-5 uppercase letters), numeric fields bounded, chat message roles restricted to user/assistant.

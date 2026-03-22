@@ -24,6 +24,7 @@
             <path d="M8 11L11 6.5L14 11L11 15.5Z" fill="var(--accent)" fill-opacity="0.35"/>
           </svg>
           <h1><span class="logo-accent">Stock</span><span class="logo-dim">Tales</span></h1>
+          <span id="user-name" class="user-name"></span>
         </div>
         <div class="header-controls">
           <label class="ai-toggle" title="When off, Check runs scripts only (no AI tokens)">
@@ -56,6 +57,9 @@
         </button>
         <button class="nav-tab" data-tab="analyzer">
           <span class="tab-icon">&#9671;</span> Analyzer
+        </button>
+        <button class="nav-tab" data-tab="profile">
+          <span class="tab-icon">&#9881;</span> Profile
         </button>
       </nav>
 
@@ -110,7 +114,7 @@
               </div>
             </div>
             <div class="form-group" style="align-self:flex-end;display:flex;gap:6px;">
-              <button class="btn-analyze" id="btn-analyze" onclick="runAnalysis()">Analyze</button>
+              <button class="btn-analyze" id="btn-analyze" onclick="runAnalysis()">Find Trade</button>
               <button class="btn-clear" id="btn-clear" onclick="clearAnalysis()" style="display:none;">Clear</button>
             </div>
           </div>
@@ -120,6 +124,85 @@
           <div class="empty-icon">&#9671;</div>
           <p>Pick a ticker and strategy to analyze</p>
           <p class="empty-sub">Runs selector scripts directly — no AI tokens used</p>
+        </div>
+      </section>
+
+      <!-- Profile Panel -->
+      <section id="panel-profile" class="panel">
+        <div class="profile-container">
+          <div class="profile-section">
+            <h3>Personal</h3>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Name</label>
+                <input type="text" id="pf-name" placeholder="Your name" maxlength="50">
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-section">
+            <h3>Strategy Defaults</h3>
+            <p class="profile-hint">These pre-fill the Analyzer and apply when no override is specified.</p>
+            <div class="profile-grid">
+              <div class="profile-strategy">
+                <div class="profile-strategy-label">Bull Put Spread</div>
+                <div class="form-row">
+                  <div class="form-group"><label>Delta</label><input type="number" id="pf-bps-delta" step="0.01" min="0.01" max="0.99"></div>
+                  <div class="form-group"><label>DTE Min</label><input type="number" id="pf-bps-dte-min" min="1" max="365"></div>
+                  <div class="form-group"><label>DTE Max</label><input type="number" id="pf-bps-dte-max" min="1" max="365"></div>
+                  <div class="form-group"><label>Width %</label><input type="number" id="pf-bps-width" step="1" min="1" max="50" title="Long put placed this % below short strike"></div>
+                </div>
+              </div>
+              <div class="profile-strategy">
+                <div class="profile-strategy-label">Iron Condor</div>
+                <div class="form-row">
+                  <div class="form-group"><label>Delta</label><input type="number" id="pf-ic-delta" step="0.01" min="0.01" max="0.99"></div>
+                  <div class="form-group"><label>DTE Min</label><input type="number" id="pf-ic-dte-min" min="1" max="365"></div>
+                  <div class="form-group"><label>DTE Max</label><input type="number" id="pf-ic-dte-max" min="1" max="365"></div>
+                </div>
+              </div>
+              <div class="profile-strategy">
+                <div class="profile-strategy-label">Covered Call</div>
+                <div class="form-row">
+                  <div class="form-group"><label>Delta</label><input type="number" id="pf-cc-delta" step="0.01" min="0.01" max="0.99"></div>
+                  <div class="form-group"><label>DTE Min</label><input type="number" id="pf-cc-dte-min" min="1" max="365"></div>
+                  <div class="form-group"><label>DTE Max</label><input type="number" id="pf-cc-dte-max" min="1" max="365"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-section">
+            <h3>Profit-Taking Rules</h3>
+            <p class="profile-hint">Thresholds that trigger position suggestions during monitoring.</p>
+            <div class="profile-grid">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Close candidate at</label>
+                  <div class="input-suffix"><input type="number" id="pf-close-pct" min="1" max="100"><span>% of max profit</span></div>
+                </div>
+                <div class="form-group">
+                  <label>Consider closing at</label>
+                  <div class="input-suffix"><input type="number" id="pf-consider-pct" min="1" max="100"><span>% of max profit</span></div>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Near-expiry profit threshold</label>
+                  <div class="input-suffix"><input type="number" id="pf-near-pct" min="1" max="100"><span>% of max profit</span></div>
+                </div>
+                <div class="form-group">
+                  <label>Near-expiry DTE threshold</label>
+                  <div class="input-suffix"><input type="number" id="pf-near-dte" min="1" max="60"><span>days</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-actions">
+            <button class="btn-save-profile" onclick="saveProfile()">Save Settings</button>
+            <span id="profile-status" class="profile-status"></span>
+          </div>
         </div>
       </section>
     </main>

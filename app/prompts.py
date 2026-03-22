@@ -24,7 +24,7 @@ SKILL_GUIDANCE = {
 
 **Strike selection context:**
 - The short put was selected near the target delta (default 20Δ = ~80% probability of profit)
-- The long put is ~10% below the short strike for defined risk
+- The long put is placed below the short strike at the configured spread width % (default 10%) for defined risk
 - If delta_source is "estimated", label prices as estimates
 
 **Risk checklist — flag these in your response:**

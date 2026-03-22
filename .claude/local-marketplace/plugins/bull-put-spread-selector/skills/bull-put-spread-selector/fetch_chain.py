@@ -3,11 +3,12 @@
 Fetch options chain data for a bull put spread via yfinance.
 
 Usage:
-  python3 fetch_chain.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX]
+  python3 fetch_chain.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX] [SPREAD_WIDTH]
 
   TARGET_DELTA  : absolute delta value, e.g. 0.20  (default: 0.20)
   DTE_MIN       : minimum DTE, e.g. 35             (default: 35)
   DTE_MAX       : maximum DTE, e.g. 45             (default: 45)
+  SPREAD_WIDTH  : % below short strike for long put (default: 10)
 
 Outputs JSON to stdout. Errors output JSON with an "error" key.
 """
@@ -122,6 +123,7 @@ def main():
     target_delta = float(sys.argv[2]) if len(sys.argv) > 2 else 0.20
     dte_min = int(sys.argv[3]) if len(sys.argv) > 3 else 35
     dte_max = int(sys.argv[4]) if len(sys.argv) > 4 else 45
+    spread_width_pct = float(sys.argv[5]) if len(sys.argv) > 5 else 10.0
 
     tk = yf.Ticker(ticker_sym)
 
@@ -194,8 +196,8 @@ def main():
     else:
         price_source = "last_trade_price"
 
-    # Long put: nearest listed strike ~10% below short
-    long_target = short_strike * 0.90
+    # Long put: nearest listed strike at spread_width_pct below short
+    long_target = short_strike * (1 - spread_width_pct / 100)
     valid["long_diff"] = (valid["strike"] - long_target).abs()
     long_row = valid.loc[valid["long_diff"].idxmin()].to_dict()
     long_strike = float(long_row["strike"])

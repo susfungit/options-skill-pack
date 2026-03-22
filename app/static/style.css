@@ -1546,3 +1546,132 @@ body {
   .modal { width: 95%; }
   .az-compare-grid { grid-template-columns: 1fr; }
 }
+
+
+/* ── Profile Panel ──────────────────────────────────────────────────────── */
+
+.user-name {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-left: 4px;
+}
+
+.user-name:not(:empty)::before {
+  content: "· ";
+}
+
+.profile-container {
+  padding: 24px;
+  max-width: 720px;
+}
+
+.profile-section {
+  margin-bottom: 32px;
+}
+
+.profile-section h3 {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+  letter-spacing: 0.02em;
+}
+
+.profile-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 16px 0;
+}
+
+.profile-strategy {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.profile-strategy-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.profile-strategy .form-row {
+  gap: 12px;
+}
+
+.input-suffix {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.input-suffix input {
+  width: 70px;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.input-suffix input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.input-suffix span {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-save-profile {
+  padding: 8px 24px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-save-profile:hover {
+  background: var(--accent-hover);
+}
+
+.btn-save-profile:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-status {
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.profile-status.success {
+  color: var(--green);
+}
+
+.profile-status.error {
+  color: var(--red);
+}
