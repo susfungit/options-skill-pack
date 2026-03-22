@@ -7,8 +7,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◆</text></svg>">
   <link rel="stylesheet" href="/static/style.css">
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -19,7 +21,14 @@
           <span class="logo-icon">&#9670;</span>
           <h1>OPTIONS SKILL PACK</h1>
         </div>
-        <div class="header-badge">LIVE</div>
+        <div class="header-controls">
+          <label class="ai-toggle" title="When off, Check runs scripts only (no AI tokens)">
+            <input type="checkbox" id="ai-toggle" checked>
+            <span class="ai-toggle-slider"></span>
+            <span class="ai-toggle-label">AI</span>
+          </label>
+          <div class="header-badge">LIVE</div>
+        </div>
       </div>
       <div id="messages">
         <div class="message assistant welcome">
@@ -40,15 +49,9 @@
         <button class="nav-tab active" data-tab="portfolio">
           <span class="tab-icon">&#9633;</span> Portfolio
         </button>
-        <!-- Future tabs go here -->
-        <!--
-        <button class="nav-tab" data-tab="dashboard">
-          <span class="tab-icon">&#9632;</span> Dashboard
+        <button class="nav-tab" data-tab="analyzer">
+          <span class="tab-icon">&#9671;</span> Analyzer
         </button>
-        <button class="nav-tab" data-tab="settings">
-          <span class="tab-icon">&#9881;</span> Settings
-        </button>
-        -->
       </nav>
 
       <!-- Portfolio Panel -->
@@ -69,6 +72,49 @@
           <div class="empty-icon">&#9670;</div>
           <p>No positions yet</p>
           <p class="empty-sub">Add your first position to start tracking</p>
+        </div>
+      </section>
+
+      <!-- Analyzer Panel -->
+      <section id="panel-analyzer" class="panel">
+        <div class="analyzer-controls">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Ticker</label>
+              <input type="text" id="az-ticker" placeholder="AAPL" style="text-transform:uppercase">
+            </div>
+            <div class="form-group">
+              <label>Strategy</label>
+              <select id="az-strategy" onchange="onStrategyChange(this.value)">
+                <option value="compare">Compare All</option>
+                <option value="bull-put-spread">Bull Put Spread</option>
+                <option value="iron-condor">Iron Condor</option>
+                <option value="covered-call">Covered Call</option>
+              </select>
+            </div>
+            <div class="form-group" id="az-delta-group" style="display:none;">
+              <label>Delta</label>
+              <input type="number" id="az-delta" step="0.01" placeholder="auto">
+            </div>
+            <div class="form-group">
+              <label>DTE Range</label>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input type="number" id="az-dte-min" placeholder="35" style="width:60px">
+                <span style="color:var(--text-muted);">–</span>
+                <input type="number" id="az-dte-max" placeholder="45" style="width:60px">
+              </div>
+            </div>
+            <div class="form-group" style="align-self:flex-end;display:flex;gap:6px;">
+              <button class="btn-analyze" id="btn-analyze" onclick="runAnalysis()">Analyze</button>
+              <button class="btn-clear" id="btn-clear" onclick="clearAnalysis()" style="display:none;">Clear</button>
+            </div>
+          </div>
+        </div>
+        <div id="az-results"></div>
+        <div id="az-empty" class="empty-state">
+          <div class="empty-icon">&#9671;</div>
+          <p>Pick a ticker and strategy to analyze</p>
+          <p class="empty-sub">Runs selector scripts directly — no AI tokens used</p>
         </div>
       </section>
     </main>
@@ -147,7 +193,6 @@
         </form>
       </div>
     </div>
-  </div>
 
     <!-- Close Position Modal -->
     <div id="close-modal-overlay" class="modal-overlay" style="display:none;" onclick="closeCloseModal(event)">

@@ -2,6 +2,7 @@
 
 import os
 import json
+import uuid
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -116,6 +117,77 @@ async def chat(req: ChatRequest):
         return ChatResponse(response=f"**Error:** {str(e)}")
 
 
+# ── Analyzer endpoint (no Claude, no tokens) ────────────────────────────────
+
+_STRATEGY_TO_TOOL = {
+    "bull-put-spread": "find_bull_put_spread",
+    "iron-condor": "find_iron_condor",
+    "covered-call": "find_covered_call",
+}
+
+
+class AnalyzeRequest(BaseModel):
+    ticker: str
+    strategy: str
+    target_delta: Optional[float] = None
+    dte_min: Optional[int] = None
+    dte_max: Optional[int] = None
+
+
+@app.post("/api/analyze")
+async def analyze(req: AnalyzeRequest):
+    tool_name = _STRATEGY_TO_TOOL.get(req.strategy)
+    if not tool_name:
+        raise HTTPException(status_code=400, detail=f"Unknown strategy: {req.strategy}")
+
+    tool_input = {"ticker": req.ticker.upper()}
+    if req.target_delta is not None:
+        tool_input["target_delta"] = req.target_delta
+    if req.dte_min is not None:
+        tool_input["dte_min"] = req.dte_min
+    if req.dte_max is not None:
+        tool_input["dte_max"] = req.dte_max
+
+    result_json = execute_tool(tool_name, tool_input)
+    return json.loads(result_json)
+
+
+class CompareRequest(BaseModel):
+    ticker: str
+    dte_min: Optional[int] = None
+    dte_max: Optional[int] = None
+
+
+@app.post("/api/analyze/compare")
+async def analyze_compare(req: CompareRequest):
+    """Run all 3 selectors in parallel and return results."""
+    import asyncio
+
+    ticker = req.ticker.upper()
+    base_input = {"ticker": ticker}
+    if req.dte_min is not None:
+        base_input["dte_min"] = req.dte_min
+    if req.dte_max is not None:
+        base_input["dte_max"] = req.dte_max
+
+    async def run_tool(tool_name):
+        result_json = await asyncio.to_thread(execute_tool, tool_name, dict(base_input))
+        return json.loads(result_json)
+
+    bps, ic, cc = await asyncio.gather(
+        run_tool("find_bull_put_spread"),
+        run_tool("find_iron_condor"),
+        run_tool("find_covered_call"),
+    )
+
+    return {
+        "ticker": ticker,
+        "bull_put_spread": bps,
+        "iron_condor": ic,
+        "covered_call": cc,
+    }
+
+
 # ── Portfolio helpers ────────────────────────────────────────────────────────
 
 def _read_portfolio() -> list[dict]:
@@ -128,6 +200,14 @@ def _read_portfolio() -> list[dict]:
 def _write_portfolio(data: list[dict]):
     with open(PORTFOLIO_PATH, "w") as f:
         json.dump(data, f, indent=2)
+
+
+def _find_position(portfolio: list[dict], pos_id: str) -> tuple[int, dict]:
+    """Find position by ID, return (index, position) or raise 404."""
+    for i, p in enumerate(portfolio):
+        if p.get("id") == pos_id:
+            return i, p
+    raise HTTPException(status_code=404, detail="Position not found")
 
 
 # ── Portfolio models ─────────────────────────────────────────────────────────
@@ -156,23 +236,54 @@ class Position(BaseModel):
 
 @app.get("/api/portfolio")
 async def list_portfolio():
-    return _read_portfolio()
+    portfolio = _read_portfolio()
+    # Backfill IDs for legacy positions
+    changed = False
+    for p in portfolio:
+        if "id" not in p:
+            p["id"] = uuid.uuid4().hex[:8]
+            changed = True
+    if changed:
+        _write_portfolio(portfolio)
+    return portfolio
 
 
 @app.post("/api/portfolio")
 async def add_position(position: Position):
     portfolio = _read_portfolio()
-    portfolio.append(position.model_dump(exclude_none=True))
+    entry = position.model_dump(exclude_none=True)
+    entry["id"] = uuid.uuid4().hex[:8]
+    portfolio.append(entry)
     _write_portfolio(portfolio)
-    return {"status": "ok", "index": len(portfolio) - 1}
+    return {"status": "ok", "id": entry["id"]}
 
 
-@app.put("/api/portfolio/{index}")
-async def update_position(index: int, position: Position):
+@app.post("/api/portfolio/check")
+async def check_all_positions():
+    """Run monitors for all open positions, save zones to portfolio.json."""
     portfolio = _read_portfolio()
-    if index < 0 or index >= len(portfolio):
-        raise HTTPException(status_code=404, detail="Position not found")
-    portfolio[index] = position.model_dump(exclude_none=True)
+    results = []
+
+    for i, p in enumerate(portfolio):
+        if p.get("status") != "open":
+            results.append({"id": p.get("id"), "zone": "CLOSED"})
+            continue
+
+        zone_data = _check_single_position(p)
+        portfolio[i].update(zone_data)
+        results.append({"id": p.get("id"), **zone_data})
+
+    _write_portfolio(portfolio)
+    return results
+
+
+@app.put("/api/portfolio/{pos_id}")
+async def update_position(pos_id: str, position: Position):
+    portfolio = _read_portfolio()
+    idx, existing = _find_position(portfolio, pos_id)
+    updated = position.model_dump(exclude_none=True)
+    updated["id"] = pos_id
+    portfolio[idx] = updated
     _write_portfolio(portfolio)
     return {"status": "ok"}
 
@@ -182,14 +293,11 @@ class CloseRequest(BaseModel):
     close_price: Optional[float] = None
 
 
-@app.post("/api/portfolio/{index}/close")
-async def close_position(index: int, req: CloseRequest = CloseRequest()):
+@app.post("/api/portfolio/{pos_id}/close")
+async def close_position(pos_id: str, req: CloseRequest = CloseRequest()):
     from datetime import date
     portfolio = _read_portfolio()
-    if index < 0 or index >= len(portfolio):
-        raise HTTPException(status_code=404, detail="Position not found")
-
-    p = portfolio[index]
+    idx, p = _find_position(portfolio, pos_id)
     p["status"] = "closed"
     p["closed_date"] = date.today().isoformat()
 
@@ -206,22 +314,20 @@ async def close_position(index: int, req: CloseRequest = CloseRequest()):
     return {"status": "ok"}
 
 
-@app.post("/api/portfolio/{index}/reopen")
-async def reopen_position(index: int):
+@app.post("/api/portfolio/{pos_id}/reopen")
+async def reopen_position(pos_id: str):
     portfolio = _read_portfolio()
-    if index < 0 or index >= len(portfolio):
-        raise HTTPException(status_code=404, detail="Position not found")
-    portfolio[index]["status"] = "open"
+    idx, p = _find_position(portfolio, pos_id)
+    p["status"] = "open"
     _write_portfolio(portfolio)
     return {"status": "ok"}
 
 
-@app.delete("/api/portfolio/{index}")
-async def delete_position(index: int):
+@app.delete("/api/portfolio/{pos_id}")
+async def delete_position(pos_id: str):
     portfolio = _read_portfolio()
-    if index < 0 or index >= len(portfolio):
-        raise HTTPException(status_code=404, detail="Position not found")
-    removed = portfolio.pop(index)
+    idx, removed = _find_position(portfolio, pos_id)
+    portfolio.pop(idx)
     _write_portfolio(portfolio)
     return {"status": "ok", "removed": removed}
 
@@ -268,7 +374,7 @@ def _classify_zone_covered_call(buffer_pct: float, call_value: float, credit: fl
 
 def _check_single_position(p: dict) -> dict:
     """Run the monitor script for a single position and return zone data."""
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     strategy = p.get("strategy", "")
     ticker = p.get("ticker", "")
@@ -297,7 +403,7 @@ def _check_single_position(p: dict) -> dict:
             )
             return {
                 "zone": zone,
-                "zone_updated": datetime.utcnow().isoformat(timespec="seconds"),
+                "zone_updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "buffer_pct": data.get("buffer_pct"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
@@ -329,7 +435,7 @@ def _check_single_position(p: dict) -> dict:
             )
             return {
                 "zone": zone,
-                "zone_updated": datetime.utcnow().isoformat(timespec="seconds"),
+                "zone_updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "buffer_pct": data.get("worst_buffer_pct"),
                 "worst_side": data.get("worst_side"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
@@ -361,7 +467,7 @@ def _check_single_position(p: dict) -> dict:
             )
             return {
                 "zone": zone,
-                "zone_updated": datetime.utcnow().isoformat(timespec="seconds"),
+                "zone_updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "buffer_pct": data.get("buffer_pct"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
@@ -374,37 +480,16 @@ def _check_single_position(p: dict) -> dict:
         return {"zone": "UNKNOWN", "zone_error": str(e)}
 
 
-@app.post("/api/portfolio/check")
-async def check_all_positions():
-    """Run monitors for all open positions, save zones to portfolio.json."""
-    portfolio = _read_portfolio()
-    results = []
-
-    for i, p in enumerate(portfolio):
-        if p.get("status") != "open":
-            results.append({"index": i, "zone": "CLOSED"})
-            continue
-
-        zone_data = _check_single_position(p)
-        # Save zone data into the position
-        portfolio[i].update(zone_data)
-        results.append({"index": i, **zone_data})
-
-    _write_portfolio(portfolio)
-    return results
-
-
-@app.post("/api/portfolio/{index}/check")
-async def check_single(index: int):
+@app.post("/api/portfolio/{pos_id}/check")
+async def check_single(pos_id: str):
     """Run monitor for a single position, save zone to portfolio.json."""
     portfolio = _read_portfolio()
-    if index < 0 or index >= len(portfolio):
-        raise HTTPException(status_code=404, detail="Position not found")
+    idx, p = _find_position(portfolio, pos_id)
 
-    zone_data = _check_single_position(portfolio[index])
-    portfolio[index].update(zone_data)
+    zone_data = _check_single_position(p)
+    portfolio[idx].update(zone_data)
     _write_portfolio(portfolio)
-    return {"index": index, **zone_data}
+    return {"id": pos_id, **zone_data}
 
 
 # ── Static files ─────────────────────────────────────────────────────────────

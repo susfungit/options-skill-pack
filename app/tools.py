@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 
 # Project root — one level up from app/
@@ -233,11 +234,19 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
     return []
 
 
+_TICKER_RE = re.compile(r'^[A-Z]{1,5}$')
+
+
 def execute_tool(tool_name: str, tool_input: dict) -> str:
     """Execute a tool by running the corresponding Python script.
 
     Returns the JSON string output from the script, or an error JSON string.
     """
+    # Validate ticker if present
+    ticker = tool_input.get("ticker", "")
+    if ticker and not _TICKER_RE.match(ticker.upper()):
+        return json.dumps({"error": f"Invalid ticker: {ticker}"})
+
     script_path = SCRIPT_MAP.get(tool_name)
     if not script_path:
         return json.dumps({"error": f"Unknown tool: {tool_name}"})

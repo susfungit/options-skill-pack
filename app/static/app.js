@@ -1,3 +1,11 @@
+// ── HTML escaping ────────────────────────────────────────────────────────────
+
+function esc(str) {
+  const div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
 // ── Panel Navigation (right side tabs) ──────────────────────────────────────
 
 document.querySelectorAll('.nav-tab').forEach(tab => {
@@ -12,6 +20,14 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
 
 // Load portfolio on startup
 document.addEventListener('DOMContentLoaded', () => loadPortfolio());
+
+// ── AI Toggle ────────────────────────────────────────────────────────────────
+
+document.getElementById('ai-toggle').addEventListener('change', (e) => {
+  const chatArea = document.getElementById('input-area');
+  chatArea.classList.toggle('disabled', !e.target.checked);
+});
+
 
 // ── Chat ────────────────────────────────────────────────────────────────────
 
@@ -36,7 +52,7 @@ function addMessage(role, content) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
   if (role === 'assistant') {
-    div.innerHTML = marked.parse(content);
+    div.innerHTML = DOMPurify.sanitize(marked.parse(content));
   } else {
     div.textContent = content;
   }
@@ -48,6 +64,7 @@ function addMessage(role, content) {
 async function sendMessage() {
   const text = inputEl.value.trim();
   if (!text) return;
+  if (!document.getElementById('ai-toggle').checked) return;
 
   addMessage('user', text);
   inputEl.value = '';
@@ -71,14 +88,14 @@ async function sendMessage() {
 
     const data = await res.json();
     loadingEl.classList.remove('loading');
-    loadingEl.innerHTML = marked.parse(data.response);
+    loadingEl.innerHTML = DOMPurify.sanitize(marked.parse(data.response));
 
     history.push({ role: 'user', content: text });
     history.push({ role: 'assistant', content: data.response });
     if (history.length > 20) history = history.slice(-20);
   } catch (err) {
     loadingEl.classList.remove('loading');
-    loadingEl.innerHTML = `<strong>Error:</strong> ${err.message}`;
+    loadingEl.textContent = 'Error: ' + err.message;
   } finally {
     sendBtn.disabled = false;
     inputEl.focus();
@@ -153,21 +170,21 @@ function renderPortfolio() {
         <div class="card-top">
           <div>
             <div style="display:flex; align-items:center; gap:8px;">
-              <div class="card-ticker">${p.ticker}</div>
+              <div class="card-ticker">${esc(p.ticker)}</div>
               ${zone && !isClosed ? `
                 <div class="zone-info">
                   <span class="zone-dot ${zoneClass}"></span>
-                  <span class="zone-label ${zoneClass}">${zone}</span>
+                  <span class="zone-label ${zoneClass}">${esc(zone)}</span>
                 </div>
               ` : ''}
             </div>
-            <div class="card-label">${p.label}</div>
-            <div class="card-legs">${legsStr}</div>
+            <div class="card-label">${esc(p.label)}</div>
+            <div class="card-legs">${esc(legsStr)}</div>
           </div>
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-            <span class="card-strategy">${formatStrategy(p.strategy)}</span>
+            <span class="card-strategy">${esc(formatStrategy(p.strategy))}</span>
             ${isClosed ? '<span class="zone-badge" style="color:var(--text-muted);border-color:var(--border);">CLOSED</span>' : ''}
-            ${zoneUpdated && !isClosed ? `<span class="zone-updated">${zoneUpdated}</span>` : ''}
+            ${zoneUpdated && !isClosed ? `<span class="zone-updated">${esc(zoneUpdated)}</span>` : ''}
           </div>
         </div>
         <div class="card-metrics">
@@ -260,6 +277,7 @@ function formatDTE(expiry) {
 
 async function checkPosition(index) {
   const p = portfolio[index];
+  const aiEnabled = document.getElementById('ai-toggle').checked;
 
   // 1. Run monitor script silently → update badge immediately
   const card = document.getElementById('card-' + index);
@@ -268,12 +286,14 @@ async function checkPosition(index) {
     if (dot) dot.className = 'zone-dot checking';
   }
 
-  // Fire script check (don't await — let it run in parallel with chat)
-  fetch(`/api/portfolio/${index}/check`, { method: 'POST' })
+  // Always run the script check
+  fetch(`/api/portfolio/${p.id}/check`, { method: 'POST' })
     .then(() => loadPortfolio())
     .catch(() => {});
 
-  // 2. Send to chat sidebar for AI analysis
+  // 2. Only send to chat if AI is enabled
+  if (!aiEnabled) return;
+
   let prompt = '';
 
   if (p.strategy === 'bull-put-spread') {
@@ -453,7 +473,8 @@ async function savePosition(event) {
 
   try {
     if (editIndex !== '') {
-      await fetch(`/api/portfolio/${editIndex}`, {
+      const posId = portfolio[parseInt(editIndex)].id;
+      await fetch(`/api/portfolio/${posId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(position),
@@ -478,8 +499,8 @@ function closePosition(index) {
   const buffer = p.buffer_pct;
 
   document.getElementById('close-summary').innerHTML = `
-    <div class="close-ticker">${p.ticker} — ${p.label}</div>
-    <div class="close-detail">${formatLegs(p)} · ${p.expiry}</div>
+    <div class="close-ticker">${esc(p.ticker)} — ${esc(p.label)}</div>
+    <div class="close-detail">${esc(formatLegs(p))} · ${esc(p.expiry)}</div>
   `;
 
   document.getElementById('close-pnl').innerHTML = `
@@ -521,12 +542,13 @@ function updateClosePnl(index) {
 }
 
 async function confirmClosePosition() {
-  const index = document.getElementById('close-index').value;
+  const index = parseInt(document.getElementById('close-index').value);
   const notes = document.getElementById('close-notes').value;
   const closePrice = parseFloat(document.getElementById('close-price').value);
+  const posId = portfolio[index].id;
 
   try {
-    await fetch(`/api/portfolio/${index}/close`, {
+    await fetch(`/api/portfolio/${posId}/close`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -547,8 +569,9 @@ function closeCloseModal(event) {
 }
 
 async function reopenPosition(index) {
+  const posId = portfolio[index].id;
   try {
-    await fetch(`/api/portfolio/${index}/reopen`, { method: 'POST' });
+    await fetch(`/api/portfolio/${posId}/reopen`, { method: 'POST' });
     loadPortfolio();
   } catch (err) {
     alert('Failed to reopen: ' + err.message);
@@ -558,17 +581,18 @@ async function reopenPosition(index) {
 function deletePosition(index) {
   const p = portfolio[index];
   document.getElementById('delete-summary').innerHTML = `
-    <div class="close-ticker">${p.ticker} — ${p.label}</div>
-    <div class="close-detail">${formatLegs(p)} · ${p.expiry}</div>
+    <div class="close-ticker">${esc(p.ticker)} — ${esc(p.label)}</div>
+    <div class="close-detail">${esc(formatLegs(p))} · ${esc(p.expiry)}</div>
   `;
   document.getElementById('delete-index').value = index;
   document.getElementById('delete-modal-overlay').style.display = 'flex';
 }
 
 async function confirmDeletePosition() {
-  const index = document.getElementById('delete-index').value;
+  const index = parseInt(document.getElementById('delete-index').value);
+  const posId = portfolio[index].id;
   try {
-    await fetch(`/api/portfolio/${index}`, { method: 'DELETE' });
+    await fetch(`/api/portfolio/${posId}`, { method: 'DELETE' });
     closeDeleteModal();
     loadPortfolio();
   } catch (err) {
@@ -579,4 +603,488 @@ async function confirmDeletePosition() {
 function closeDeleteModal(event) {
   if (event && event.target !== document.getElementById('delete-modal-overlay')) return;
   document.getElementById('delete-modal-overlay').style.display = 'none';
+}
+
+// ── Analyzer ─────────────────────────────────────────────────────────────────
+
+document.getElementById('az-ticker').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') runAnalysis();
+});
+
+function onStrategyChange(value) {
+  document.getElementById('az-delta-group').style.display = value === 'compare' ? 'none' : 'block';
+}
+
+async function runAnalysis() {
+  const ticker = document.getElementById('az-ticker').value.trim().toUpperCase();
+  const strategy = document.getElementById('az-strategy').value;
+
+  if (!ticker) return;
+
+  const btn = document.getElementById('btn-analyze');
+  btn.disabled = true;
+  btn.textContent = 'Analyzing...';
+  document.getElementById('az-empty').style.display = 'none';
+  document.getElementById('az-results').innerHTML = '<div class="az-loading">Fetching live option chain data...</div>';
+
+  if (strategy === 'compare') {
+    await runCompareAnalysis(ticker, btn);
+  } else {
+    await runSingleAnalysis(ticker, strategy, btn);
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Analyze';
+}
+
+async function runSingleAnalysis(ticker, strategy, btn) {
+  const deltaVal = document.getElementById('az-delta').value;
+  const dteMinVal = document.getElementById('az-dte-min').value;
+  const dteMaxVal = document.getElementById('az-dte-max').value;
+
+  const body = { ticker, strategy };
+  if (deltaVal) body.target_delta = parseFloat(deltaVal);
+  if (dteMinVal) body.dte_min = parseInt(dteMinVal);
+  if (dteMaxVal) body.dte_max = parseInt(dteMaxVal);
+
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      document.getElementById('az-results').innerHTML = `<div class="az-error">${esc(data.error)}</div>`;
+      return;
+    }
+
+    renderAnalysisResult(strategy, data);
+    document.getElementById('btn-clear').style.display = 'inline-block';
+
+    if (document.getElementById('ai-toggle').checked) {
+      inputEl.value = buildAnalysisChatPrompt(strategy, data);
+      sendMessage();
+    }
+  } catch (err) {
+    document.getElementById('az-results').innerHTML = `<div class="az-error">${esc(err.message)}</div>`;
+    document.getElementById('btn-clear').style.display = 'inline-block';
+  }
+}
+
+async function runCompareAnalysis(ticker, btn) {
+  const dteMinVal = document.getElementById('az-dte-min').value;
+  const dteMaxVal = document.getElementById('az-dte-max').value;
+
+  const body = { ticker };
+  if (dteMinVal) body.dte_min = parseInt(dteMinVal);
+  if (dteMaxVal) body.dte_max = parseInt(dteMaxVal);
+
+  try {
+    const res = await fetch('/api/analyze/compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    renderCompareResult(data);
+    document.getElementById('btn-clear').style.display = 'inline-block';
+
+    if (document.getElementById('ai-toggle').checked) {
+      inputEl.value = buildCompareChatPrompt(data);
+      sendMessage();
+    }
+  } catch (err) {
+    document.getElementById('az-results').innerHTML = `<div class="az-error">${esc(err.message)}</div>`;
+    document.getElementById('btn-clear').style.display = 'inline-block';
+  }
+}
+
+function buildAnalysisChatPrompt(strategy, d) {
+  if (strategy === 'bull-put-spread') {
+    return `Assess this bull put spread on ${d.ticker} ($${d.price}): sell $${d.short_put.strike}P (Δ${d.short_put.delta}, IV ${d.short_put.iv_pct}%) / buy $${d.long_put.strike}P, credit $${d.net_credit}, max loss $${d.max_loss}, breakeven $${d.breakeven}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, ${d.dte} DTE. Is this a good trade?`;
+  }
+  if (strategy === 'iron-condor') {
+    const ps = d.put_side, cs = d.call_side;
+    return `Assess this iron condor on ${d.ticker} ($${d.price}): puts ${ps.short_put.strike}/${ps.long_put.strike} (Δ${ps.short_put.delta}, IV ${ps.short_put.iv_pct}%), calls ${cs.short_call.strike}/${cs.long_call.strike} (Δ${cs.short_call.delta}, IV ${cs.short_call.iv_pct}%), total credit $${d.total_credit}, max loss $${d.max_loss}, profit zone ${d.profit_zone}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, ${d.dte} DTE. Is this a good trade?`;
+  }
+  if (strategy === 'covered-call') {
+    return `Assess this covered call on ${d.ticker} ($${d.stock_price}): sell $${d.short_call.strike}C (Δ${d.short_call.delta}, IV ${d.short_call.iv_pct}%), premium $${d.premium_per_share}, static ${d.static_return_pct}%, annualized ${d.annualized_return_pct}%, downside protection ${d.downside_protection_pct}%, called away return ${d.called_away_return_pct}%, ${d.prob_called_pct}% prob called, ${d.dte} DTE. Is this a good trade?`;
+  }
+  return `Assess this ${formatStrategy(strategy)} result: ${JSON.stringify(d)}`;
+}
+
+let lastAnalysis = null;
+
+function clearAnalysis() {
+  document.getElementById('az-results').innerHTML = '';
+  document.getElementById('az-empty').style.display = 'block';
+  document.getElementById('btn-clear').style.display = 'none';
+  lastAnalysis = null;
+}
+
+function renderCompareResult(data) {
+  lastAnalysis = null; // Compare mode doesn't use single "Add to Portfolio"
+  const results = document.getElementById('az-results');
+  const bps = data.bull_put_spread;
+  const ic = data.iron_condor;
+  const cc = data.covered_call;
+  const ticker = data.ticker;
+  const price = bps.price || ic.price || cc.stock_price || 0;
+
+  // Find best values for highlighting
+  const returns = [
+    { strategy: 'Bull Put Spread', val: bps.return_on_risk_pct || 0 },
+    { strategy: 'Iron Condor', val: ic.return_on_risk_pct || 0 },
+    { strategy: 'Covered Call', val: cc.annualized_return_pct || 0 },
+  ];
+  const probs = [
+    { strategy: 'Bull Put Spread', val: bps.prob_profit_pct || 0 },
+    { strategy: 'Iron Condor', val: ic.prob_profit_pct || 0 },
+    { strategy: 'Covered Call', val: 100 - (cc.prob_called_pct || 0) },
+  ];
+  const bestReturn = returns.reduce((a, b) => a.val > b.val ? a : b).strategy;
+  const bestProb = probs.reduce((a, b) => a.val > b.val ? a : b).strategy;
+
+  results.innerHTML = `
+    <div class="az-compare-header">
+      <span class="az-ticker">${esc(ticker)}</span>
+      <span class="az-price">$${price.toFixed(2)}</span>
+      <span class="az-strategy-label" style="margin-left:12px;margin-bottom:0;">STRATEGY COMPARISON</span>
+    </div>
+    <div class="az-compare-grid">
+      <div class="az-compare-card">
+        <div class="az-compare-title">Bull Put Spread</div>
+        ${bps.error ? `<div class="az-error">${esc(bps.error)}</div>` : `
+        <div class="az-compare-legs">
+          <span class="leg-action sell">SELL</span> $${bps.short_put.strike}P
+          <span class="leg-action buy">BUY</span> $${bps.long_put.strike}P
+        </div>
+        <div class="az-compare-metrics">
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${bps.net_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit</span></div>
+          <div class="az-cm"><span class="az-cm-val ${bestReturn === 'Bull Put Spread' ? 'az-best' : ''}">${bps.return_on_risk_pct}%</span><span class="az-cm-lbl">Return/Risk</span></div>
+          <div class="az-cm"><span class="az-cm-val ${bestProb === 'Bull Put Spread' ? 'az-best' : ''}">${bps.prob_profit_pct}%</span><span class="az-cm-lbl">Prob Profit</span></div>
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-negative)">$${bps.max_loss.toFixed(0)}</span><span class="az-cm-lbl">Max Loss</span></div>
+          <div class="az-cm"><span class="az-cm-val">$${bps.breakeven.toFixed(2)}</span><span class="az-cm-lbl">Breakeven</span></div>
+          <div class="az-cm"><span class="az-cm-val">${bps.dte}d</span><span class="az-cm-lbl">DTE</span></div>
+        </div>
+        <div class="az-compare-actions">
+          <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('bull-put-spread')">Add to Portfolio</button>
+        </div>
+        `}
+      </div>
+      <div class="az-compare-card">
+        <div class="az-compare-title">Iron Condor</div>
+        ${ic.error ? `<div class="az-error">${esc(ic.error)}</div>` : `
+        <div class="az-compare-legs">
+          <span class="leg-action sell">SELL</span> $${ic.put_side.short_put.strike}P / $${ic.call_side.short_call.strike}C
+          <span class="leg-action buy">BUY</span> $${ic.put_side.long_put.strike}P / $${ic.call_side.long_call.strike}C
+        </div>
+        <div class="az-compare-metrics">
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${ic.total_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit</span></div>
+          <div class="az-cm"><span class="az-cm-val ${bestReturn === 'Iron Condor' ? 'az-best' : ''}">${ic.return_on_risk_pct}%</span><span class="az-cm-lbl">Return/Risk</span></div>
+          <div class="az-cm"><span class="az-cm-val ${bestProb === 'Iron Condor' ? 'az-best' : ''}">${ic.prob_profit_pct}%</span><span class="az-cm-lbl">Prob Profit</span></div>
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-negative)">$${ic.max_loss.toFixed(0)}</span><span class="az-cm-lbl">Max Loss</span></div>
+          <div class="az-cm"><span class="az-cm-val">${esc(ic.profit_zone)}</span><span class="az-cm-lbl">Profit Zone</span></div>
+          <div class="az-cm"><span class="az-cm-val">${ic.dte}d</span><span class="az-cm-lbl">DTE</span></div>
+        </div>
+        <div class="az-compare-actions">
+          <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('iron-condor')">Add to Portfolio</button>
+        </div>
+        `}
+      </div>
+      <div class="az-compare-card">
+        <div class="az-compare-title">Covered Call</div>
+        ${cc.error ? `<div class="az-error">${esc(cc.error)}</div>` : `
+        <div class="az-compare-legs">
+          <span class="leg-action sell">SELL</span> $${cc.short_call.strike}C @ $${cc.premium_per_share.toFixed(2)}
+        </div>
+        <div class="az-compare-metrics">
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${cc.premium_per_share.toFixed(2)}</span><span class="az-cm-lbl">Premium</span></div>
+          <div class="az-cm"><span class="az-cm-val ${bestReturn === 'Covered Call' ? 'az-best' : ''}">${cc.annualized_return_pct}%</span><span class="az-cm-lbl">Annualized</span></div>
+          <div class="az-cm"><span class="az-cm-val ${bestProb === 'Covered Call' ? 'az-best' : ''}">${(100 - cc.prob_called_pct).toFixed(1)}%</span><span class="az-cm-lbl">Prob Profit</span></div>
+          <div class="az-cm"><span class="az-cm-val">${cc.downside_protection_pct}%</span><span class="az-cm-lbl">Downside Prot.</span></div>
+          <div class="az-cm"><span class="az-cm-val">${cc.called_away_return_pct}%</span><span class="az-cm-lbl">Called Away</span></div>
+          <div class="az-cm"><span class="az-cm-val">${cc.dte}d</span><span class="az-cm-lbl">DTE</span></div>
+        </div>
+        <div class="az-compare-actions">
+          <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('covered-call')">Add to Portfolio</button>
+        </div>
+        `}
+      </div>
+    </div>`;
+
+  // Store all results for "Add to Portfolio"
+  lastAnalysis = {
+    strategy: 'compare',
+    data: { 'bull-put-spread': bps, 'iron-condor': ic, 'covered-call': cc },
+  };
+}
+
+function addCompareToPortfolio(strategy) {
+  if (!lastAnalysis || lastAnalysis.strategy !== 'compare') return;
+  const data = lastAnalysis.data[strategy];
+  if (!data || data.error) return;
+  lastAnalysis = { strategy, data };
+  addAnalysisToPortfolio();
+}
+
+function buildCompareChatPrompt(data) {
+  const bps = data.bull_put_spread;
+  const ic = data.iron_condor;
+  const cc = data.covered_call;
+  const ticker = data.ticker;
+
+  let prompt = `Compare these 3 strategies for ${ticker} and recommend which is best right now:\n\n`;
+  if (!bps.error) {
+    prompt += `Bull Put Spread: sell $${bps.short_put.strike}P / buy $${bps.long_put.strike}P, credit $${bps.net_credit}, ${bps.return_on_risk_pct}% return, ${bps.prob_profit_pct}% prob profit, ${bps.dte} DTE\n`;
+  }
+  if (!ic.error) {
+    prompt += `Iron Condor: puts ${ic.put_side.short_put.strike}/${ic.put_side.long_put.strike}, calls ${ic.call_side.short_call.strike}/${ic.call_side.long_call.strike}, credit $${ic.total_credit}, ${ic.return_on_risk_pct}% return, ${ic.prob_profit_pct}% prob profit, ${ic.dte} DTE\n`;
+  }
+  if (!cc.error) {
+    prompt += `Covered Call: sell $${cc.short_call.strike}C, premium $${cc.premium_per_share}, ${cc.annualized_return_pct}% annualized, ${cc.prob_called_pct}% prob called, ${cc.dte} DTE\n`;
+  }
+  prompt += `\nWhich strategy fits best for ${ticker} given current conditions? Consider risk/reward, probability, and market outlook.`;
+  return prompt;
+}
+
+function renderAnalysisResult(strategy, d) {
+  lastAnalysis = { strategy, data: d };
+  const results = document.getElementById('az-results');
+
+  if (strategy === 'bull-put-spread') {
+    results.innerHTML = `
+      <div class="az-result-card">
+        <div class="az-header">
+          <div>
+            <span class="az-ticker">${esc(d.ticker)}</span>
+            <span class="az-price">$${d.price.toFixed(2)}</span>
+          </div>
+          <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
+        </div>
+        <div class="az-strategy-label">Bull Put Spread</div>
+        <table class="az-legs-table">
+          <tr>
+            <td class="leg-action sell">SELL</td>
+            <td class="leg-strike">$${d.short_put.strike} P</td>
+            <td class="leg-delta">Δ ${d.short_put.delta.toFixed(2)}</td>
+            <td class="leg-iv">IV ${d.short_put.iv_pct}%</td>
+            <td class="leg-bid-ask">${d.short_put.bid.toFixed(2)} / ${d.short_put.ask.toFixed(2)}</td>
+            <td class="leg-mid">$${d.short_put.mid.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td class="leg-action buy">BUY</td>
+            <td class="leg-strike">$${d.long_put.strike} P</td>
+            <td class="leg-delta"></td>
+            <td class="leg-iv"></td>
+            <td class="leg-bid-ask">${d.long_put.bid.toFixed(2)} / ${d.long_put.ask.toFixed(2)}</td>
+            <td class="leg-mid">$${d.long_put.mid.toFixed(2)}</td>
+          </tr>
+        </table>
+        <div class="az-metrics">
+          <div class="metric">
+            <div class="metric-value" style="color:var(--pnl-positive)">$${d.net_credit.toFixed(2)}</div>
+            <div class="metric-label">Net Credit</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">$${d.max_profit.toFixed(0)}</div>
+            <div class="metric-label">Max Profit</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value" style="color:var(--pnl-negative)">$${d.max_loss.toFixed(0)}</div>
+            <div class="metric-label">Max Loss</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">$${d.breakeven.toFixed(2)}</div>
+            <div class="metric-label">Breakeven</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.return_on_risk_pct}%</div>
+            <div class="metric-label">Return/Risk</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.prob_profit_pct}%</div>
+            <div class="metric-label">Prob Profit</div>
+          </div>
+        </div>
+        <div class="az-actions">
+          <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
+        </div>
+      </div>`;
+  } else if (strategy === 'iron-condor') {
+    const ps = d.put_side, cs = d.call_side;
+    results.innerHTML = `
+      <div class="az-result-card">
+        <div class="az-header">
+          <div>
+            <span class="az-ticker">${esc(d.ticker)}</span>
+            <span class="az-price">$${d.price.toFixed(2)}</span>
+          </div>
+          <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
+        </div>
+        <div class="az-strategy-label">Iron Condor</div>
+        <div class="az-side-label">Put Side · $${ps.credit.toFixed(2)} credit</div>
+        <table class="az-legs-table">
+          <tr>
+            <td class="leg-action sell">SELL</td>
+            <td class="leg-strike">$${ps.short_put.strike} P</td>
+            <td class="leg-delta">Δ ${ps.short_put.delta.toFixed(2)}</td>
+            <td class="leg-iv">IV ${ps.short_put.iv_pct}%</td>
+            <td class="leg-bid-ask">${ps.short_put.bid.toFixed(2)} / ${ps.short_put.ask.toFixed(2)}</td>
+            <td class="leg-mid">$${ps.short_put.mid.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td class="leg-action buy">BUY</td>
+            <td class="leg-strike">$${ps.long_put.strike} P</td>
+            <td class="leg-delta"></td>
+            <td class="leg-iv"></td>
+            <td class="leg-bid-ask">${ps.long_put.bid.toFixed(2)} / ${ps.long_put.ask.toFixed(2)}</td>
+            <td class="leg-mid">$${ps.long_put.mid.toFixed(2)}</td>
+          </tr>
+        </table>
+        <div class="az-side-label">Call Side · $${cs.credit.toFixed(2)} credit</div>
+        <table class="az-legs-table">
+          <tr>
+            <td class="leg-action sell">SELL</td>
+            <td class="leg-strike">$${cs.short_call.strike} C</td>
+            <td class="leg-delta">Δ ${cs.short_call.delta.toFixed(2)}</td>
+            <td class="leg-iv">IV ${cs.short_call.iv_pct}%</td>
+            <td class="leg-bid-ask">${cs.short_call.bid.toFixed(2)} / ${cs.short_call.ask.toFixed(2)}</td>
+            <td class="leg-mid">$${cs.short_call.mid.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td class="leg-action buy">BUY</td>
+            <td class="leg-strike">$${cs.long_call.strike} C</td>
+            <td class="leg-delta"></td>
+            <td class="leg-iv"></td>
+            <td class="leg-bid-ask">${cs.long_call.bid.toFixed(2)} / ${cs.long_call.ask.toFixed(2)}</td>
+            <td class="leg-mid">$${cs.long_call.mid.toFixed(2)}</td>
+          </tr>
+        </table>
+        <div class="az-metrics">
+          <div class="metric">
+            <div class="metric-value" style="color:var(--pnl-positive)">$${d.total_credit.toFixed(2)}</div>
+            <div class="metric-label">Total Credit</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">$${d.max_profit.toFixed(0)}</div>
+            <div class="metric-label">Max Profit</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value" style="color:var(--pnl-negative)">$${d.max_loss.toFixed(0)}</div>
+            <div class="metric-label">Max Loss</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${esc(d.profit_zone)}</div>
+            <div class="metric-label">Profit Zone</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.return_on_risk_pct}%</div>
+            <div class="metric-label">Return/Risk</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.prob_profit_pct}%</div>
+            <div class="metric-label">Prob Profit</div>
+          </div>
+        </div>
+        <div class="az-actions">
+          <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
+        </div>
+      </div>`;
+  } else if (strategy === 'covered-call') {
+    results.innerHTML = `
+      <div class="az-result-card">
+        <div class="az-header">
+          <div>
+            <span class="az-ticker">${esc(d.ticker)}</span>
+            <span class="az-price">$${d.stock_price.toFixed(2)}</span>
+          </div>
+          <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
+        </div>
+        <div class="az-strategy-label">Covered Call</div>
+        <table class="az-legs-table">
+          <tr>
+            <td class="leg-action sell">SELL</td>
+            <td class="leg-strike">$${d.short_call.strike} C</td>
+            <td class="leg-delta">Δ ${d.short_call.delta.toFixed(2)}</td>
+            <td class="leg-iv">IV ${d.short_call.iv_pct}%</td>
+            <td class="leg-bid-ask">${d.short_call.bid.toFixed(2)} / ${d.short_call.ask.toFixed(2)}</td>
+            <td class="leg-mid">$${d.short_call.mid.toFixed(2)}</td>
+          </tr>
+        </table>
+        <div class="az-metrics">
+          <div class="metric">
+            <div class="metric-value" style="color:var(--pnl-positive)">$${d.premium_per_share.toFixed(2)}</div>
+            <div class="metric-label">Premium</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.static_return_pct}%</div>
+            <div class="metric-label">Static Return</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.annualized_return_pct}%</div>
+            <div class="metric-label">Annualized</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.downside_protection_pct}%</div>
+            <div class="metric-label">Downside Prot.</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.called_away_return_pct}%</div>
+            <div class="metric-label">Called Away</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.prob_called_pct}%</div>
+            <div class="metric-label">Prob Called</div>
+          </div>
+        </div>
+        <div class="az-actions">
+          <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
+        </div>
+      </div>`;
+  }
+}
+
+function addAnalysisToPortfolio() {
+  if (!lastAnalysis) return;
+  const { strategy, data } = lastAnalysis;
+
+  // Pre-fill the add position form
+  const form = document.getElementById('position-form');
+  document.getElementById('modal-title').textContent = 'New Position';
+  form.reset();
+  form.querySelector('[name="edit_index"]').value = '';
+  form.querySelector('[name="strategy"]').value = strategy;
+  form.querySelector('[name="ticker"]').value = data.ticker;
+  form.querySelector('[name="expiry"]').value = data.expiry;
+  const expMonth = new Date(data.expiry + 'T00:00:00').toLocaleString('en', { month: 'short' });
+  form.querySelector('[name="label"]').value = `${data.ticker} ${expMonth} ${formatStrategy(strategy)}`;
+
+  updateLegFields(strategy);
+
+  if (strategy === 'bull-put-spread') {
+    form.querySelector('[name="short_put_strike"]').value = data.short_put.strike;
+    form.querySelector('[name="short_put_price"]').value = data.short_put.mid;
+    form.querySelector('[name="long_put_strike"]').value = data.long_put.strike;
+    form.querySelector('[name="long_put_price"]').value = data.long_put.mid;
+    form.querySelector('[name="net_credit"]').value = data.net_credit;
+  } else if (strategy === 'iron-condor') {
+    form.querySelector('[name="short_put_strike"]').value = data.put_side.short_put.strike;
+    form.querySelector('[name="short_put_price"]').value = data.put_side.short_put.mid;
+    form.querySelector('[name="long_put_strike"]').value = data.put_side.long_put.strike;
+    form.querySelector('[name="long_put_price"]').value = data.put_side.long_put.mid;
+    form.querySelector('[name="short_call_strike"]').value = data.call_side.short_call.strike;
+    form.querySelector('[name="short_call_price"]').value = data.call_side.short_call.mid;
+    form.querySelector('[name="long_call_strike"]').value = data.call_side.long_call.strike;
+    form.querySelector('[name="long_call_price"]').value = data.call_side.long_call.mid;
+    form.querySelector('[name="net_credit"]').value = data.total_credit;
+  } else if (strategy === 'covered-call') {
+    form.querySelector('[name="call_strike"]').value = data.short_call.strike;
+    form.querySelector('[name="call_price"]').value = data.short_call.mid;
+    form.querySelector('[name="net_credit"]').value = data.premium_per_share;
+  }
+
+  document.getElementById('modal-overlay').style.display = 'flex';
 }
