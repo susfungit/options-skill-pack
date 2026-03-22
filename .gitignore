@@ -10,14 +10,29 @@
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
 
 # macOS
 .DS_Store
 
+# Windows
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/
+
 # Portfolio monitor — personal data and credentials (copy from *.example.json)
 portfolio.json
 monitor_config.json
-monitor.log
 
 # App — API key (copy from .env.example)
 app/.env

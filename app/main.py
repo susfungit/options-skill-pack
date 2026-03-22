@@ -3,12 +3,13 @@
 import os
 import json
 import uuid
+from enum import Enum
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import anthropic
 
 from app.tools import TOOLS, execute_tool
@@ -41,8 +42,13 @@ def get_client() -> anthropic.Anthropic:
 
 # ── Chat models & endpoint ───────────────────────────────────────────────────
 
+class MessageRole(str, Enum):
+    user = "user"
+    assistant = "assistant"
+
+
 class Message(BaseModel):
-    role: str
+    role: MessageRole
     content: str
 
 
@@ -113,8 +119,8 @@ async def chat(req: ChatRequest):
         return ChatResponse(response=f"**API error:** {e.message}")
     except anthropic.AuthenticationError as e:
         return ChatResponse(response="**Authentication failed.** Check your ANTHROPIC_API_KEY.")
-    except Exception as e:
-        return ChatResponse(response=f"**Error:** {str(e)}")
+    except Exception:
+        return ChatResponse(response="**Error:** An unexpected error occurred. Check server logs.")
 
 
 # ── Analyzer endpoint (no Claude, no tokens) ────────────────────────────────
@@ -126,17 +132,23 @@ _STRATEGY_TO_TOOL = {
 }
 
 
+class StrategyType(str, Enum):
+    bull_put_spread = "bull-put-spread"
+    iron_condor = "iron-condor"
+    covered_call = "covered-call"
+
+
 class AnalyzeRequest(BaseModel):
     ticker: str
-    strategy: str
-    target_delta: Optional[float] = None
-    dte_min: Optional[int] = None
-    dte_max: Optional[int] = None
+    strategy: StrategyType
+    target_delta: Optional[float] = Field(None, gt=0, lt=1)
+    dte_min: Optional[int] = Field(None, ge=1, le=365)
+    dte_max: Optional[int] = Field(None, ge=1, le=365)
 
 
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
-    tool_name = _STRATEGY_TO_TOOL.get(req.strategy)
+    tool_name = _STRATEGY_TO_TOOL.get(req.strategy.value)
     if not tool_name:
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {req.strategy}")
 

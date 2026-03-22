@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+*.md
+.claude
+!.claude/local-marketplace/plugins
+app/.env
+app/.env.example
+portfolio.json
+.venv
+.env
