@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StockTales</title>
+  <title>OptionsGuru</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -23,7 +23,7 @@
             <path d="M14 2L8 11L14 20L20 11Z" stroke="currentColor" stroke-width="1.5" fill="var(--accent)" fill-opacity="0.15"/>
             <path d="M8 11L11 6.5L14 11L11 15.5Z" fill="var(--accent)" fill-opacity="0.35"/>
           </svg>
-          <h1><span class="logo-accent">Stock</span><span class="logo-dim">Tales</span></h1>
+          <h1><span class="logo-accent">Options</span><span class="logo-dim">Guru</span></h1>
           <span id="user-name" class="user-name"></span>
         </div>
         <div class="header-controls">
@@ -105,7 +105,7 @@
             </div>
             <div class="form-group" id="az-delta-group" style="display:none;">
               <label>Delta</label>
-              <input type="number" id="az-delta" step="0.01" placeholder="auto">
+              <input type="text" id="az-delta" inputmode="decimal" pattern="^0?\.\d{1,2}$" placeholder="auto" maxlength="4">
             </div>
             <div class="form-group">
               <label>Expiration</label>
@@ -123,8 +123,9 @@
                 <input type="number" id="az-dte-max" placeholder="45" style="width:60px">
               </div>
               <div id="az-expiry-input" style="display:none;">
-                <input type="text" id="az-expiry" list="az-expiry-list" placeholder="YYYY-MM-DD" style="width:140px">
-                <datalist id="az-expiry-list"></datalist>
+                <select id="az-expiry" style="width:150px;">
+                  <option value="">Select expiry...</option>
+                </select>
               </div>
             </div>
             <div class="form-group" style="align-self:flex-end;display:flex;gap:6px;">

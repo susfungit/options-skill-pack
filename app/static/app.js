@@ -31,6 +31,8 @@ function esc(str) {
   return div.innerHTML;
 }
 
+function fmtOI(v) { return (v || 0).toLocaleString(); }
+
 // ── Panel Navigation (right side tabs) ──────────────────────────────────────
 
 document.querySelectorAll('.nav-tab').forEach(tab => {
@@ -191,6 +193,8 @@ function renderPortfolio() {
     const pnl = p.pnl_per_contract;
     const buffer = p.buffer_pct;
     const suggestion = p.suggestion || null;
+    const contracts = p.contracts || 1;
+    const maxLoss = computeMaxLoss(p);
 
     return `
       <div class="position-card ${isClosed ? 'closed' : ''} ${zone ? 'zone-' + zoneClass : ''}" style="animation-delay: ${i * 0.05}s" id="card-${i}">
@@ -228,8 +232,16 @@ function renderPortfolio() {
             <div class="metric-label">Buffer</div>
           </div>
           <div class="metric">
-            <div class="metric-value">${dteStr}</div>
-            <div class="metric-label">DTE</div>
+            <div class="metric-value" style="color:var(--pnl-negative)">${maxLoss != null ? '$' + maxLoss.toFixed(0) : '--'}</div>
+            <div class="metric-label">Max Loss</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${contracts}</div>
+            <div class="metric-label">Contracts</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${p.expiry || '--'}</div>
+            <div class="metric-label">Expiry</div>
           </div>
         </div>
         ${suggestion && !isClosed ? `<div class="card-suggestion ${zoneClass}">${esc(suggestion)}</div>` : ''}
@@ -292,6 +304,32 @@ async function checkAllPositions() {
 }
 
 // (checkSinglePosition merged into checkPosition below)
+
+function computeMaxLoss(p) {
+  const legs = p.legs || [];
+  const credit = p.net_credit || 0;
+  const contracts = p.contracts || 1;
+  const strikes = legs.map(l => l.strike).filter(Boolean);
+  if (strikes.length < 2 && !['covered-call', 'cash-secured-put'].includes(p.strategy)) return null;
+  if (p.strategy === 'bull-put-spread' || p.strategy === 'bear-call-spread') {
+    const width = Math.abs(strikes[0] - strikes[1]);
+    return (width - credit) * 100 * contracts;
+  }
+  if (p.strategy === 'iron-condor') {
+    const puts = legs.filter(l => l.type === 'put').map(l => l.strike);
+    const calls = legs.filter(l => l.type === 'call').map(l => l.strike);
+    const putWidth = puts.length === 2 ? Math.abs(puts[0] - puts[1]) : 0;
+    const callWidth = calls.length === 2 ? Math.abs(calls[0] - calls[1]) : 0;
+    const maxWidth = Math.max(putWidth, callWidth);
+    return (maxWidth - credit) * 100 * contracts;
+  }
+  if (p.strategy === 'cash-secured-put') {
+    const strike = strikes[0] || 0;
+    return (strike - credit) * 100 * contracts;
+  }
+  if (p.strategy === 'covered-call') return null; // unlimited downside on shares
+  return null;
+}
 
 function formatDTE(expiry) {
   const exp = new Date(expiry + 'T00:00:00');
@@ -714,17 +752,18 @@ async function loadExpirations() {
   const ticker = document.getElementById('az-ticker').value.trim().toUpperCase();
   if (!ticker || ticker === _lastExpTicker) return;
   _lastExpTicker = ticker;
-  const dl = document.getElementById('az-expiry-list');
-  dl.innerHTML = '';
+  const sel = document.getElementById('az-expiry');
+  sel.innerHTML = '<option value="">Select expiry...</option>';
   try {
     const res = await fetch(`/api/expirations/${ticker}`);
     const data = await res.json();
     for (const exp of data.expirations || []) {
       const opt = document.createElement('option');
       opt.value = exp;
-      dl.appendChild(opt);
+      opt.textContent = exp;
+      sel.appendChild(opt);
     }
-  } catch (e) { /* silent — user can still type manually */ }
+  } catch (e) { /* silent */ }
 }
 
 function onTickerChange() {
@@ -909,8 +948,8 @@ function renderCompareResult(data) {
         <div class="az-compare-title">Bull Put Spread${suggested === 'bull-put-spread' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}${trendPick === 'bull-put-spread' ? '<span class="az-trend-pick-tag">TREND PICK</span>' : ''}</div>
         ${bps.error ? `<div class="az-error">${esc(bps.error)}</div>` : `
         <div class="az-compare-legs">
-          <span class="leg-action sell">SELL</span> $${bps.short_put.strike}P
-          <span class="leg-action buy">BUY</span> $${bps.long_put.strike}P
+          <div><span class="leg-action sell">SELL</span> $${bps.short_put.strike}P <span class="leg-oi">OI:${fmtOI(bps.short_put.oi)}</span> <span class="leg-vol">Vol:${fmtOI(bps.short_put.volume)}</span></div>
+          <div><span class="leg-action buy">BUY</span> $${bps.long_put.strike}P <span class="leg-oi">OI:${fmtOI(bps.long_put.oi)}</span> <span class="leg-vol">Vol:${fmtOI(bps.long_put.volume)}</span></div>
         </div>
         <div class="az-compare-metrics">
           <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${bps.net_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit</span></div>
@@ -930,8 +969,8 @@ function renderCompareResult(data) {
         <div class="az-compare-title">Bear Call Spread${suggested === 'bear-call-spread' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}${trendPick === 'bear-call-spread' ? '<span class="az-trend-pick-tag">TREND PICK</span>' : ''}</div>
         ${bcs.error ? `<div class="az-error">${esc(bcs.error)}</div>` : `
         <div class="az-compare-legs">
-          <span class="leg-action sell">SELL</span> $${bcs.short_call.strike}C
-          <span class="leg-action buy">BUY</span> $${bcs.long_call.strike}C
+          <div><span class="leg-action sell">SELL</span> $${bcs.short_call.strike}C <span class="leg-oi">OI:${fmtOI(bcs.short_call.oi)}</span> <span class="leg-vol">Vol:${fmtOI(bcs.short_call.volume)}</span></div>
+          <div><span class="leg-action buy">BUY</span> $${bcs.long_call.strike}C <span class="leg-oi">OI:${fmtOI(bcs.long_call.oi)}</span> <span class="leg-vol">Vol:${fmtOI(bcs.long_call.volume)}</span></div>
         </div>
         <div class="az-compare-metrics">
           <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${bcs.net_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit</span></div>
@@ -951,8 +990,8 @@ function renderCompareResult(data) {
         <div class="az-compare-title">Iron Condor${suggested === 'iron-condor' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}${trendPick === 'iron-condor' ? '<span class="az-trend-pick-tag">TREND PICK</span>' : ''}</div>
         ${ic.error ? `<div class="az-error">${esc(ic.error)}</div>` : `
         <div class="az-compare-legs">
-          <span class="leg-action sell">SELL</span> $${ic.put_side.short_put.strike}P / $${ic.call_side.short_call.strike}C
-          <span class="leg-action buy">BUY</span> $${ic.put_side.long_put.strike}P / $${ic.call_side.long_call.strike}C
+          <div><span class="leg-action sell">SELL</span> $${ic.put_side.short_put.strike}P / $${ic.call_side.short_call.strike}C <span class="leg-oi">OI:${fmtOI(ic.put_side.short_put.oi + ic.call_side.short_call.oi)}</span></div>
+          <div><span class="leg-action buy">BUY</span> $${ic.put_side.long_put.strike}P / $${ic.call_side.long_call.strike}C <span class="leg-oi">OI:${fmtOI(ic.put_side.long_put.oi + ic.call_side.long_call.oi)}</span></div>
         </div>
         <div class="az-compare-metrics">
           <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${ic.total_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit</span></div>
@@ -972,7 +1011,7 @@ function renderCompareResult(data) {
         <div class="az-compare-title">Covered Call${suggested === 'covered-call' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}${trendPick === 'covered-call' ? '<span class="az-trend-pick-tag">TREND PICK</span>' : ''}</div>
         ${cc.error ? `<div class="az-error">${esc(cc.error)}</div>` : `
         <div class="az-compare-legs">
-          <span class="leg-action sell">SELL</span> $${cc.short_call.strike}C @ $${cc.premium_per_share.toFixed(2)}
+          <div><span class="leg-action sell">SELL</span> $${cc.short_call.strike}C @ $${cc.premium_per_share.toFixed(2)} <span class="leg-oi">OI:${fmtOI(cc.short_call.oi)}</span> <span class="leg-vol">Vol:${fmtOI(cc.short_call.volume)}</span></div>
         </div>
         <div class="az-compare-metrics">
           <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${cc.premium_per_share.toFixed(2)}</span><span class="az-cm-lbl">Premium</span></div>
@@ -992,7 +1031,7 @@ function renderCompareResult(data) {
         <div class="az-compare-title">Cash-Secured Put${suggested === 'cash-secured-put' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}${trendPick === 'cash-secured-put' ? '<span class="az-trend-pick-tag">TREND PICK</span>' : ''}</div>
         ${csp.error || !csp.short_put ? `<div class="az-error">${esc(csp.error || 'No data')}</div>` : `
         <div class="az-compare-legs">
-          <span class="leg-action sell">SELL</span> $${csp.short_put.strike}P @ $${csp.premium_per_share.toFixed(2)}
+          <div><span class="leg-action sell">SELL</span> $${csp.short_put.strike}P @ $${csp.premium_per_share.toFixed(2)} <span class="leg-oi">OI:${fmtOI(csp.short_put.oi)}</span> <span class="leg-vol">Vol:${fmtOI(csp.short_put.volume)}</span></div>
         </div>
         <div class="az-compare-metrics">
           <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${csp.premium_per_share.toFixed(2)}</span><span class="az-cm-lbl">Premium</span></div>
@@ -1090,6 +1129,8 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv">IV ${d.short_put.iv_pct}%</td>
             <td class="leg-bid-ask">${d.short_put.bid.toFixed(2)} / ${d.short_put.ask.toFixed(2)}</td>
             <td class="leg-mid">$${d.short_put.mid.toFixed(2)}</td>
+            <td class="leg-oi">OI ${fmtOI(d.short_put.oi)}</td>
+            <td class="leg-vol">Vol ${fmtOI(d.short_put.volume)}</td>
           </tr>
           <tr>
             <td class="leg-action buy">BUY</td>
@@ -1098,6 +1139,8 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv"></td>
             <td class="leg-bid-ask">${d.long_put.bid.toFixed(2)} / ${d.long_put.ask.toFixed(2)}</td>
             <td class="leg-mid">$${d.long_put.mid.toFixed(2)}</td>
+            <td class="leg-oi">OI ${fmtOI(d.long_put.oi)}</td>
+            <td class="leg-vol">Vol ${fmtOI(d.long_put.volume)}</td>
           </tr>
         </table>
         <div class="az-metrics">
@@ -1150,6 +1193,8 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv">IV ${d.short_call.iv_pct}%</td>
             <td class="leg-bid-ask">${d.short_call.bid.toFixed(2)} / ${d.short_call.ask.toFixed(2)}</td>
             <td class="leg-mid">$${d.short_call.mid.toFixed(2)}</td>
+            <td class="leg-oi">OI ${fmtOI(d.short_call.oi)}</td>
+            <td class="leg-vol">Vol ${fmtOI(d.short_call.volume)}</td>
           </tr>
           <tr>
             <td class="leg-action buy">BUY</td>
@@ -1158,6 +1203,8 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv"></td>
             <td class="leg-bid-ask">${d.long_call.bid.toFixed(2)} / ${d.long_call.ask.toFixed(2)}</td>
             <td class="leg-mid">$${d.long_call.mid.toFixed(2)}</td>
+            <td class="leg-oi">OI ${fmtOI(d.long_call.oi)}</td>
+            <td class="leg-vol">Vol ${fmtOI(d.long_call.volume)}</td>
           </tr>
         </table>
         <div class="az-metrics">
@@ -1212,6 +1259,8 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv">IV ${ps.short_put.iv_pct}%</td>
             <td class="leg-bid-ask">${ps.short_put.bid.toFixed(2)} / ${ps.short_put.ask.toFixed(2)}</td>
             <td class="leg-mid">$${ps.short_put.mid.toFixed(2)}</td>
+            <td class="leg-oi">OI ${fmtOI(ps.short_put.oi)}</td>
+            <td class="leg-vol">Vol ${fmtOI(ps.short_put.volume)}</td>
           </tr>
           <tr>
             <td class="leg-action buy">BUY</td>
@@ -1220,6 +1269,8 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv"></td>
             <td class="leg-bid-ask">${ps.long_put.bid.toFixed(2)} / ${ps.long_put.ask.toFixed(2)}</td>
             <td class="leg-mid">$${ps.long_put.mid.toFixed(2)}</td>
+            <td class="leg-oi">OI ${fmtOI(ps.long_put.oi)}</td>
+            <td class="leg-vol">Vol ${fmtOI(ps.long_put.volume)}</td>
           </tr>
         </table>
         <div class="az-side-label">Call Side · $${cs.credit.toFixed(2)} credit</div>
@@ -1231,6 +1282,8 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv">IV ${cs.short_call.iv_pct}%</td>
             <td class="leg-bid-ask">${cs.short_call.bid.toFixed(2)} / ${cs.short_call.ask.toFixed(2)}</td>
             <td class="leg-mid">$${cs.short_call.mid.toFixed(2)}</td>
+            <td class="leg-oi">OI ${fmtOI(cs.short_call.oi)}</td>
+            <td class="leg-vol">Vol ${fmtOI(cs.short_call.volume)}</td>
           </tr>
           <tr>
             <td class="leg-action buy">BUY</td>
@@ -1239,6 +1292,8 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv"></td>
             <td class="leg-bid-ask">${cs.long_call.bid.toFixed(2)} / ${cs.long_call.ask.toFixed(2)}</td>
             <td class="leg-mid">$${cs.long_call.mid.toFixed(2)}</td>
+            <td class="leg-oi">OI ${fmtOI(cs.long_call.oi)}</td>
+            <td class="leg-vol">Vol ${fmtOI(cs.long_call.volume)}</td>
           </tr>
         </table>
         <div class="az-metrics">
@@ -1291,6 +1346,8 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv">IV ${d.short_call.iv_pct}%</td>
             <td class="leg-bid-ask">${d.short_call.bid.toFixed(2)} / ${d.short_call.ask.toFixed(2)}</td>
             <td class="leg-mid">$${d.short_call.mid.toFixed(2)}</td>
+            <td class="leg-oi">OI ${fmtOI(d.short_call.oi)}</td>
+            <td class="leg-vol">Vol ${fmtOI(d.short_call.volume)}</td>
           </tr>
         </table>
         <div class="az-metrics">
@@ -1343,6 +1400,8 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv">IV ${d.short_put.iv_pct}%</td>
             <td class="leg-bid-ask">${d.short_put.bid.toFixed(2)} / ${d.short_put.ask.toFixed(2)}</td>
             <td class="leg-mid">$${d.short_put.mid.toFixed(2)}</td>
+            <td class="leg-oi">OI ${fmtOI(d.short_put.oi)}</td>
+            <td class="leg-vol">Vol ${fmtOI(d.short_put.volume)}</td>
           </tr>
         </table>
         <div class="az-metrics">
@@ -1652,6 +1711,13 @@ function updateAnalyzerPlaceholders() {
   document.getElementById('az-dte-max').placeholder = defaults.dte_max ?? '45';
   document.getElementById('az-delta').placeholder = defaults.delta ?? 'auto';
 }
+
+// Clamp delta input to 0.00–0.99
+document.getElementById('az-delta').addEventListener('blur', function() {
+  const v = parseFloat(this.value);
+  if (this.value === '' || isNaN(v)) { this.value = ''; return; }
+  this.value = Math.min(0.99, Math.max(0, v)).toFixed(2);
+});
 
 // Load profile on startup and update placeholders when strategy changes
 document.addEventListener('DOMContentLoaded', () => loadProfile());

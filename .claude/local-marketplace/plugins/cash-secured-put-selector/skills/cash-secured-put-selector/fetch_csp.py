@@ -18,6 +18,19 @@ import math
 from datetime import date, datetime
 import pytz
 
+
+def _safe_int(v):
+    """Convert to int, treating None/NaN as 0."""
+    if v is None:
+        return 0
+    try:
+        if math.isnan(v):
+            return 0
+    except TypeError:
+        pass
+    return int(v)
+
+
 try:
     import yfinance as yf
 except ImportError:
@@ -230,6 +243,8 @@ def main():
             "iv_pct": round(iv * 100, 1),
             "bid": bid,
             "ask": ask,
+            "oi": _safe_int(short_put.get("openInterest")),
+            "volume": _safe_int(short_put.get("volume")),
         },
         "premium_per_share": mid,
         "premium_per_contract": premium_per_contract,

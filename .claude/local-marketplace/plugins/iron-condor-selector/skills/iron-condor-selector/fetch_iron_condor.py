@@ -18,6 +18,19 @@ import math
 from datetime import date, datetime
 import pytz
 
+
+def _safe_int(v):
+    """Convert to int, treating None/NaN as 0."""
+    if v is None:
+        return 0
+    try:
+        if math.isnan(v):
+            return 0
+    except TypeError:
+        pass
+    return int(v)
+
+
 try:
     import yfinance as yf
 except ImportError:
@@ -347,12 +360,16 @@ def main():
                 "iv_pct": round(short_put_iv * 100, 1),
                 "bid": short_put_bid,
                 "ask": short_put_ask,
+                "oi": _safe_int(short_put_row.get("openInterest")),
+                "volume": _safe_int(short_put_row.get("volume")),
             },
             "long_put": {
                 "strike": long_put_strike,
                 "mid": long_put_mid,
                 "bid": long_put_bid,
                 "ask": long_put_ask,
+                "oi": _safe_int(long_put_row.get("openInterest")),
+                "volume": _safe_int(long_put_row.get("volume")),
             },
             "credit": put_credit,
             "width": put_width,
@@ -365,12 +382,16 @@ def main():
                 "iv_pct": round(short_call_iv * 100, 1),
                 "bid": short_call_bid,
                 "ask": short_call_ask,
+                "oi": _safe_int(short_call_row.get("openInterest")),
+                "volume": _safe_int(short_call_row.get("volume")),
             },
             "long_call": {
                 "strike": long_call_strike,
                 "mid": long_call_mid,
                 "bid": long_call_bid,
                 "ask": long_call_ask,
+                "oi": _safe_int(long_call_row.get("openInterest")),
+                "volume": _safe_int(long_call_row.get("volume")),
             },
             "credit": call_credit,
             "width": call_width,

@@ -579,7 +579,7 @@ body {
 .zone-updated {
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
@@ -647,15 +647,23 @@ body {
   font-size: 10px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   background: var(--bg-deep);
   padding: 3px 8px;
   border-radius: 3px;
 }
 
+.card-expiry {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  margin-left: 10px;
+}
+
 .card-metrics {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr) repeat(3, 1fr);
   gap: 12px;
   margin-top: 12px;
   padding-top: 12px;
@@ -673,7 +681,7 @@ body {
 
 .metric-label {
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   letter-spacing: 0.5px;
   text-transform: uppercase;
   margin-top: 2px;
@@ -1039,6 +1047,15 @@ body {
   align-items: flex-end;
 }
 
+.analyzer-controls #az-delta-group {
+  flex: 0 0 90px;
+}
+
+#az-delta {
+  -moz-appearance: textfield;
+  text-align: center;
+}
+
 .btn-analyze {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -1189,6 +1206,12 @@ body {
 .leg-mid {
   text-align: right;
   color: var(--text-primary);
+}
+
+.leg-oi, .leg-vol {
+  color: var(--text-secondary);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .az-metrics {
@@ -1379,7 +1402,7 @@ body {
 .az-mc-reason {
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-style: italic;
 }
 
