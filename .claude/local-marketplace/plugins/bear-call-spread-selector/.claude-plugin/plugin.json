@@ -1,0 +1,8 @@
+{
+  "name": "bear-call-spread-selector",
+  "version": "1.0.0",
+  "description": "Identifies the optimal strikes for a bear call spread (sell call + buy call) for a given stock.",
+  "author": {
+    "name": "sushant"
+  }
+}

@@ -556,6 +556,8 @@ Benchmark results (with_skill vs without_skill):
 | bull-put-spread-monitor | **100%** | 50% |
 | cash-secured-put-selector | **100%** | 38% |
 | cash-secured-put-monitor | **100%** | 40% |
+| bear-call-spread-selector | **100%** | 33% |
+| bear-call-spread-monitor | **100%** | 60% |
 
 ---
 

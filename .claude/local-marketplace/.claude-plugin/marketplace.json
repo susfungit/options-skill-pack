@@ -27,6 +27,26 @@
       "category": "finance"
     },
     {
+      "name": "bear-call-spread-selector",
+      "description": "Identifies the optimal strikes for a bear call spread (sell call + buy call) for a given stock.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/bear-call-spread-selector",
+      "category": "finance"
+    },
+    {
+      "name": "bear-call-spread-monitor",
+      "description": "Monitors bear call spread positions and classifies health into SAFE/WATCH/WARNING/DANGER/ACT NOW zones.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/bear-call-spread-monitor",
+      "category": "finance"
+    },
+    {
       "name": "iron-condor-selector",
       "description": "Identifies the optimal strikes for an iron condor (sell put + buy put + sell call + buy call) for a given stock.",
       "version": "1.0.0",

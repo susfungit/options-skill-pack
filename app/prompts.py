@@ -43,6 +43,52 @@ SKILL_GUIDANCE = {
 
 Present a clear trade summary with the strikes, all metrics, risk flags, and a brief rationale.""",
 
+    "find_bear_call_spread": """Interpretation guidance for the bear call spread data:
+
+**Strike selection context:**
+- The short call was selected near the target delta (default 20Δ = ~80% probability of profit)
+- The long call is placed above the short strike at the configured spread width % (default 10%) for defined risk
+- If delta_source is "estimated", label prices as estimates
+
+**Risk checklist — flag these in your response:**
+- Earnings within expiry window? → IV spike/crush risk
+- IV Rank < 25? → premium is thin, may not be worth selling
+- Stock in an uptrend? → directional risk, consider lower delta
+- Ex-dividend date within expiry? → early assignment risk on ITM calls
+- Spread width < $3? → commissions eat into profit
+
+**Key formulas (already computed in the data):**
+- max_profit = net_credit × 100
+- max_loss = (spread_width - net_credit) × 100
+- breakeven = short_strike + net_credit
+- prob_profit ≈ 1 - short_delta
+- return_on_risk = net_credit / (spread_width - net_credit) × 100
+
+Present a clear trade summary with the strikes, all metrics, risk flags, and a brief rationale.""",
+
+    "check_bear_call_spread": """Interpretation guidance for bear call spread position data:
+
+**Zone classification — use the WORSE of these two signals:**
+
+| Zone | Buffer (stock below short strike) | OR | Loss % of max loss |
+|------|---|---|---|
+| 🟢 SAFE | > 8% | AND | < 20% |
+| 🟡 WATCH | 4–8% | OR | 20–40% |
+| 🟠 WARNING | 2–4% | OR | 40–65% |
+| 🔴 DANGER | 0–2% | OR | 65–85% |
+| 🚨 ACT NOW | Stock at/above short strike | OR | > 85% |
+
+**DTE adjustments:**
+- DTE ≤ 5: tighten thresholds by ~1%
+- DTE ≥ 30: slightly more lenient
+
+**Zone-specific guidance:**
+- SAFE: No action, let theta work. Note profit captured so far.
+- WATCH: Monitor, set price alerts near short strike.
+- WARNING: Decide exit level in advance. Consider rolling.
+- DANGER: Strongly suggest closing or rolling up and out.
+- ACT NOW: Close immediately or roll. Assignment risk is real.""",
+
     "find_iron_condor": """Interpretation guidance for the iron condor data:
 
 **Strike selection context:**

@@ -1,0 +1,5 @@
+{
+  "name": "bear-call-spread-monitor",
+  "version": "1.0.0",
+  "description": "Monitors bear call spread positions and classifies health zones."
+}

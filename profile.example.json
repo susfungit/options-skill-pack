@@ -2,6 +2,7 @@
   "name": "",
   "strategy_defaults": {
     "bull-put-spread": { "delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10 },
+    "bear-call-spread": { "delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10 },
     "iron-condor":     { "delta": 0.16, "dte_min": 35, "dte_max": 45 },
     "covered-call":    { "delta": 0.30, "dte_min": 30, "dte_max": 45 },
     "cash-secured-put": { "delta": 0.25, "dte_min": 30, "dte_max": 45 }

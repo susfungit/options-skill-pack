@@ -28,6 +28,36 @@ TOOLS = [
         },
     },
     {
+        "name": "find_bear_call_spread",
+        "description": "Fetch live option chain data and find optimal bear call spread strikes (sell call + buy call) for a given stock. Returns strikes, credit, max profit/loss, breakeven, probability of profit.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. AAPL, NVDA)"},
+                "target_delta": {"type": "number", "description": "Target delta for short call (default 0.20 = 20 delta)"},
+                "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 35)"},
+                "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
+                "spread_width": {"type": "number", "description": "Spread width as % above short strike for long call (default 10)"},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "check_bear_call_spread",
+        "description": "Check the current status of an existing bear call spread position. Returns current stock price, option prices, P&L, buffer to short strike, and loss percentage of max loss.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol"},
+                "short_strike": {"type": "number", "description": "Short (sold) call strike price"},
+                "long_strike": {"type": "number", "description": "Long (bought) call strike price"},
+                "net_credit": {"type": "number", "description": "Original net credit received per share"},
+                "expiry": {"type": "string", "description": "Expiry date as YYYY-MM-DD"},
+            },
+            "required": ["ticker", "short_strike", "long_strike", "net_credit", "expiry"],
+        },
+    },
+    {
         "name": "find_iron_condor",
         "description": "Fetch live option chain data and find optimal iron condor strikes (sell put + buy put + sell call + buy call) for a given stock. Returns all 4 legs, total credit, profit zone, and probability of profit.",
         "input_schema": {
@@ -158,6 +188,8 @@ def _skill_path(plugin: str, skill: str, script: str) -> str:
 
 SCRIPT_MAP = {
     "find_bull_put_spread": _skill_path("bull-put-spread-selector", "bull-put-spread-selector", "fetch_chain.py"),
+    "find_bear_call_spread": _skill_path("bear-call-spread-selector", "bear-call-spread-selector", "fetch_bear_call.py"),
+    "check_bear_call_spread": _skill_path("bear-call-spread-monitor", "bear-call-spread-monitor", "check_bear_call.py"),
     "find_iron_condor": _skill_path("iron-condor-selector", "iron-condor-selector", "fetch_iron_condor.py"),
     "find_covered_call": _skill_path("covered-call-selector", "covered-call-selector", "fetch_covered_call.py"),
     "check_bull_put_spread": _skill_path("bull-put-spread-monitor", "bull-put-spread-monitor", "check_position.py"),
@@ -183,6 +215,27 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
         if "spread_width" in tool_input:
             args.append(str(tool_input["spread_width"]))
         return args
+
+    if tool_name == "find_bear_call_spread":
+        args = [tool_input["ticker"]]
+        if "target_delta" in tool_input:
+            args.append(str(tool_input["target_delta"]))
+        if "dte_min" in tool_input:
+            args.append(str(tool_input["dte_min"]))
+        if "dte_max" in tool_input:
+            args.append(str(tool_input["dte_max"]))
+        if "spread_width" in tool_input:
+            args.append(str(tool_input["spread_width"]))
+        return args
+
+    if tool_name == "check_bear_call_spread":
+        return [
+            tool_input["ticker"],
+            str(tool_input["short_strike"]),
+            str(tool_input["long_strike"]),
+            str(tool_input["net_credit"]),
+            tool_input["expiry"],
+        ]
 
     if tool_name == "find_iron_condor":
         args = [tool_input["ticker"]]

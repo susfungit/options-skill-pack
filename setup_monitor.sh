@@ -17,7 +17,7 @@ else
   echo "✓ Created portfolio.json from template"
   echo ""
   echo "  Edit portfolio.json to add your open positions."
-  echo "  Supported strategies: bull-put-spread, iron-condor, covered-call, cash-secured-put"
+  echo "  Supported strategies: bull-put-spread, bear-call-spread, iron-condor, covered-call, cash-secured-put"
   echo "  See README.md for the full schema and examples."
   echo ""
 fi

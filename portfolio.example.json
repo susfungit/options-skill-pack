@@ -28,6 +28,20 @@
     "status": "open"
   },
   {
+    "label": "AAPL May bear call",
+    "strategy": "bear-call-spread",
+    "ticker": "AAPL",
+    "legs": [
+      { "type": "call", "action": "sell", "strike": 270, "price": 2.14 },
+      { "type": "call", "action": "buy", "strike": 295, "price": 0.34 }
+    ],
+    "net_credit": 1.80,
+    "expiry": "2026-05-01",
+    "contracts": 1,
+    "opened": "2026-03-23",
+    "status": "open"
+  },
+  {
     "label": "AAPL Apr covered call",
     "strategy": "covered-call",
     "ticker": "AAPL",

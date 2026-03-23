@@ -381,6 +381,13 @@ function editPosition(index) {
     form.querySelector('[name="short_put_price"]').value = short.price || '';
     form.querySelector('[name="long_put_strike"]').value = long.strike;
     form.querySelector('[name="long_put_price"]').value = long.price || '';
+  } else if (p.strategy === 'bear-call-spread') {
+    const short = p.legs.find(l => l.action === 'sell');
+    const long = p.legs.find(l => l.action === 'buy');
+    form.querySelector('[name="short_call_strike"]').value = short.strike;
+    form.querySelector('[name="short_call_price"]').value = short.price || '';
+    form.querySelector('[name="long_call_strike"]').value = long.strike;
+    form.querySelector('[name="long_call_price"]').value = long.price || '';
   } else if (p.strategy === 'iron-condor') {
     const sp = p.legs.find(l => l.type === 'put' && l.action === 'sell');
     const lp = p.legs.find(l => l.type === 'put' && l.action === 'buy');
@@ -426,6 +433,16 @@ function updateLegFields(strategy) {
         <div class="form-group"><label>Short Put Price</label><input type="number" name="short_put_price" step="0.01"></div>
         <div class="form-group"><label>Long Put Strike</label><input type="number" name="long_put_strike" step="0.5" required></div>
         <div class="form-group"><label>Long Put Price</label><input type="number" name="long_put_price" step="0.01"></div>
+      </div>`;
+  } else if (strategy === 'bear-call-spread') {
+    costBasisGroup.style.display = 'none';
+    container.innerHTML = `
+      <div class="form-section-label">Legs</div>
+      <div class="form-row">
+        <div class="form-group"><label>Short Call Strike</label><input type="number" name="short_call_strike" step="0.5" required></div>
+        <div class="form-group"><label>Short Call Price</label><input type="number" name="short_call_price" step="0.01"></div>
+        <div class="form-group"><label>Long Call Strike</label><input type="number" name="long_call_strike" step="0.5" required></div>
+        <div class="form-group"><label>Long Call Price</label><input type="number" name="long_call_price" step="0.01"></div>
       </div>`;
   } else if (strategy === 'iron-condor') {
     costBasisGroup.style.display = 'none';
@@ -475,6 +492,11 @@ async function savePosition(event) {
     legs = [
       { type: 'put', action: 'sell', strike: parseFloat(form.querySelector('[name="short_put_strike"]').value), price: parseFloat(form.querySelector('[name="short_put_price"]').value) || undefined },
       { type: 'put', action: 'buy', strike: parseFloat(form.querySelector('[name="long_put_strike"]').value), price: parseFloat(form.querySelector('[name="long_put_price"]').value) || undefined },
+    ];
+  } else if (strategy === 'bear-call-spread') {
+    legs = [
+      { type: 'call', action: 'sell', strike: parseFloat(form.querySelector('[name="short_call_strike"]').value), price: parseFloat(form.querySelector('[name="short_call_price"]').value) || undefined },
+      { type: 'call', action: 'buy', strike: parseFloat(form.querySelector('[name="long_call_strike"]').value), price: parseFloat(form.querySelector('[name="long_call_price"]').value) || undefined },
     ];
   } else if (strategy === 'iron-condor') {
     legs = [
@@ -748,6 +770,9 @@ function buildAnalysisChatPrompt(strategy, d) {
   if (strategy === 'bull-put-spread') {
     return `Assess this bull put spread on ${d.ticker} ($${d.price}): sell $${d.short_put.strike}P (Δ${d.short_put.delta}, IV ${d.short_put.iv_pct}%) / buy $${d.long_put.strike}P, credit $${d.net_credit}, max loss $${d.max_loss}, breakeven $${d.breakeven}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, ${d.dte} DTE. Is this a good trade?`;
   }
+  if (strategy === 'bear-call-spread') {
+    return `Assess this bear call spread on ${d.ticker} ($${d.price}): sell $${d.short_call.strike}C (Δ${d.short_call.delta}, IV ${d.short_call.iv_pct}%) / buy $${d.long_call.strike}C, credit $${d.net_credit}, max loss $${d.max_loss}, breakeven $${d.breakeven}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, ${d.dte} DTE. Is this a good trade?`;
+  }
   if (strategy === 'iron-condor') {
     const ps = d.put_side, cs = d.call_side;
     return `Assess this iron condor on ${d.ticker} ($${d.price}): puts ${ps.short_put.strike}/${ps.long_put.strike} (Δ${ps.short_put.delta}, IV ${ps.short_put.iv_pct}%), calls ${cs.short_call.strike}/${cs.long_call.strike} (Δ${cs.short_call.delta}, IV ${cs.short_call.iv_pct}%), total credit $${d.total_credit}, max loss $${d.max_loss}, profit zone ${d.profit_zone}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, ${d.dte} DTE. Is this a good trade?`;
@@ -774,22 +799,25 @@ function renderCompareResult(data) {
   lastAnalysis = null;
   const results = document.getElementById('az-results');
   const bps = data.bull_put_spread || {};
+  const bcs = data.bear_call_spread || {};
   const ic = data.iron_condor || {};
   const cc = data.covered_call || {};
   const csp = data.cash_secured_put || {};
   const mc = data.market_context;
   const ticker = data.ticker;
-  const price = bps.price || ic.price || cc.stock_price || csp.stock_price || 0;
+  const price = bps.price || bcs.price || ic.price || cc.stock_price || csp.stock_price || 0;
 
   // Find best values for highlighting (skip strategies with errors)
   const returns = [
     !bps.error && { strategy: 'Bull Put Spread', val: bps.return_on_risk_pct || 0 },
+    !bcs.error && { strategy: 'Bear Call Spread', val: bcs.return_on_risk_pct || 0 },
     !ic.error && { strategy: 'Iron Condor', val: ic.return_on_risk_pct || 0 },
     !cc.error && { strategy: 'Covered Call', val: cc.annualized_return_pct || 0 },
     !csp.error && { strategy: 'Cash-Secured Put', val: csp.annualized_return_pct || 0 },
   ].filter(Boolean);
   const probs = [
     !bps.error && { strategy: 'Bull Put Spread', val: bps.prob_profit_pct || 0 },
+    !bcs.error && { strategy: 'Bear Call Spread', val: bcs.prob_profit_pct || 0 },
     !ic.error && { strategy: 'Iron Condor', val: ic.prob_profit_pct || 0 },
     !cc.error && { strategy: 'Covered Call', val: 100 - (cc.prob_called_pct || 0) },
     !csp.error && { strategy: 'Cash-Secured Put', val: csp.prob_profit_pct || 0 },
@@ -797,9 +825,9 @@ function renderCompareResult(data) {
   const bestReturn = returns.length ? returns.reduce((a, b) => a.val > b.val ? a : b).strategy : '';
   const bestProb = probs.length ? probs.reduce((a, b) => a.val > b.val ? a : b).strategy : '';
 
-  // Suggestion strategy key (e.g. "bull-put-spread") or null
+  // Data-driven best pick and rules-based trend pick
   const suggested = mc && !mc.error && mc.suggestion ? mc.suggestion.strategy : null;
-  const strategyToKey = { 'Bull Put Spread': 'bull-put-spread', 'Iron Condor': 'iron-condor', 'Covered Call': 'covered-call', 'Cash-Secured Put': 'cash-secured-put' };
+  const trendPick = mc && !mc.error && mc.trend_pick ? mc.trend_pick.strategy : null;
 
   // Market context bar
   let contextHtml = '';
@@ -816,10 +844,13 @@ function renderCompareResult(data) {
         <span class="az-iv-badge">IV: ${mc.iv.atm_iv_pct != null ? mc.iv.atm_iv_pct + '%' : 'N/A'} ${mc.iv.level.toUpperCase()}</span>
         <span class="az-mc-sep"></span>
         ${suggested
-          ? `<span class="az-suggestion-badge">\u2605 ${esc(mc.suggestion.label)}</span>`
-          : `<span class="az-mc-badge az-trend-bearish">\u26A0 ${esc(mc.suggestion.label)}</span>`
-        }
-        <span class="az-mc-reason">${esc(mc.suggestion.reason)}</span>
+          ? `<span class="az-suggestion-badge">\u2605 ${esc(mc.suggestion.label)}</span>
+             <span class="az-mc-reason">${esc(mc.suggestion.reason)}</span>`
+          : ''}
+        ${trendPick
+          ? `<span class="az-mc-sep"></span>
+             <span class="az-trend-pick-badge">${trendIcon} TREND: ${esc(mc.trend_pick.label)}</span>`
+          : ''}
       </div>`;
   }
 
@@ -831,8 +862,8 @@ function renderCompareResult(data) {
     </div>
     ${contextHtml}
     <div class="az-compare-grid">
-      <div class="az-compare-card ${suggested === 'bull-put-spread' ? 'az-suggested' : ''}">
-        <div class="az-compare-title">Bull Put Spread${suggested === 'bull-put-spread' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}</div>
+      <div class="az-compare-card ${suggested === 'bull-put-spread' ? 'az-suggested' : ''} ${trendPick === 'bull-put-spread' ? 'az-trend-picked' : ''}">
+        <div class="az-compare-title">Bull Put Spread${suggested === 'bull-put-spread' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}${trendPick === 'bull-put-spread' ? '<span class="az-trend-pick-tag">TREND PICK</span>' : ''}</div>
         ${bps.error ? `<div class="az-error">${esc(bps.error)}</div>` : `
         <div class="az-compare-legs">
           <span class="leg-action sell">SELL</span> $${bps.short_put.strike}P
@@ -852,8 +883,29 @@ function renderCompareResult(data) {
         </div>
         `}
       </div>
-      <div class="az-compare-card ${suggested === 'iron-condor' ? 'az-suggested' : ''}">
-        <div class="az-compare-title">Iron Condor${suggested === 'iron-condor' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}</div>
+      <div class="az-compare-card ${suggested === 'bear-call-spread' ? 'az-suggested' : ''} ${trendPick === 'bear-call-spread' ? 'az-trend-picked' : ''}">
+        <div class="az-compare-title">Bear Call Spread${suggested === 'bear-call-spread' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}${trendPick === 'bear-call-spread' ? '<span class="az-trend-pick-tag">TREND PICK</span>' : ''}</div>
+        ${bcs.error ? `<div class="az-error">${esc(bcs.error)}</div>` : `
+        <div class="az-compare-legs">
+          <span class="leg-action sell">SELL</span> $${bcs.short_call.strike}C
+          <span class="leg-action buy">BUY</span> $${bcs.long_call.strike}C
+        </div>
+        <div class="az-compare-metrics">
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${bcs.net_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit</span></div>
+          <div class="az-cm"><span class="az-cm-val ${bestReturn === 'Bear Call Spread' ? 'az-best' : ''}">${bcs.return_on_risk_pct}%</span><span class="az-cm-lbl">Return/Risk</span></div>
+          <div class="az-cm"><span class="az-cm-val ${bestProb === 'Bear Call Spread' ? 'az-best' : ''}">${bcs.prob_profit_pct}%</span><span class="az-cm-lbl">Prob Profit</span></div>
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-negative)">$${bcs.max_loss.toFixed(0)}</span><span class="az-cm-lbl">Max Loss</span></div>
+          <div class="az-cm"><span class="az-cm-val">$${bcs.breakeven.toFixed(2)}</span><span class="az-cm-lbl">Breakeven</span></div>
+          <div class="az-cm"><span class="az-cm-val">${bcs.dte}d</span><span class="az-cm-lbl">DTE</span></div>
+        </div>
+        <div class="az-compare-actions">
+          <button class="btn-view-chain" onclick="viewChain('bear-call-spread', lastAnalysis && lastAnalysis.data ? lastAnalysis.data['bear-call-spread'] : null)">View Chain</button>
+          <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('bear-call-spread')">Add to Portfolio</button>
+        </div>
+        `}
+      </div>
+      <div class="az-compare-card ${suggested === 'iron-condor' ? 'az-suggested' : ''} ${trendPick === 'iron-condor' ? 'az-trend-picked' : ''}">
+        <div class="az-compare-title">Iron Condor${suggested === 'iron-condor' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}${trendPick === 'iron-condor' ? '<span class="az-trend-pick-tag">TREND PICK</span>' : ''}</div>
         ${ic.error ? `<div class="az-error">${esc(ic.error)}</div>` : `
         <div class="az-compare-legs">
           <span class="leg-action sell">SELL</span> $${ic.put_side.short_put.strike}P / $${ic.call_side.short_call.strike}C
@@ -873,8 +925,8 @@ function renderCompareResult(data) {
         </div>
         `}
       </div>
-      <div class="az-compare-card ${suggested === 'covered-call' ? 'az-suggested' : ''}">
-        <div class="az-compare-title">Covered Call${suggested === 'covered-call' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}</div>
+      <div class="az-compare-card ${suggested === 'covered-call' ? 'az-suggested' : ''} ${trendPick === 'covered-call' ? 'az-trend-picked' : ''}">
+        <div class="az-compare-title">Covered Call${suggested === 'covered-call' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}${trendPick === 'covered-call' ? '<span class="az-trend-pick-tag">TREND PICK</span>' : ''}</div>
         ${cc.error ? `<div class="az-error">${esc(cc.error)}</div>` : `
         <div class="az-compare-legs">
           <span class="leg-action sell">SELL</span> $${cc.short_call.strike}C @ $${cc.premium_per_share.toFixed(2)}
@@ -893,8 +945,8 @@ function renderCompareResult(data) {
         </div>
         `}
       </div>
-      <div class="az-compare-card ${suggested === 'cash-secured-put' ? 'az-suggested' : ''}">
-        <div class="az-compare-title">Cash-Secured Put${suggested === 'cash-secured-put' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}</div>
+      <div class="az-compare-card ${suggested === 'cash-secured-put' ? 'az-suggested' : ''} ${trendPick === 'cash-secured-put' ? 'az-trend-picked' : ''}">
+        <div class="az-compare-title">Cash-Secured Put${suggested === 'cash-secured-put' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}${trendPick === 'cash-secured-put' ? '<span class="az-trend-pick-tag">TREND PICK</span>' : ''}</div>
         ${csp.error || !csp.short_put ? `<div class="az-error">${esc(csp.error || 'No data')}</div>` : `
         <div class="az-compare-legs">
           <span class="leg-action sell">SELL</span> $${csp.short_put.strike}P @ $${csp.premium_per_share.toFixed(2)}
@@ -918,7 +970,7 @@ function renderCompareResult(data) {
   // Store all results for "Add to Portfolio"
   lastAnalysis = {
     strategy: 'compare',
-    data: { 'bull-put-spread': bps, 'iron-condor': ic, 'covered-call': cc, 'cash-secured-put': csp },
+    data: { 'bull-put-spread': bps, 'bear-call-spread': bcs, 'iron-condor': ic, 'covered-call': cc, 'cash-secured-put': csp },
   };
 }
 
@@ -932,15 +984,19 @@ function addCompareToPortfolio(strategy) {
 
 function buildCompareChatPrompt(data) {
   const bps = data.bull_put_spread || {};
+  const bcs = data.bear_call_spread || {};
   const ic = data.iron_condor || {};
   const cc = data.covered_call || {};
   const csp = data.cash_secured_put || {};
   const ticker = data.ticker;
 
-  const count = [bps, ic, cc, csp].filter(s => s.short_put || s.short_call || s.put_side).length;
+  const count = [bps, bcs, ic, cc, csp].filter(s => s.short_put || s.short_call || s.put_side).length;
   let prompt = `Compare these ${count} strategies for ${ticker} and recommend which is best right now:\n\n`;
   if (bps.short_put && !bps.error) {
     prompt += `Bull Put Spread: sell $${bps.short_put.strike}P / buy $${bps.long_put.strike}P, credit $${bps.net_credit}, ${bps.return_on_risk_pct}% return, ${bps.prob_profit_pct}% prob profit, ${bps.dte} DTE\n`;
+  }
+  if (bcs.short_call && !bcs.error) {
+    prompt += `Bear Call Spread: sell $${bcs.short_call.strike}C / buy $${bcs.long_call.strike}C, credit $${bcs.net_credit}, ${bcs.return_on_risk_pct}% return, ${bcs.prob_profit_pct}% prob profit, ${bcs.dte} DTE\n`;
   }
   if (ic.put_side && !ic.error) {
     prompt += `Iron Condor: puts ${ic.put_side.short_put.strike}/${ic.put_side.long_put.strike}, calls ${ic.call_side.short_call.strike}/${ic.call_side.long_call.strike}, credit $${ic.total_credit}, ${ic.return_on_risk_pct}% return, ${ic.prob_profit_pct}% prob profit, ${ic.dte} DTE\n`;
@@ -959,7 +1015,10 @@ function buildCompareChatPrompt(data) {
     prompt += `\nMarket Context:\n`;
     prompt += `- Trend: ${t.classification} (5d: ${sign5d}${t.change_5d_pct}%, 20d: ${sign20d}${t.change_20d_pct}%, 52w percentile: ${t.percentile_52w}%)\n`;
     prompt += `- ATM IV: ${mc.iv.atm_iv_pct}% (${mc.iv.level})\n`;
-    prompt += `- Auto-suggestion: ${mc.suggestion.label} \u2014 ${mc.suggestion.reason}\n`;
+    prompt += `- Best by numbers: ${mc.suggestion.label} \u2014 ${mc.suggestion.reason}\n`;
+    if (mc.trend_pick && mc.trend_pick.strategy !== mc.suggestion.strategy) {
+      prompt += `- Trend pick: ${mc.trend_pick.label} \u2014 ${mc.trend_pick.reason}\n`;
+    }
   }
   prompt += `\nWhich strategy fits best for ${ticker} given current conditions? Consider risk/reward, probability, and market outlook.`;
   return prompt;
@@ -996,6 +1055,66 @@ function renderAnalysisResult(strategy, d) {
             <td class="leg-iv"></td>
             <td class="leg-bid-ask">${d.long_put.bid.toFixed(2)} / ${d.long_put.ask.toFixed(2)}</td>
             <td class="leg-mid">$${d.long_put.mid.toFixed(2)}</td>
+          </tr>
+        </table>
+        <div class="az-metrics">
+          <div class="metric">
+            <div class="metric-value" style="color:var(--pnl-positive)">$${d.net_credit.toFixed(2)}</div>
+            <div class="metric-label">Net Credit</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">$${d.max_profit.toFixed(0)}</div>
+            <div class="metric-label">Max Profit</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value" style="color:var(--pnl-negative)">$${d.max_loss.toFixed(0)}</div>
+            <div class="metric-label">Max Loss</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">$${d.breakeven.toFixed(2)}</div>
+            <div class="metric-label">Breakeven</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.return_on_risk_pct}%</div>
+            <div class="metric-label">Return/Risk</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.prob_profit_pct}%</div>
+            <div class="metric-label">Prob Profit</div>
+          </div>
+        </div>
+        <div class="az-actions">
+          <button class="btn-view-chain" onclick="viewChain()">View Chain</button>
+          <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
+        </div>
+      </div>`;
+  } else if (strategy === 'bear-call-spread') {
+    results.innerHTML = `
+      <div class="az-result-card">
+        <div class="az-header">
+          <div>
+            <span class="az-ticker">${esc(d.ticker)}</span>
+            <span class="az-price">$${d.price.toFixed(2)}</span>
+          </div>
+          <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
+        </div>
+        <div class="az-strategy-label">Bear Call Spread</div>
+        <table class="az-legs-table">
+          <tr>
+            <td class="leg-action sell">SELL</td>
+            <td class="leg-strike">$${d.short_call.strike} C</td>
+            <td class="leg-delta">Δ ${d.short_call.delta.toFixed(2)}</td>
+            <td class="leg-iv">IV ${d.short_call.iv_pct}%</td>
+            <td class="leg-bid-ask">${d.short_call.bid.toFixed(2)} / ${d.short_call.ask.toFixed(2)}</td>
+            <td class="leg-mid">$${d.short_call.mid.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td class="leg-action buy">BUY</td>
+            <td class="leg-strike">$${d.long_call.strike} C</td>
+            <td class="leg-delta"></td>
+            <td class="leg-iv"></td>
+            <td class="leg-bid-ask">${d.long_call.bid.toFixed(2)} / ${d.long_call.ask.toFixed(2)}</td>
+            <td class="leg-mid">$${d.long_call.mid.toFixed(2)}</td>
           </tr>
         </table>
         <div class="az-metrics">
@@ -1240,6 +1359,12 @@ function addAnalysisToPortfolio() {
     form.querySelector('[name="short_put_price"]').value = data.short_put.mid;
     form.querySelector('[name="long_put_strike"]').value = data.long_put.strike;
     form.querySelector('[name="long_put_price"]').value = data.long_put.mid;
+    form.querySelector('[name="net_credit"]').value = data.net_credit;
+  } else if (strategy === 'bear-call-spread') {
+    form.querySelector('[name="short_call_strike"]').value = data.short_call.strike;
+    form.querySelector('[name="short_call_price"]').value = data.short_call.mid;
+    form.querySelector('[name="long_call_strike"]').value = data.long_call.strike;
+    form.querySelector('[name="long_call_price"]').value = data.long_call.mid;
     form.querySelector('[name="net_credit"]').value = data.net_credit;
   } else if (strategy === 'iron-condor') {
     form.querySelector('[name="short_put_strike"]').value = data.put_side.short_put.strike;

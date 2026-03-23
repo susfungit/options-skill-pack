@@ -29,6 +29,7 @@ DEFAULT_PROFILE = {
     "name": "",
     "strategy_defaults": {
         "bull-put-spread": {"delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10},
+        "bear-call-spread": {"delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10},
         "iron-condor": {"delta": 0.16, "dte_min": 35, "dte_max": 45},
         "covered-call": {"delta": 0.30, "dte_min": 30, "dte_max": 45},
         "cash-secured-put": {"delta": 0.25, "dte_min": 30, "dte_max": 45},
@@ -146,6 +147,7 @@ async def chat(req: ChatRequest):
 
 _STRATEGY_TO_TOOL = {
     "bull-put-spread": "find_bull_put_spread",
+    "bear-call-spread": "find_bear_call_spread",
     "iron-condor": "find_iron_condor",
     "covered-call": "find_covered_call",
     "cash-secured-put": "find_cash_secured_put",
@@ -154,6 +156,7 @@ _STRATEGY_TO_TOOL = {
 
 class StrategyType(str, Enum):
     bull_put_spread = "bull-put-spread"
+    bear_call_spread = "bear-call-spread"
     iron_condor = "iron-condor"
     covered_call = "covered-call"
     cash_secured_put = "cash-secured-put"
@@ -211,10 +214,16 @@ class CompareRequest(BaseModel):
 def _suggest_strategy(trend: str, iv_level: str, percentile_52w: int = 50) -> dict:
     """Rules-based strategy suggestion from trend + IV level + 52-week position."""
     if trend == "bearish":
+        if iv_level in ("high", "very_high"):
+            return {
+                "strategy": "bear-call-spread",
+                "label": "Bear Call Spread",
+                "reason": "Bearish trend with elevated IV \u2014 sell call spreads above resistance for rich premiums",
+            }
         return {
-            "strategy": None,
-            "label": "Wait",
-            "reason": "Bearish trend detected \u2014 consider waiting or hedging",
+            "strategy": "bear-call-spread",
+            "label": "Bear Call Spread",
+            "reason": "Bearish trend detected \u2014 sell call spreads above resistance",
         }
     if trend == "bullish":
         if iv_level == "low":
@@ -333,6 +342,39 @@ def _fetch_market_context(ticker: str) -> dict:
         return {"error": str(e)}
 
 
+def _pick_best_strategy(bps, bcs, ic, cc, csp) -> dict | None:
+    """Rank strategies by actual results (return + probability composite)."""
+    candidates = []
+    for key, label, d in [
+        ("bull-put-spread", "Bull Put Spread", bps),
+        ("bear-call-spread", "Bear Call Spread", bcs),
+        ("iron-condor", "Iron Condor", ic),
+        ("covered-call", "Covered Call", cc),
+        ("cash-secured-put", "Cash-Secured Put", csp),
+    ]:
+        if not d or d.get("error"):
+            continue
+        ret = d.get("return_on_risk_pct") or d.get("annualized_return_pct") or 0
+        prob = d.get("prob_profit_pct")
+        if prob is None and "prob_called_pct" in d:
+            prob = 100 - d["prob_called_pct"]
+        if prob is None:
+            prob = 0
+        score = ret * 0.4 + prob * 0.6
+        candidates.append((score, key, label, ret, prob))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    _score, key, label, ret, prob = candidates[0]
+    return {
+        "strategy": key,
+        "label": label,
+        "reason": f"Best risk/reward — {ret}% return, {prob}% prob profit",
+    }
+
+
 @app.post("/api/analyze/compare")
 async def analyze_compare(req: CompareRequest):
     """Run all 4 selectors + market context in parallel and return results."""
@@ -363,17 +405,26 @@ async def analyze_compare(req: CompareRequest):
         result_json = await asyncio.to_thread(execute_tool, tool_name, _build_input(strategy_key))
         return json.loads(result_json)
 
-    bps, ic, cc, csp, market_ctx = await asyncio.gather(
+    bps, bcs, ic, cc, csp, market_ctx = await asyncio.gather(
         run_tool("find_bull_put_spread", "bull-put-spread"),
+        run_tool("find_bear_call_spread", "bear-call-spread"),
         run_tool("find_iron_condor", "iron-condor"),
         run_tool("find_covered_call", "covered-call"),
         run_tool("find_cash_secured_put", "cash-secured-put"),
         asyncio.to_thread(_fetch_market_context, ticker),
     )
 
+    # Add data-driven pick alongside rules-based trend pick
+    if market_ctx and not market_ctx.get("error"):
+        market_ctx["trend_pick"] = market_ctx.get("suggestion")
+        best = _pick_best_strategy(bps, bcs, ic, cc, csp)
+        if best:
+            market_ctx["suggestion"] = best
+
     return {
         "ticker": ticker,
         "bull_put_spread": bps,
+        "bear_call_spread": bcs,
         "iron_condor": ic,
         "covered_call": cc,
         "cash_secured_put": csp,
@@ -710,6 +761,42 @@ def _check_single_position(p: dict) -> dict:
             short = next(l for l in p["legs"] if l["action"] == "sell")
             long = next(l for l in p["legs"] if l["action"] == "buy")
             result_json = execute_tool("check_bull_put_spread", {
+                "ticker": ticker,
+                "short_strike": short["strike"],
+                "long_strike": long["strike"],
+                "net_credit": net_credit,
+                "expiry": expiry,
+            })
+            data = json.loads(result_json)
+            if "error" in data:
+                return {"zone": "UNKNOWN", "zone_error": data["error"]}
+
+            zone = _classify_zone_spread(
+                data.get("buffer_pct", 0),
+                data.get("loss_pct_of_max", 0),
+                data.get("dte", 30),
+            )
+            suggestion = _position_suggestion(
+                zone, strategy, data.get("pnl_per_contract", 0),
+                net_credit, p.get("contracts", 1), data.get("dte", 30),
+                data.get("buffer_pct", 0),
+            )
+            result = {
+                "zone": zone,
+                "zone_updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "buffer_pct": data.get("buffer_pct"),
+                "pnl_per_contract": data.get("pnl_per_contract"),
+                "stock_price": data.get("stock_price"),
+                "loss_pct_of_max": data.get("loss_pct_of_max"),
+            }
+            if suggestion:
+                result["suggestion"] = suggestion
+            return result
+
+        elif strategy == "bear-call-spread":
+            short = next(l for l in p["legs"] if l["action"] == "sell")
+            long = next(l for l in p["legs"] if l["action"] == "buy")
+            result_json = execute_tool("check_bear_call_spread", {
                 "ticker": ticker,
                 "short_strike": short["strike"],
                 "long_strike": long["strike"],

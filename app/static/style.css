@@ -1401,6 +1401,36 @@ body {
   vertical-align: middle;
 }
 
+.az-trend-pick-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  text-transform: uppercase;
+}
+
+.az-compare-card.az-trend-picked {
+  border-color: #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.1);
+}
+
+.az-trend-pick-tag {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
 /* ── Chain Viewer ──────────────────────────────────────────────────────── */
 
 #az-chain-container {

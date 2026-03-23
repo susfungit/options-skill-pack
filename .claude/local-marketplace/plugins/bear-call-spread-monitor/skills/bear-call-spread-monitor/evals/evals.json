@@ -1,0 +1,18 @@
+{
+  "skill_name": "bear-call-spread-monitor",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Check my AAPL bear call spread: I sold the $260 call and bought the $270 call for $1.50 credit, expires May 1 2026.",
+      "expected_output": "A status card showing the zone classification with buffer%, current P&L, loss% of max, and zone-appropriate guidance.",
+      "files": [],
+      "assertions": [
+        { "name": "status_card_present", "description": "Response contains the formatted status card" },
+        { "name": "zone_classified", "description": "Response clearly states one of the five zones" },
+        { "name": "shows_buffer_pct", "description": "Response shows the percentage buffer between stock price and short call strike" },
+        { "name": "shows_pnl", "description": "Response shows current P&L per contract" },
+        { "name": "actionable_guidance", "description": "Response provides zone-appropriate guidance" }
+      ]
+    }
+  ]
+}

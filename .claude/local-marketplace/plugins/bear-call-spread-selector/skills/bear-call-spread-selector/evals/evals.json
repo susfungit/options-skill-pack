@@ -1,0 +1,29 @@
+{
+  "skill_name": "bear-call-spread-selector",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Find me a bear call spread on AAPL.",
+      "expected_output": "A complete trade card with short call strike, long call strike, net credit, max profit, max loss, breakeven, probability of profit, and return on risk. Should use ~20 delta short call and ~35-45 DTE expiry by default.",
+      "files": [],
+      "assertions": [
+        { "name": "trade_card_present", "description": "Response contains the formatted box trade card with SELL and BUY legs shown" },
+        { "name": "has_both_legs", "description": "Response explicitly shows both the short (SELL) call strike and the long (BUY) call strike" },
+        { "name": "has_full_metrics", "description": "Response includes all five metrics: max profit, max loss, breakeven, probability of profit, and return on risk" },
+        { "name": "uses_default_20_delta", "description": "Response targets ~20 delta for the short call since none was specified" },
+        { "name": "has_risk_checklist", "description": "Response includes a risk signal checklist covering at least earnings and IV rank" }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I think NVDA is overextended. Set up a bearish call spread for me.",
+      "expected_output": "Trade card for a bear call spread on NVDA. Should recognize the bearish intent and use the bear call spread strategy.",
+      "files": [],
+      "assertions": [
+        { "name": "trade_card_present", "description": "Response contains a bear call spread trade card for NVDA" },
+        { "name": "has_full_metrics", "description": "Response includes max profit, max loss, breakeven, probability of profit, and return on risk" },
+        { "name": "acknowledges_bearish_view", "description": "Response acknowledges the user's bearish outlook on NVDA" }
+      ]
+    }
+  ]
+}
