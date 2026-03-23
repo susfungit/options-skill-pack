@@ -40,5 +40,18 @@
     "contracts": 1,
     "opened": "2026-03-21",
     "status": "open"
+  },
+  {
+    "label": "MSFT May cash-secured put",
+    "strategy": "cash-secured-put",
+    "ticker": "MSFT",
+    "legs": [
+      { "type": "put", "action": "sell", "strike": 370, "price": 5.20 }
+    ],
+    "net_credit": 5.20,
+    "expiry": "2026-05-01",
+    "contracts": 1,
+    "opened": "2026-03-23",
+    "status": "open"
   }
 ]

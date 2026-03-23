@@ -99,6 +99,7 @@
                 <option value="bull-put-spread">Bull Put Spread</option>
                 <option value="iron-condor">Iron Condor</option>
                 <option value="covered-call">Covered Call</option>
+                <option value="cash-secured-put">Cash-Secured Put</option>
               </select>
             </div>
             <div class="form-group" id="az-delta-group" style="display:none;">
@@ -169,6 +170,14 @@
                   <div class="form-group"><label>DTE Max</label><input type="number" id="pf-cc-dte-max" min="1" max="365"></div>
                 </div>
               </div>
+              <div class="profile-strategy">
+                <div class="profile-strategy-label">Cash-Secured Put</div>
+                <div class="form-row">
+                  <div class="form-group"><label>Delta</label><input type="number" id="pf-csp-delta" step="0.01" min="0.01" max="0.99"></div>
+                  <div class="form-group"><label>DTE Min</label><input type="number" id="pf-csp-dte-min" min="1" max="365"></div>
+                  <div class="form-group"><label>DTE Max</label><input type="number" id="pf-csp-dte-max" min="1" max="365"></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -226,6 +235,7 @@
                 <option value="bull-put-spread">Bull Put Spread</option>
                 <option value="iron-condor">Iron Condor</option>
                 <option value="covered-call">Covered Call</option>
+                <option value="cash-secured-put">Cash-Secured Put</option>
               </select>
             </div>
           </div>

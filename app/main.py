@@ -31,6 +31,7 @@ DEFAULT_PROFILE = {
         "bull-put-spread": {"delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10},
         "iron-condor": {"delta": 0.16, "dte_min": 35, "dte_max": 45},
         "covered-call": {"delta": 0.30, "dte_min": 30, "dte_max": 45},
+        "cash-secured-put": {"delta": 0.25, "dte_min": 30, "dte_max": 45},
     },
     "profit_rules": {
         "close_pct": 75,
@@ -147,6 +148,7 @@ _STRATEGY_TO_TOOL = {
     "bull-put-spread": "find_bull_put_spread",
     "iron-condor": "find_iron_condor",
     "covered-call": "find_covered_call",
+    "cash-secured-put": "find_cash_secured_put",
 }
 
 
@@ -154,6 +156,7 @@ class StrategyType(str, Enum):
     bull_put_spread = "bull-put-spread"
     iron_condor = "iron-condor"
     covered_call = "covered-call"
+    cash_secured_put = "cash-secured-put"
 
 
 class AnalyzeRequest(BaseModel):
@@ -332,31 +335,39 @@ def _fetch_market_context(ticker: str) -> dict:
 
 @app.post("/api/analyze/compare")
 async def analyze_compare(req: CompareRequest):
-    """Run all 3 selectors + market context in parallel and return results."""
+    """Run all 4 selectors + market context in parallel and return results."""
     import asyncio
 
     ticker = req.ticker.upper()
     profile = _read_profile()
-    bps_defaults = profile["strategy_defaults"].get("bull-put-spread", {})
+    strategy_defaults = profile["strategy_defaults"]
 
-    base_input = {"ticker": ticker}
-    if req.dte_min is not None:
-        base_input["dte_min"] = req.dte_min
-    elif "dte_min" in bps_defaults:
-        base_input["dte_min"] = bps_defaults["dte_min"]
-    if req.dte_max is not None:
-        base_input["dte_max"] = req.dte_max
-    elif "dte_max" in bps_defaults:
-        base_input["dte_max"] = bps_defaults["dte_max"]
+    def _build_input(strategy_key: str) -> dict:
+        defaults = strategy_defaults.get(strategy_key, {})
+        inp = {"ticker": ticker}
+        if req.dte_min is not None:
+            inp["dte_min"] = req.dte_min
+        elif "dte_min" in defaults:
+            inp["dte_min"] = defaults["dte_min"]
+        if req.dte_max is not None:
+            inp["dte_max"] = req.dte_max
+        elif "dte_max" in defaults:
+            inp["dte_max"] = defaults["dte_max"]
+        if "delta" in defaults:
+            inp["target_delta"] = defaults["delta"]
+        if "spread_width" in defaults:
+            inp["spread_width"] = defaults["spread_width"]
+        return inp
 
-    async def run_tool(tool_name):
-        result_json = await asyncio.to_thread(execute_tool, tool_name, dict(base_input))
+    async def run_tool(tool_name, strategy_key):
+        result_json = await asyncio.to_thread(execute_tool, tool_name, _build_input(strategy_key))
         return json.loads(result_json)
 
-    bps, ic, cc, market_ctx = await asyncio.gather(
-        run_tool("find_bull_put_spread"),
-        run_tool("find_iron_condor"),
-        run_tool("find_covered_call"),
+    bps, ic, cc, csp, market_ctx = await asyncio.gather(
+        run_tool("find_bull_put_spread", "bull-put-spread"),
+        run_tool("find_iron_condor", "iron-condor"),
+        run_tool("find_covered_call", "covered-call"),
+        run_tool("find_cash_secured_put", "cash-secured-put"),
         asyncio.to_thread(_fetch_market_context, ticker),
     )
 
@@ -365,6 +376,7 @@ async def analyze_compare(req: CompareRequest):
         "bull_put_spread": bps,
         "iron_condor": ic,
         "covered_call": cc,
+        "cash_secured_put": csp,
         "market_context": market_ctx,
     }
 
@@ -804,6 +816,40 @@ def _check_single_position(p: dict) -> dict:
                 "buffer_pct": data.get("buffer_pct"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
+            }
+            if suggestion:
+                result["suggestion"] = suggestion
+            return result
+
+        elif strategy == "cash-secured-put":
+            put = next(l for l in p["legs"] if l["type"] == "put")
+            result_json = execute_tool("check_cash_secured_put", {
+                "ticker": ticker,
+                "short_put_strike": put["strike"],
+                "net_credit": net_credit,
+                "expiry": expiry,
+            })
+            data = json.loads(result_json)
+            if "error" in data:
+                return {"zone": "UNKNOWN", "zone_error": data["error"]}
+
+            zone = _classify_zone_spread(
+                data.get("buffer_pct", 0),
+                data.get("loss_pct_of_max", 0),
+                data.get("dte", 30),
+            )
+            suggestion = _position_suggestion(
+                zone, strategy, data.get("pnl_per_contract", 0),
+                net_credit, p.get("contracts", 1), data.get("dte", 30),
+                data.get("buffer_pct", 0),
+            )
+            result = {
+                "zone": zone,
+                "zone_updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "buffer_pct": data.get("buffer_pct"),
+                "pnl_per_contract": data.get("pnl_per_contract"),
+                "stock_price": data.get("stock_price"),
+                "loss_pct_of_max": data.get("loss_pct_of_max"),
             }
             if suggestion:
                 result["suggestion"] = suggestion

@@ -338,6 +338,9 @@ async function checkPosition(index) {
     const call = p.legs.find(l => l.type === 'call');
     prompt = `Check my ${p.ticker} covered call, sold $${call.strike} call for $${p.net_credit}, expires ${p.expiry}` +
       (p.cost_basis ? `, I bought shares at $${p.cost_basis}` : '');
+  } else if (p.strategy === 'cash-secured-put') {
+    const put = p.legs.find(l => l.type === 'put');
+    prompt = `Check my ${p.ticker} cash-secured put, sold $${put.strike} put for $${p.net_credit}, expires ${p.expiry}`;
   }
 
   inputEl.value = prompt;
@@ -396,6 +399,10 @@ function editPosition(index) {
     form.querySelector('[name="call_strike"]').value = call.strike;
     form.querySelector('[name="call_price"]').value = call.price || '';
     if (p.cost_basis) form.querySelector('[name="cost_basis"]').value = p.cost_basis;
+  } else if (p.strategy === 'cash-secured-put') {
+    const put = p.legs.find(l => l.type === 'put');
+    form.querySelector('[name="csp_put_strike"]').value = put.strike;
+    form.querySelector('[name="csp_put_price"]').value = put.price || '';
   }
 
   document.getElementById('modal-overlay').style.display = 'flex';
@@ -445,6 +452,14 @@ function updateLegFields(strategy) {
         <div class="form-group"><label>Call Strike</label><input type="number" name="call_strike" step="0.5" required></div>
         <div class="form-group"><label>Call Price</label><input type="number" name="call_price" step="0.01"></div>
       </div>`;
+  } else if (strategy === 'cash-secured-put') {
+    costBasisGroup.style.display = 'none';
+    container.innerHTML = `
+      <div class="form-section-label">Leg</div>
+      <div class="form-row">
+        <div class="form-group"><label>Put Strike</label><input type="number" name="csp_put_strike" step="0.5" required></div>
+        <div class="form-group"><label>Put Price</label><input type="number" name="csp_put_price" step="0.01"></div>
+      </div>`;
   }
 }
 
@@ -471,6 +486,10 @@ async function savePosition(event) {
   } else if (strategy === 'covered-call') {
     legs = [
       { type: 'call', action: 'sell', strike: parseFloat(form.querySelector('[name="call_strike"]').value), price: parseFloat(form.querySelector('[name="call_price"]').value) || undefined },
+    ];
+  } else if (strategy === 'cash-secured-put') {
+    legs = [
+      { type: 'put', action: 'sell', strike: parseFloat(form.querySelector('[name="csp_put_strike"]').value), price: parseFloat(form.querySelector('[name="csp_put_price"]').value) || undefined },
     ];
   }
 
@@ -736,6 +755,9 @@ function buildAnalysisChatPrompt(strategy, d) {
   if (strategy === 'covered-call') {
     return `Assess this covered call on ${d.ticker} ($${d.stock_price}): sell $${d.short_call.strike}C (Δ${d.short_call.delta}, IV ${d.short_call.iv_pct}%), premium $${d.premium_per_share}, static ${d.static_return_pct}%, annualized ${d.annualized_return_pct}%, downside protection ${d.downside_protection_pct}%, called away return ${d.called_away_return_pct}%, ${d.prob_called_pct}% prob called, ${d.dte} DTE. Is this a good trade?`;
   }
+  if (strategy === 'cash-secured-put') {
+    return `Assess this cash-secured put on ${d.ticker} ($${d.stock_price}): sell $${d.short_put.strike}P (Δ${d.short_put.delta}, IV ${d.short_put.iv_pct}%), premium $${d.premium_per_share}, return on capital ${d.return_on_capital_pct}%, annualized ${d.annualized_return_pct}%, effective buy price $${d.effective_buy_price} (${d.discount_pct}% discount), ${d.prob_profit_pct}% prob profit, cash required $${d.cash_required}, ${d.dte} DTE. Is this a good trade?`;
+  }
   return `Assess this ${formatStrategy(strategy)} result: ${JSON.stringify(d)}`;
 }
 
@@ -751,30 +773,33 @@ function clearAnalysis() {
 function renderCompareResult(data) {
   lastAnalysis = null;
   const results = document.getElementById('az-results');
-  const bps = data.bull_put_spread;
-  const ic = data.iron_condor;
-  const cc = data.covered_call;
+  const bps = data.bull_put_spread || {};
+  const ic = data.iron_condor || {};
+  const cc = data.covered_call || {};
+  const csp = data.cash_secured_put || {};
   const mc = data.market_context;
   const ticker = data.ticker;
-  const price = bps.price || ic.price || cc.stock_price || 0;
+  const price = bps.price || ic.price || cc.stock_price || csp.stock_price || 0;
 
-  // Find best values for highlighting
+  // Find best values for highlighting (skip strategies with errors)
   const returns = [
-    { strategy: 'Bull Put Spread', val: bps.return_on_risk_pct || 0 },
-    { strategy: 'Iron Condor', val: ic.return_on_risk_pct || 0 },
-    { strategy: 'Covered Call', val: cc.annualized_return_pct || 0 },
-  ];
+    !bps.error && { strategy: 'Bull Put Spread', val: bps.return_on_risk_pct || 0 },
+    !ic.error && { strategy: 'Iron Condor', val: ic.return_on_risk_pct || 0 },
+    !cc.error && { strategy: 'Covered Call', val: cc.annualized_return_pct || 0 },
+    !csp.error && { strategy: 'Cash-Secured Put', val: csp.annualized_return_pct || 0 },
+  ].filter(Boolean);
   const probs = [
-    { strategy: 'Bull Put Spread', val: bps.prob_profit_pct || 0 },
-    { strategy: 'Iron Condor', val: ic.prob_profit_pct || 0 },
-    { strategy: 'Covered Call', val: 100 - (cc.prob_called_pct || 0) },
-  ];
-  const bestReturn = returns.reduce((a, b) => a.val > b.val ? a : b).strategy;
-  const bestProb = probs.reduce((a, b) => a.val > b.val ? a : b).strategy;
+    !bps.error && { strategy: 'Bull Put Spread', val: bps.prob_profit_pct || 0 },
+    !ic.error && { strategy: 'Iron Condor', val: ic.prob_profit_pct || 0 },
+    !cc.error && { strategy: 'Covered Call', val: 100 - (cc.prob_called_pct || 0) },
+    !csp.error && { strategy: 'Cash-Secured Put', val: csp.prob_profit_pct || 0 },
+  ].filter(Boolean);
+  const bestReturn = returns.length ? returns.reduce((a, b) => a.val > b.val ? a : b).strategy : '';
+  const bestProb = probs.length ? probs.reduce((a, b) => a.val > b.val ? a : b).strategy : '';
 
   // Suggestion strategy key (e.g. "bull-put-spread") or null
   const suggested = mc && !mc.error && mc.suggestion ? mc.suggestion.strategy : null;
-  const strategyToKey = { 'Bull Put Spread': 'bull-put-spread', 'Iron Condor': 'iron-condor', 'Covered Call': 'covered-call' };
+  const strategyToKey = { 'Bull Put Spread': 'bull-put-spread', 'Iron Condor': 'iron-condor', 'Covered Call': 'covered-call', 'Cash-Secured Put': 'cash-secured-put' };
 
   // Market context bar
   let contextHtml = '';
@@ -868,12 +893,32 @@ function renderCompareResult(data) {
         </div>
         `}
       </div>
+      <div class="az-compare-card ${suggested === 'cash-secured-put' ? 'az-suggested' : ''}">
+        <div class="az-compare-title">Cash-Secured Put${suggested === 'cash-secured-put' ? '<span class="az-suggested-tag">SUGGESTED</span>' : ''}</div>
+        ${csp.error || !csp.short_put ? `<div class="az-error">${esc(csp.error || 'No data')}</div>` : `
+        <div class="az-compare-legs">
+          <span class="leg-action sell">SELL</span> $${csp.short_put.strike}P @ $${csp.premium_per_share.toFixed(2)}
+        </div>
+        <div class="az-compare-metrics">
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${csp.premium_per_share.toFixed(2)}</span><span class="az-cm-lbl">Premium</span></div>
+          <div class="az-cm"><span class="az-cm-val ${bestReturn === 'Cash-Secured Put' ? 'az-best' : ''}">${csp.annualized_return_pct}%</span><span class="az-cm-lbl">Annualized</span></div>
+          <div class="az-cm"><span class="az-cm-val ${bestProb === 'Cash-Secured Put' ? 'az-best' : ''}">${csp.prob_profit_pct}%</span><span class="az-cm-lbl">Prob Profit</span></div>
+          <div class="az-cm"><span class="az-cm-val">$${csp.effective_buy_price.toFixed(2)}</span><span class="az-cm-lbl">Eff. Buy Price</span></div>
+          <div class="az-cm"><span class="az-cm-val">${csp.discount_pct}%</span><span class="az-cm-lbl">Discount</span></div>
+          <div class="az-cm"><span class="az-cm-val">${csp.dte}d</span><span class="az-cm-lbl">DTE</span></div>
+        </div>
+        <div class="az-compare-actions">
+          <button class="btn-view-chain" onclick="viewChain('cash-secured-put', lastAnalysis && lastAnalysis.data ? lastAnalysis.data['cash-secured-put'] : null)">View Chain</button>
+          <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('cash-secured-put')">Add to Portfolio</button>
+        </div>
+        `}
+      </div>
     </div>`;
 
   // Store all results for "Add to Portfolio"
   lastAnalysis = {
     strategy: 'compare',
-    data: { 'bull-put-spread': bps, 'iron-condor': ic, 'covered-call': cc },
+    data: { 'bull-put-spread': bps, 'iron-condor': ic, 'covered-call': cc, 'cash-secured-put': csp },
   };
 }
 
@@ -886,20 +931,25 @@ function addCompareToPortfolio(strategy) {
 }
 
 function buildCompareChatPrompt(data) {
-  const bps = data.bull_put_spread;
-  const ic = data.iron_condor;
-  const cc = data.covered_call;
+  const bps = data.bull_put_spread || {};
+  const ic = data.iron_condor || {};
+  const cc = data.covered_call || {};
+  const csp = data.cash_secured_put || {};
   const ticker = data.ticker;
 
-  let prompt = `Compare these 3 strategies for ${ticker} and recommend which is best right now:\n\n`;
-  if (!bps.error) {
+  const count = [bps, ic, cc, csp].filter(s => s.short_put || s.short_call || s.put_side).length;
+  let prompt = `Compare these ${count} strategies for ${ticker} and recommend which is best right now:\n\n`;
+  if (bps.short_put && !bps.error) {
     prompt += `Bull Put Spread: sell $${bps.short_put.strike}P / buy $${bps.long_put.strike}P, credit $${bps.net_credit}, ${bps.return_on_risk_pct}% return, ${bps.prob_profit_pct}% prob profit, ${bps.dte} DTE\n`;
   }
-  if (!ic.error) {
+  if (ic.put_side && !ic.error) {
     prompt += `Iron Condor: puts ${ic.put_side.short_put.strike}/${ic.put_side.long_put.strike}, calls ${ic.call_side.short_call.strike}/${ic.call_side.long_call.strike}, credit $${ic.total_credit}, ${ic.return_on_risk_pct}% return, ${ic.prob_profit_pct}% prob profit, ${ic.dte} DTE\n`;
   }
-  if (!cc.error) {
+  if (cc.short_call && !cc.error) {
     prompt += `Covered Call: sell $${cc.short_call.strike}C, premium $${cc.premium_per_share}, ${cc.annualized_return_pct}% annualized, ${cc.prob_called_pct}% prob called, ${cc.dte} DTE\n`;
+  }
+  if (csp.short_put && !csp.error) {
+    prompt += `Cash-Secured Put: sell $${csp.short_put.strike}P, premium $${csp.premium_per_share}, ${csp.return_on_capital_pct}% return on capital, ${csp.annualized_return_pct}% annualized, ${csp.prob_profit_pct}% prob profit, eff. buy $${csp.effective_buy_price}, ${csp.dte} DTE\n`;
   }
   if (data.market_context && !data.market_context.error) {
     const mc = data.market_context;
@@ -1112,6 +1162,59 @@ function renderAnalysisResult(strategy, d) {
           <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
         </div>
       </div>`;
+  } else if (strategy === 'cash-secured-put') {
+    results.innerHTML = `
+      <div class="az-result-card">
+        <div class="az-header">
+          <div>
+            <span class="az-ticker">${esc(d.ticker)}</span>
+            <span class="az-price">$${d.stock_price.toFixed(2)}</span>
+          </div>
+          <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
+        </div>
+        <div class="az-strategy-label">Cash-Secured Put</div>
+        <table class="az-legs-table">
+          <tr>
+            <td class="leg-action sell">SELL</td>
+            <td class="leg-strike">$${d.short_put.strike} P</td>
+            <td class="leg-delta">Δ ${d.short_put.delta.toFixed(2)}</td>
+            <td class="leg-iv">IV ${d.short_put.iv_pct}%</td>
+            <td class="leg-bid-ask">${d.short_put.bid.toFixed(2)} / ${d.short_put.ask.toFixed(2)}</td>
+            <td class="leg-mid">$${d.short_put.mid.toFixed(2)}</td>
+          </tr>
+        </table>
+        <div class="az-metrics">
+          <div class="metric">
+            <div class="metric-value" style="color:var(--pnl-positive)">$${d.premium_per_share.toFixed(2)}</div>
+            <div class="metric-label">Premium</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.return_on_capital_pct}%</div>
+            <div class="metric-label">Return/Capital</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.annualized_return_pct}%</div>
+            <div class="metric-label">Annualized</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">$${d.effective_buy_price.toFixed(2)}</div>
+            <div class="metric-label">Eff. Buy Price</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.discount_pct}%</div>
+            <div class="metric-label">Discount</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${d.prob_profit_pct}%</div>
+            <div class="metric-label">Prob Profit</div>
+          </div>
+        </div>
+        <div class="az-cash-required">Cash Required: $${d.cash_required.toFixed(0)} per contract</div>
+        <div class="az-actions">
+          <button class="btn-view-chain" onclick="viewChain()">View Chain</button>
+          <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
+        </div>
+      </div>`;
   }
 }
 
@@ -1152,6 +1255,10 @@ function addAnalysisToPortfolio() {
     form.querySelector('[name="call_strike"]').value = data.short_call.strike;
     form.querySelector('[name="call_price"]').value = data.short_call.mid;
     form.querySelector('[name="net_credit"]').value = data.premium_per_share;
+  } else if (strategy === 'cash-secured-put') {
+    form.querySelector('[name="csp_put_strike"]').value = data.short_put.strike;
+    form.querySelector('[name="csp_put_price"]').value = data.short_put.mid;
+    form.querySelector('[name="net_credit"]').value = data.premium_per_share;
   }
 
   document.getElementById('modal-overlay').style.display = 'flex';
@@ -1172,6 +1279,8 @@ function extractHighlightStrikes(strategy, data) {
     strikes.add(data.call_side.long_call.strike);
   } else if (strategy === 'covered-call') {
     strikes.add(data.short_call.strike);
+  } else if (strategy === 'cash-secured-put') {
+    strikes.add(data.short_put.strike);
   }
   return strikes;
 }
@@ -1288,6 +1397,11 @@ async function loadProfile() {
     document.getElementById('pf-cc-dte-min').value = cc.dte_min ?? '';
     document.getElementById('pf-cc-dte-max').value = cc.dte_max ?? '';
 
+    const csp = sd['cash-secured-put'] || {};
+    document.getElementById('pf-csp-delta').value = csp.delta ?? '';
+    document.getElementById('pf-csp-dte-min').value = csp.dte_min ?? '';
+    document.getElementById('pf-csp-dte-max').value = csp.dte_max ?? '';
+
     const pr = profile.profit_rules || {};
     document.getElementById('pf-close-pct').value = pr.close_pct ?? '';
     document.getElementById('pf-consider-pct').value = pr.consider_pct ?? '';
@@ -1324,6 +1438,11 @@ async function saveProfile() {
         delta: parseFloat(document.getElementById('pf-cc-delta').value) || 0.30,
         dte_min: parseInt(document.getElementById('pf-cc-dte-min').value) || 30,
         dte_max: parseInt(document.getElementById('pf-cc-dte-max').value) || 45,
+      },
+      'cash-secured-put': {
+        delta: parseFloat(document.getElementById('pf-csp-delta').value) || 0.25,
+        dte_min: parseInt(document.getElementById('pf-csp-dte-min').value) || 30,
+        dte_max: parseInt(document.getElementById('pf-csp-dte-max').value) || 45,
       },
     },
     profit_rules: {

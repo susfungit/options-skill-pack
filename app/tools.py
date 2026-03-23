@@ -103,6 +103,34 @@ TOOLS = [
         },
     },
     {
+        "name": "find_cash_secured_put",
+        "description": "Fetch live option chain data and find the optimal put to sell for a cash-secured put. Returns strike, premium, return on capital, effective buy price, and probability of assignment.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol"},
+                "target_delta": {"type": "number", "description": "Target delta for short put (default 0.25)"},
+                "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 30)"},
+                "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
+            },
+            "required": ["ticker"],
+        },
+    },
+    {
+        "name": "check_cash_secured_put",
+        "description": "Check the current status of an existing cash-secured put position. Returns current put price, buffer to short strike, P&L, loss percentage, and effective buy price if assigned.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Stock ticker symbol"},
+                "short_put_strike": {"type": "number", "description": "Short put strike price"},
+                "net_credit": {"type": "number", "description": "Premium received per share"},
+                "expiry": {"type": "string", "description": "Expiry date as YYYY-MM-DD"},
+            },
+            "required": ["ticker", "short_put_strike", "net_credit", "expiry"],
+        },
+    },
+    {
         "name": "roll_spread",
         "description": "Find roll targets for a bull put spread or one side of an iron condor. Shows close cost, then ranks calendar and diagonal roll candidates by net roll credit. For iron condors, specify which side to roll.",
         "input_schema": {
@@ -135,6 +163,8 @@ SCRIPT_MAP = {
     "check_bull_put_spread": _skill_path("bull-put-spread-monitor", "bull-put-spread-monitor", "check_position.py"),
     "check_iron_condor": _skill_path("iron-condor-monitor", "iron-condor-monitor", "check_iron_condor.py"),
     "check_covered_call": _skill_path("covered-call-monitor", "covered-call-monitor", "check_covered_call.py"),
+    "find_cash_secured_put": _skill_path("cash-secured-put-selector", "cash-secured-put-selector", "fetch_csp.py"),
+    "check_cash_secured_put": _skill_path("cash-secured-put-monitor", "cash-secured-put-monitor", "check_csp.py"),
     "roll_spread": _skill_path("spread-roller", "spread-roller", "roll_spread.py"),
 }
 
@@ -173,6 +203,28 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
         if "dte_max" in tool_input:
             args.append(str(tool_input["dte_max"]))
         return args
+
+    if tool_name == "find_cash_secured_put":
+        args = [tool_input["ticker"]]
+        # Positional: TICKER TARGET_DELTA DTE_MIN DTE_MAX
+        # Must include target_delta placeholder if dte_min/dte_max are provided
+        if "target_delta" in tool_input:
+            args.append(str(tool_input["target_delta"]))
+        elif "dte_min" in tool_input or "dte_max" in tool_input:
+            args.append("0.25")  # default delta as placeholder
+        if "dte_min" in tool_input:
+            args.append(str(tool_input["dte_min"]))
+        if "dte_max" in tool_input:
+            args.append(str(tool_input["dte_max"]))
+        return args
+
+    if tool_name == "check_cash_secured_put":
+        return [
+            tool_input["ticker"],
+            str(tool_input["short_put_strike"]),
+            str(tool_input["net_credit"]),
+            tool_input["expiry"],
+        ]
 
     if tool_name == "check_bull_put_spread":
         return [

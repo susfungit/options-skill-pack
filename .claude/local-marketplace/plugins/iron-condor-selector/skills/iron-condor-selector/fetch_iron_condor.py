@@ -162,15 +162,26 @@ def select_short_strike(df, price, T, target_delta, side="put"):
     return short_row.to_dict(), valid
 
 
-def select_wing(valid_df, short_strike, side="put"):
-    """Select long (wing) strike ~10% away from short strike."""
+def select_wing(valid_df, short_strike, short_mid, side="put"):
+    """Select long (wing) strike further OTM than short strike, ~$5 wide."""
     if side == "put":
-        wing_target = short_strike * 0.90
+        candidates = valid_df[valid_df["strike"] < short_strike].copy()
+        wing_target = short_strike - 5
     else:
-        wing_target = short_strike * 1.10
+        candidates = valid_df[valid_df["strike"] > short_strike].copy()
+        wing_target = short_strike + 5
 
-    valid_df["wing_diff"] = (valid_df["strike"] - wing_target).abs()
-    wing_row = valid_df.loc[valid_df["wing_diff"].idxmin()]
+    if candidates.empty:
+        return None
+
+    # Filter to wings that cost less than the short (ensures positive leg credit)
+    candidates = candidates[candidates["mid_price"] < short_mid]
+    if candidates.empty:
+        # Fallback: just pick further OTM even if credit is thin
+        candidates = valid_df[valid_df["strike"] < short_strike].copy() if side == "put" else valid_df[valid_df["strike"] > short_strike].copy()
+
+    candidates["wing_diff"] = (candidates["strike"] - wing_target).abs()
+    wing_row = candidates.loc[candidates["wing_diff"].idxmin()]
     return wing_row.to_dict()
 
 
@@ -224,7 +235,10 @@ def main():
     short_put_bid = round(float(short_put_row.get("bid", 0) or 0), 2)
     short_put_ask = round(float(short_put_row.get("ask", 0) or 0), 2)
 
-    long_put_row = select_wing(put_valid, short_put_strike, "put")
+    long_put_row = select_wing(put_valid, short_put_strike, short_put_mid, "put")
+    if long_put_row is None:
+        print(json.dumps({"error": "No valid put wing strike found"}))
+        sys.exit(1)
     long_put_strike = float(long_put_row["strike"])
     long_put_mid = float(long_put_row["mid_price"])
     long_put_bid = round(float(long_put_row.get("bid", 0) or 0), 2)
@@ -246,7 +260,10 @@ def main():
     short_call_bid = round(float(short_call_row.get("bid", 0) or 0), 2)
     short_call_ask = round(float(short_call_row.get("ask", 0) or 0), 2)
 
-    long_call_row = select_wing(call_valid, short_call_strike, "call")
+    long_call_row = select_wing(call_valid, short_call_strike, short_call_mid, "call")
+    if long_call_row is None:
+        print(json.dumps({"error": "No valid call wing strike found"}))
+        sys.exit(1)
     long_call_strike = float(long_call_row["strike"])
     long_call_mid = float(long_call_row["mid_price"])
     long_call_bid = round(float(long_call_row.get("bid", 0) or 0), 2)

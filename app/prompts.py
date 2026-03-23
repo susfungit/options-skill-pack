@@ -88,6 +88,56 @@ If the user provided a cost basis, calculate and show:
 - Effective cost basis = cost_basis - premium
 - Called-away P&L = strike - cost_basis + premium""",
 
+    "find_cash_secured_put": """Interpretation guidance for the cash-secured put data:
+
+**Strike selection context:**
+- Put selected near target delta (default 25Δ = ~25% chance of assignment)
+- Higher delta = more premium but more likely to be assigned shares
+- Lower delta = less premium but higher probability of keeping the cash
+
+**Key metrics to highlight:**
+- return_on_capital_pct: premium / cash required
+- annualized_return_pct: return on capital annualized
+- effective_buy_price: what you'd pay per share if assigned (strike - premium)
+- discount_pct: how far below current price the effective buy price is
+- cash_required: strike × 100 per contract
+- prob_assigned_pct ≈ delta × 100
+
+**Risk checklist:**
+- Earnings within expiry? → IV spike/crush, possible gap below strike
+- IV Rank < 25? → premium is thin, may not be worth selling
+- Stock in a downtrend? → directional risk, consider lower delta
+- Large cash commitment? → flag if cash_required is significant
+
+**Two outcomes to present:**
+1. Stock stays above strike → keep premium, return on capital = [N]%
+2. Stock drops below strike → assigned shares at effective price, [N]% below current""",
+
+    "check_cash_secured_put": """Interpretation guidance for cash-secured put position data:
+
+**Zone classification — use the WORSE of these two signals:**
+
+| Zone | Buffer (stock above short strike) | OR | Loss % of max loss |
+|------|---|---|---|
+| 🟢 SAFE | > 8% | AND | < 20% |
+| 🟡 WATCH | 4–8% | OR | 20–40% |
+| 🟠 WARNING | 2–4% | OR | 40–65% |
+| 🔴 DANGER | 0–2% | OR | 65–85% |
+| 🚨 ACT NOW | Stock at/below short strike | OR | > 85% |
+
+**DTE adjustments:**
+- DTE ≤ 5: tighten thresholds by ~1%
+- DTE ≥ 30: slightly more lenient
+
+**Important nuance:** Unlike a bull put spread, assignment means buying shares — this may be desirable. Always mention the effective buy price (strike - premium) and whether that's a good entry.
+
+**Zone guidance:**
+- SAFE: No action, let theta work. Note profit captured so far.
+- WATCH: Monitor, set price alerts near short strike.
+- WARNING: Two paths — accept assignment (if wanting shares) or roll down and out.
+- DANGER: Ask if user wants to own shares at this price. If yes, let it ride. If no, close or roll.
+- ACT NOW: Assignment imminent. Accept and prepare to own shares, or close immediately.""",
+
     "check_bull_put_spread": """Interpretation guidance for bull put spread position data:
 
 **Zone classification — use the WORSE of these two signals:**

@@ -1,0 +1,121 @@
+{
+  "skill_name": "cash-secured-put-selector",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Find a cash-secured put on AAPL",
+      "expected_output": "Trade card with strike, premium, return on capital, effective buy price, discount, and probability of profit. Should use ~25 delta and 30-45 DTE by default. Should include a risk checklist.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "trade_card_present",
+          "description": "Response contains a structured trade card showing the put to SELL"
+        },
+        {
+          "name": "has_key_metrics",
+          "description": "Response includes return on capital, effective buy price, discount percentage, and probability of profit"
+        },
+        {
+          "name": "uses_default_25_delta",
+          "description": "Response targets ~25 delta for the short put since none was specified"
+        },
+        {
+          "name": "uses_30_45_dte",
+          "description": "Response targets an expiry in the 30-45 DTE window"
+        },
+        {
+          "name": "shows_cash_required",
+          "description": "Response shows the cash required to secure the put (strike × 100)"
+        },
+        {
+          "name": "has_risk_checklist",
+          "description": "Response includes a risk signal checklist covering at least earnings and IV rank"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Sell a 20-delta put on MSFT",
+      "expected_output": "CSP trade card targeting 20-delta instead of the default 25. Should acknowledge the delta override.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "trade_card_present",
+          "description": "Response contains a structured trade card showing the put to SELL"
+        },
+        {
+          "name": "respects_20_delta",
+          "description": "Response explicitly uses 20-delta for the short put, not the default 25-delta"
+        },
+        {
+          "name": "has_key_metrics",
+          "description": "Response includes return on capital, effective buy price, and probability of profit"
+        },
+        {
+          "name": "pop_near_80pct",
+          "description": "Probability of profit is stated as approximately 80% (consistent with 1 - 0.20 delta)"
+        },
+        {
+          "name": "shows_cash_required",
+          "description": "Response shows the cash required to secure the put"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want to buy NVDA at a discount, what put should I sell?",
+      "expected_output": "CSP recommendation framed around stock acquisition — effective buy price, discount from current price, and the two outcomes (keep premium vs get assigned).",
+      "files": [],
+      "assertions": [
+        {
+          "name": "trade_card_present",
+          "description": "Response contains a structured trade card showing the put to SELL"
+        },
+        {
+          "name": "frames_as_acquisition",
+          "description": "Response frames the trade around acquiring NVDA at a discount, not just income generation"
+        },
+        {
+          "name": "shows_effective_buy_price",
+          "description": "Response shows the effective buy price if assigned (strike - premium)"
+        },
+        {
+          "name": "shows_discount_pct",
+          "description": "Response shows the discount percentage from current market price"
+        },
+        {
+          "name": "describes_two_outcomes",
+          "description": "Response describes both outcomes: keep premium if OTM, or acquire shares at discount if assigned"
+        },
+        {
+          "name": "has_key_metrics",
+          "description": "Response includes return on capital and cash required"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Set up a cash-secured put on TSLA, 6 weeks out.",
+      "expected_output": "CSP trade card for TSLA with earnings flag since Tesla reports ~April 28 2026 which falls near the 6-week window.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "trade_card_present",
+          "description": "Response contains a structured trade card showing the put to SELL"
+        },
+        {
+          "name": "flags_earnings_event",
+          "description": "Response identifies the Tesla earnings event as a risk within or near the expiry window"
+        },
+        {
+          "name": "has_key_metrics",
+          "description": "Response includes return on capital, effective buy price, discount, and probability of profit"
+        },
+        {
+          "name": "shows_cash_required",
+          "description": "Response shows the large cash requirement for TSLA"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "cash-secured-put-monitor",
+  "version": "1.0.0",
+  "description": "Monitors an existing cash-secured put position and classifies its current health into zones.",
+  "author": {
+    "name": "sushant"
+  }
+}

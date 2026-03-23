@@ -1,6 +1,6 @@
 # options-skill-pack
 
-Options trading toolkit — 7 skills for Claude Code + a self-hosted web chat app with portfolio management. Find spreads, monitor positions, evaluate rolls, and track your portfolio with AI-powered analysis.
+Options trading toolkit — 9 skills for Claude Code + a self-hosted web chat app with portfolio management. Find spreads, monitor positions, evaluate rolls, and track your portfolio with AI-powered analysis.
 
 **Three ways to use:**
 
@@ -32,6 +32,7 @@ Then just talk to Claude:
 > check my NVDA $155/$140 spread expiring May 1
 > iron condor on SPY
 > roll my put spread
+> sell a cash-secured put on MSFT
 ```
 
 Skills trigger based on what you say — no special commands needed. See the [Skills reference](#skills) below for trigger phrases and parameters.
@@ -63,9 +64,9 @@ Open **http://localhost:8000**.
 
 **The app has three tabs:**
 
-- **Chat** — AI-powered chat with all 7 skills available as tools. Toggle the AI switch off to run scripts without spending API tokens (Check and Analyze still work).
+- **Chat** — AI-powered chat with all 9 skills available as tools. Toggle the AI switch off to run scripts without spending API tokens (Check and Analyze still work).
 - **Portfolio** — Add, edit, check, close, and delete option positions. "Check All" runs monitors for every open position and classifies each into a zone (SAFE → ACT NOW). After each check, positions show actionable suggestions — profit-taking thresholds are configurable in the Profile tab, with gamma risk warnings near expiry and defensive guidance based on zone.
-- **Analyzer** — Run selector scripts directly (no AI tokens). Pick a ticker and strategy, click "Find Trade", or use "Compare All" to run all 3 selectors in parallel with market context. Auto-suggests the best strategy based on 20-day trend, ATM IV level, and 52-week price position. After each analysis, click "View Chain" to see the full option chain for that expiry — recommended strikes are highlighted.
+- **Analyzer** — Run selector scripts directly (no AI tokens). Pick a ticker and strategy, click "Find Trade", or use "Compare All" to run all selectors in parallel with market context. Auto-suggests the best strategy based on 20-day trend, ATM IV level, and 52-week price position. After each analysis, click "View Chain" to see the full option chain for that expiry — recommended strikes are highlighted.
 - **Profile** — Configure your name (displayed in the sidebar), strategy defaults (delta, DTE range, spread width), and profit-taking rules. Settings persist server-side in `profile.json` and pre-fill the Analyzer inputs.
 
 **Requirements:** Python 3.10+, an [Anthropic API key](https://console.anthropic.com) with credits.
@@ -278,6 +279,60 @@ Monitors an existing covered call and classifies its health. Answers the key que
 
 ---
 
+### cash-secured-put-selector
+
+Identifies the optimal put strike to sell for a cash-secured put — selling a put backed by cash to collect premium or acquire shares at a discount.
+
+**Trigger phrases:**
+- "cash-secured put on AAPL"
+- "sell a put on MSFT"
+- "CSP on NVDA"
+- "buy AAPL at a discount using options"
+- "what put should I sell on SPY"
+- "wheel strategy put side"
+
+**What it does:**
+1. Fetches live put option chain data via `fetch_csp.py`
+2. Supplements with web search for earnings dates and IV Rank
+3. Selects the put strike near 25Δ (default) in the 30–45 DTE window
+4. Calculates premium, return on capital, annualized return, effective buy price, discount from current price
+5. Runs a risk checklist (earnings, IV rank, trend, cash commitment)
+6. Presents a structured trade card with two outcome scenarios (keep premium vs. acquire shares)
+
+**Parameters** (defaults shown):
+
+| Parameter | Default | Example override |
+|---|---|---|
+| Expiry | 30–45 DTE | "60 days out", "May expiry" |
+| Short put delta | 25Δ | "sell a 15-delta put", "I want to be assigned" |
+| Contracts | 1 | "3 contracts" |
+
+---
+
+### cash-secured-put-monitor
+
+Monitors an existing cash-secured put and classifies its health. Unlike a bull put spread, assignment means buying shares — which may be the desired outcome.
+
+**Trigger phrases:**
+- "check my MSFT cash-secured put"
+- "how is my CSP doing"
+- "will I get assigned on my put"
+- "is my cash-secured put safe"
+
+**Zones:**
+
+| Zone | Condition |
+|---|---|
+| SAFE | Stock > 8% above short strike AND loss < 20% of max |
+| WATCH | 4–8% buffer OR 20–40% of max loss |
+| WARNING | 2–4% buffer OR 40–65% of max loss |
+| DANGER | 0–2% buffer OR 65–85% of max loss |
+| ACT NOW | Stock at/below short strike OR > 85% of max loss |
+
+**Required inputs:** ticker, short put strike, premium received, expiry date
+
+---
+
 ### spread-roller
 
 Finds roll targets for bull put spreads and iron condors when a position needs to be rolled out or diagonally adjusted.
@@ -344,7 +399,7 @@ This creates `portfolio.json` and `monitor_config.json` from example templates (
 | Field | Required | Description |
 |---|---|---|
 | `label` | yes | Human-readable name |
-| `strategy` | yes | `bull-put-spread`, `iron-condor`, or `covered-call` |
+| `strategy` | yes | `bull-put-spread`, `iron-condor`, `covered-call`, or `cash-secured-put` |
 | `ticker` | yes | Stock symbol |
 | `legs` | yes | Array of legs (`type`, `action`, `strike`, optional `price`) |
 | `net_credit` | yes | Net credit received per share |
@@ -378,6 +433,8 @@ For each open position, check strategy type and run the appropriate script:
     python3 .claude/local-marketplace/plugins/bull-put-spread-monitor/skills/bull-put-spread-monitor/check_position.py TICKER SELL_STRIKE BUY_STRIKE NET_CREDIT EXPIRY
   If strategy is "iron-condor": extract all 4 strikes from legs, then run:
     python3 .claude/local-marketplace/plugins/iron-condor-monitor/skills/iron-condor-monitor/check_iron_condor.py TICKER SHORT_PUT LONG_PUT SHORT_CALL LONG_CALL NET_CREDIT EXPIRY
+  If strategy is "cash-secured-put": extract the sell put strike from legs, then run:
+    python3 .claude/local-marketplace/plugins/cash-secured-put-monitor/skills/cash-secured-put-monitor/check_csp.py TICKER PUT_STRIKE NET_CREDIT EXPIRY
 
 Classify each into a zone:
   SAFE: buffer > 8% AND loss < 20%
@@ -477,6 +534,8 @@ options-skill-pack/
     ├── iron-condor-monitor/                       # Monitor iron condor health
     ├── covered-call-selector/                     # Find optimal call to sell
     ├── covered-call-monitor/                      # Monitor covered call health
+    ├── cash-secured-put-selector/                 # Find optimal put to sell (CSP)
+    ├── cash-secured-put-monitor/                  # Monitor CSP health
     └── spread-roller/                             # Find roll targets
 ```
 
@@ -495,6 +554,8 @@ Benchmark results (with_skill vs without_skill):
 | covered-call-selector | **100%** | 31% |
 | covered-call-monitor | **100%** | 13% |
 | bull-put-spread-monitor | **100%** | 50% |
+| cash-secured-put-selector | **100%** | 38% |
+| cash-secured-put-monitor | **100%** | 40% |
 
 ---
 

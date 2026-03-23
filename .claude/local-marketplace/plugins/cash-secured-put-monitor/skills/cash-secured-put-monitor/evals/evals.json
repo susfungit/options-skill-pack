@@ -1,0 +1,89 @@
+{
+  "skill_name": "cash-secured-put-monitor",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Check my CSP on AAPL — sold the 200 put for 3.50, expires 2026-05-01",
+      "expected_output": "Status card with zone classification, buffer percentage, P&L, and zone-specific guidance.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "zone_classified",
+          "description": "Response classifies the position into one of the five zones: SAFE, WATCH, WARNING, DANGER, or ACT NOW"
+        },
+        {
+          "name": "shows_buffer_pct",
+          "description": "Response shows the buffer percentage (distance from current price to short strike)"
+        },
+        {
+          "name": "shows_pnl",
+          "description": "Response shows current P&L per contract"
+        },
+        {
+          "name": "shows_effective_buy_price",
+          "description": "Response shows the effective buy price if assigned (strike - credit = $196.50)"
+        },
+        {
+          "name": "zone_guidance",
+          "description": "Response provides action guidance appropriate to the classified zone"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Is my cash-secured put on NVDA safe? I sold the 100 put for $2.00, expiring 2026-06-01",
+      "expected_output": "Zone assessment showing SAFE zone (100 strike is far OTM for NVDA) with buffer and guidance.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "zone_classified",
+          "description": "Response classifies the position into one of the five zones"
+        },
+        {
+          "name": "shows_buffer_pct",
+          "description": "Response shows the buffer percentage"
+        },
+        {
+          "name": "shows_loss_pct",
+          "description": "Response shows loss as percentage of max loss"
+        },
+        {
+          "name": "zone_guidance",
+          "description": "Response provides action guidance appropriate to the classified zone"
+        },
+        {
+          "name": "assignment_context",
+          "description": "Response mentions what happens if assigned (effective buy price)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "How is my MSFT put doing? Sold 380 put at $5.20, expires 2026-04-15",
+      "expected_output": "Status card with zone, buffer, P&L, and guidance. Should recognize this as a CSP check.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "recognizes_as_csp",
+          "description": "Response treats this as a cash-secured put position check, not a naked put or spread"
+        },
+        {
+          "name": "zone_classified",
+          "description": "Response classifies the position into one of the five zones"
+        },
+        {
+          "name": "shows_buffer_pct",
+          "description": "Response shows the buffer percentage"
+        },
+        {
+          "name": "shows_pnl",
+          "description": "Response shows current P&L per contract"
+        },
+        {
+          "name": "zone_guidance",
+          "description": "Response provides zone-appropriate action guidance"
+        }
+      ]
+    }
+  ]
+}
