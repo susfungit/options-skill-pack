@@ -214,6 +214,8 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
             args.append(str(tool_input["dte_max"]))
         if "spread_width" in tool_input:
             args.append(str(tool_input["spread_width"]))
+        if "expiry" in tool_input:
+            args.extend(["--expiry", tool_input["expiry"]])
         return args
 
     if tool_name == "find_bear_call_spread":
@@ -226,6 +228,8 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
             args.append(str(tool_input["dte_max"]))
         if "spread_width" in tool_input:
             args.append(str(tool_input["spread_width"]))
+        if "expiry" in tool_input:
+            args.extend(["--expiry", tool_input["expiry"]])
         return args
 
     if tool_name == "check_bear_call_spread":
@@ -245,6 +249,8 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
             args.append(str(tool_input["dte_min"]))
         if "dte_max" in tool_input:
             args.append(str(tool_input["dte_max"]))
+        if "expiry" in tool_input:
+            args.extend(["--expiry", tool_input["expiry"]])
         return args
 
     if tool_name == "find_covered_call":
@@ -255,6 +261,8 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
             args.append(str(tool_input["dte_min"]))
         if "dte_max" in tool_input:
             args.append(str(tool_input["dte_max"]))
+        if "expiry" in tool_input:
+            args.extend(["--expiry", tool_input["expiry"]])
         return args
 
     if tool_name == "find_cash_secured_put":
@@ -269,6 +277,8 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
             args.append(str(tool_input["dte_min"]))
         if "dte_max" in tool_input:
             args.append(str(tool_input["dte_max"]))
+        if "expiry" in tool_input:
+            args.extend(["--expiry", tool_input["expiry"]])
         return args
 
     if tool_name == "check_cash_secured_put":

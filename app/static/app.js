@@ -702,6 +702,37 @@ async function runAnalysis() {
   btn.textContent = 'Find Trade';
 }
 
+function toggleExpMode() {
+  const mode = document.querySelector('input[name="az-exp-mode"]:checked').value;
+  document.getElementById('az-dte-inputs').style.display = mode === 'dte' ? 'flex' : 'none';
+  document.getElementById('az-expiry-input').style.display = mode === 'expiry' ? 'block' : 'none';
+  if (mode === 'expiry') loadExpirations();
+}
+
+let _lastExpTicker = '';
+async function loadExpirations() {
+  const ticker = document.getElementById('az-ticker').value.trim().toUpperCase();
+  if (!ticker || ticker === _lastExpTicker) return;
+  _lastExpTicker = ticker;
+  const dl = document.getElementById('az-expiry-list');
+  dl.innerHTML = '';
+  try {
+    const res = await fetch(`/api/expirations/${ticker}`);
+    const data = await res.json();
+    for (const exp of data.expirations || []) {
+      const opt = document.createElement('option');
+      opt.value = exp;
+      dl.appendChild(opt);
+    }
+  } catch (e) { /* silent — user can still type manually */ }
+}
+
+function onTickerChange() {
+  _lastExpTicker = '';  // reset so next loadExpirations fetches fresh
+  const mode = document.querySelector('input[name="az-exp-mode"]:checked').value;
+  if (mode === 'expiry') loadExpirations();
+}
+
 async function runSingleAnalysis(ticker, strategy, btn) {
   const deltaVal = document.getElementById('az-delta').value;
   const dteMinVal = document.getElementById('az-dte-min').value;
@@ -709,8 +740,14 @@ async function runSingleAnalysis(ticker, strategy, btn) {
 
   const body = { ticker, strategy };
   if (deltaVal) body.target_delta = parseFloat(deltaVal);
-  if (dteMinVal) body.dte_min = parseInt(dteMinVal);
-  if (dteMaxVal) body.dte_max = parseInt(dteMaxVal);
+  const expMode = document.querySelector('input[name="az-exp-mode"]:checked').value;
+  if (expMode === 'expiry') {
+    const expVal = document.getElementById('az-expiry').value;
+    if (expVal) body.expiry = expVal;
+  } else {
+    if (dteMinVal) body.dte_min = parseInt(dteMinVal);
+    if (dteMaxVal) body.dte_max = parseInt(dteMaxVal);
+  }
 
   try {
     const res = await fetch('/api/analyze', {
@@ -743,8 +780,14 @@ async function runCompareAnalysis(ticker, btn) {
   const dteMaxVal = document.getElementById('az-dte-max').value;
 
   const body = { ticker };
-  if (dteMinVal) body.dte_min = parseInt(dteMinVal);
-  if (dteMaxVal) body.dte_max = parseInt(dteMaxVal);
+  const expMode = document.querySelector('input[name="az-exp-mode"]:checked').value;
+  if (expMode === 'expiry') {
+    const expVal = document.getElementById('az-expiry').value;
+    if (expVal) body.expiry = expVal;
+  } else {
+    if (dteMinVal) body.dte_min = parseInt(dteMinVal);
+    if (dteMaxVal) body.dte_max = parseInt(dteMaxVal);
+  }
 
   try {
     const res = await fetch('/api/analyze/compare', {

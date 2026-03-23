@@ -197,10 +197,19 @@ def main():
         print(json.dumps({"error": "Usage: fetch_iron_condor.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX]"}))
         sys.exit(1)
 
-    ticker_sym = sys.argv[1].upper()
-    target_delta = float(sys.argv[2]) if len(sys.argv) > 2 else 0.16
-    dte_min = int(sys.argv[3]) if len(sys.argv) > 3 else 35
-    dte_max = int(sys.argv[4]) if len(sys.argv) > 4 else 45
+    # Extract --expiry flag before positional parsing
+    explicit_expiry = None
+    argv = list(sys.argv)
+    if "--expiry" in argv:
+        idx = argv.index("--expiry")
+        if idx + 1 < len(argv):
+            explicit_expiry = argv[idx + 1]
+        argv = argv[:idx] + argv[idx + 2:]
+
+    ticker_sym = argv[1].upper()
+    target_delta = float(argv[2]) if len(argv) > 2 else 0.16
+    dte_min = int(argv[3]) if len(argv) > 3 else 35
+    dte_max = int(argv[4]) if len(argv) > 4 else 45
 
     tk = yf.Ticker(ticker_sym)
 
@@ -217,10 +226,16 @@ def main():
         print(json.dumps({"error": f"No options listed for {ticker_sym}"}))
         sys.exit(1)
 
-    expiry_result = find_best_expiry(expirations, dte_min, dte_max)
-    if expiry_result is None:
-        print(json.dumps({"error": f"No expiry within {dte_min}–{dte_max} DTE"}))
-        sys.exit(1)
+    if explicit_expiry:
+        if explicit_expiry not in expirations:
+            print(json.dumps({"error": f"Expiry {explicit_expiry} not available for {ticker_sym}"}))
+            sys.exit(1)
+        expiry_result = (explicit_expiry, (datetime.strptime(explicit_expiry, "%Y-%m-%d").date() - date.today()).days)
+    else:
+        expiry_result = find_best_expiry(expirations, dte_min, dte_max)
+        if expiry_result is None:
+            print(json.dumps({"error": f"No expiry within {dte_min}–{dte_max} DTE"}))
+            sys.exit(1)
 
     # Try preferred expiry first, then later expiries if chain is too thin
     today = date.today()

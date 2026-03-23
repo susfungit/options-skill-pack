@@ -169,6 +169,7 @@ class AnalyzeRequest(BaseModel):
     dte_min: Optional[int] = Field(None, ge=1, le=365)
     dte_max: Optional[int] = Field(None, ge=1, le=365)
     spread_width: Optional[float] = Field(None, gt=0, le=50)
+    expiry: Optional[str] = None
 
 
 @app.post("/api/analyze")
@@ -186,14 +187,17 @@ async def analyze(req: AnalyzeRequest):
         tool_input["target_delta"] = req.target_delta
     elif "delta" in defaults:
         tool_input["target_delta"] = defaults["delta"]
-    if req.dte_min is not None:
-        tool_input["dte_min"] = req.dte_min
-    elif "dte_min" in defaults:
-        tool_input["dte_min"] = defaults["dte_min"]
-    if req.dte_max is not None:
-        tool_input["dte_max"] = req.dte_max
-    elif "dte_max" in defaults:
-        tool_input["dte_max"] = defaults["dte_max"]
+    if req.expiry is not None:
+        tool_input["expiry"] = req.expiry
+    else:
+        if req.dte_min is not None:
+            tool_input["dte_min"] = req.dte_min
+        elif "dte_min" in defaults:
+            tool_input["dte_min"] = defaults["dte_min"]
+        if req.dte_max is not None:
+            tool_input["dte_max"] = req.dte_max
+        elif "dte_max" in defaults:
+            tool_input["dte_max"] = defaults["dte_max"]
     if req.spread_width is not None:
         tool_input["spread_width"] = req.spread_width
     elif "spread_width" in defaults:
@@ -207,6 +211,7 @@ class CompareRequest(BaseModel):
     ticker: str
     dte_min: Optional[int] = None
     dte_max: Optional[int] = None
+    expiry: Optional[str] = None
 
 
 # ── Market context for compare mode ──────────────────────────────────────────
@@ -387,14 +392,17 @@ async def analyze_compare(req: CompareRequest):
     def _build_input(strategy_key: str) -> dict:
         defaults = strategy_defaults.get(strategy_key, {})
         inp = {"ticker": ticker}
-        if req.dte_min is not None:
-            inp["dte_min"] = req.dte_min
-        elif "dte_min" in defaults:
-            inp["dte_min"] = defaults["dte_min"]
-        if req.dte_max is not None:
-            inp["dte_max"] = req.dte_max
-        elif "dte_max" in defaults:
-            inp["dte_max"] = defaults["dte_max"]
+        if req.expiry is not None:
+            inp["expiry"] = req.expiry
+        else:
+            if req.dte_min is not None:
+                inp["dte_min"] = req.dte_min
+            elif "dte_min" in defaults:
+                inp["dte_min"] = defaults["dte_min"]
+            if req.dte_max is not None:
+                inp["dte_max"] = req.dte_max
+            elif "dte_max" in defaults:
+                inp["dte_max"] = defaults["dte_max"]
         if "delta" in defaults:
             inp["target_delta"] = defaults["delta"]
         if "spread_width" in defaults:
@@ -430,6 +438,24 @@ async def analyze_compare(req: CompareRequest):
         "cash_secured_put": csp,
         "market_context": market_ctx,
     }
+
+
+# ── Expirations endpoint ─────────────────────────────────────────────────────
+
+@app.get("/api/expirations/{ticker}")
+async def get_expirations(ticker: str):
+    """Return available option expiry dates for a ticker."""
+    import asyncio
+    ticker = ticker.upper()
+    def _fetch():
+        import yfinance as yf
+        tk = yf.Ticker(ticker)
+        return list(tk.options)
+    try:
+        expirations = await asyncio.to_thread(_fetch)
+        return {"ticker": ticker, "expirations": expirations}
+    except Exception as e:
+        return {"ticker": ticker, "expirations": [], "error": str(e)}
 
 
 # ── Chain viewer (no Claude, no tokens) ─────────────────────────────────────

@@ -90,7 +90,7 @@
           <div class="form-row">
             <div class="form-group">
               <label>Ticker</label>
-              <input type="text" id="az-ticker" placeholder="AAPL" style="text-transform:uppercase">
+              <input type="text" id="az-ticker" placeholder="AAPL" style="text-transform:uppercase" onchange="onTickerChange()">
             </div>
             <div class="form-group">
               <label>Strategy</label>
@@ -108,11 +108,23 @@
               <input type="number" id="az-delta" step="0.01" placeholder="auto">
             </div>
             <div class="form-group">
-              <label>DTE Range</label>
-              <div style="display:flex;gap:6px;align-items:center;">
+              <label>Expiration</label>
+              <div style="display:flex;gap:8px;margin-bottom:4px;">
+                <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;">
+                  <input type="radio" name="az-exp-mode" value="dte" checked onchange="toggleExpMode()"> DTE Range
+                </label>
+                <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;">
+                  <input type="radio" name="az-exp-mode" value="expiry" onchange="toggleExpMode()"> Expiry Date
+                </label>
+              </div>
+              <div id="az-dte-inputs" style="display:flex;gap:6px;align-items:center;">
                 <input type="number" id="az-dte-min" placeholder="35" style="width:60px">
                 <span style="color:var(--text-muted);">–</span>
                 <input type="number" id="az-dte-max" placeholder="45" style="width:60px">
+              </div>
+              <div id="az-expiry-input" style="display:none;">
+                <input type="text" id="az-expiry" list="az-expiry-list" placeholder="YYYY-MM-DD" style="width:140px">
+                <datalist id="az-expiry-list"></datalist>
               </div>
             </div>
             <div class="form-group" style="align-self:flex-end;display:flex;gap:6px;">
