@@ -144,24 +144,34 @@ def main():
     if expiry_result is None:
         print(json.dumps({"error": f"No expiry within {dte_min}–{dte_max} DTE"}))
         sys.exit(1)
-    expiry_str, dte = expiry_result
+
+    # Try preferred expiry first, then later expiries if chain is too thin
+    today = date.today()
+    sorted_expiries = sorted(
+        [(e, (datetime.strptime(e, "%Y-%m-%d").date() - today).days) for e in expirations],
+        key=lambda x: x[1]
+    )
+    # Start from the best expiry and try later ones
+    start_idx = next((i for i, (e, _) in enumerate(sorted_expiries) if e == expiry_result[0]), 0)
+
+    expiry_str, dte, puts_otm = None, None, None
+    for exp_str, exp_dte in sorted_expiries[start_idx:]:
+        chain = tk.option_chain(exp_str)
+        puts = chain.puts.copy()
+        if puts.empty:
+            continue
+        otm = puts[puts["strike"] < price].copy()
+        otm["mid_price"] = otm.apply(option_mid, axis=1)
+        otm = otm[otm["mid_price"] > 0].copy()
+        if len(otm) >= 4:
+            expiry_str, dte, puts_otm = exp_str, exp_dte, otm
+            break
+
+    if puts_otm is None or puts_otm.empty:
+        print(json.dumps({"error": "No expiry with enough OTM put strikes — chain too thin"}))
+        sys.exit(1)
+
     T = dte / 365.0
-
-    # Put chain
-    chain = tk.option_chain(expiry_str)
-    puts = chain.puts.copy()
-    if puts.empty:
-        print(json.dumps({"error": f"No puts for {ticker_sym} {expiry_str}"}))
-        sys.exit(1)
-
-    # OTM puts with a usable price
-    puts_otm = puts[(puts["strike"] < price)].copy()
-    puts_otm["mid_price"] = puts_otm.apply(option_mid, axis=1)
-    puts_otm = puts_otm[puts_otm["mid_price"] > 0].copy()
-
-    if puts_otm.empty:
-        print(json.dumps({"error": "No usable OTM put prices in chain (market may be closed)"}))
-        sys.exit(1)
 
     # Compute IV and delta from actual option prices
     puts_otm["calc_iv"] = puts_otm.apply(
@@ -198,8 +208,12 @@ def main():
 
     # Long put: nearest listed strike at spread_width_pct below short
     long_target = short_strike * (1 - spread_width_pct / 100)
-    valid["long_diff"] = (valid["strike"] - long_target).abs()
-    long_row = valid.loc[valid["long_diff"].idxmin()].to_dict()
+    long_candidates = puts_otm[puts_otm["strike"] < short_strike].copy()
+    if long_candidates.empty:
+        print(json.dumps({"error": f"No strikes available below short strike {short_strike}"}))
+        sys.exit(1)
+    long_candidates["long_diff"] = (long_candidates["strike"] - long_target).abs()
+    long_row = long_candidates.loc[long_candidates["long_diff"].idxmin()].to_dict()
     long_strike = float(long_row["strike"])
     long_mid = float(long_row["mid_price"])
     long_bid = round(float(long_row.get("bid", 0) or 0), 2)

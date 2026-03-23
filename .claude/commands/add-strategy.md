@@ -195,15 +195,71 @@ Add entries to `SKILL_GUIDANCE` dict for:
 
 ---
 
-## Step 5 — Register the skills in settings
+## Step 5 — Install the plugins
 
-### 5a. `.claude/settings.json`
+### 5a. Register in `marketplace.json`
 
-Add to `enabledPlugins`:
+Add entries for the new plugins in `.claude/local-marketplace/.claude-plugin/marketplace.json` under the `plugins` array:
+
 ```json
-"{STRATEGY}-selector@options-skill-pack": true,
-"{STRATEGY}-monitor@options-skill-pack": true
+{
+  "name": "{STRATEGY}-selector",
+  "description": "Short description of what the selector does.",
+  "version": "1.0.0",
+  "author": { "name": "sushant" },
+  "source": "./plugins/{STRATEGY}-selector",
+  "category": "finance"
+},
+{
+  "name": "{STRATEGY}-monitor",
+  "description": "Short description of what the monitor does.",
+  "version": "1.0.0",
+  "author": { "name": "sushant" },
+  "source": "./plugins/{STRATEGY}-monitor",
+  "category": "finance"
+}
 ```
+
+### 5b. Copy to plugin cache
+
+Copy each new plugin into the global plugin cache so Claude Code can find it:
+
+```bash
+mkdir -p ~/.claude/plugins/cache/options-skill-pack/{STRATEGY}-selector/1.0.0
+cp -r .claude/local-marketplace/plugins/{STRATEGY}-selector/* ~/.claude/plugins/cache/options-skill-pack/{STRATEGY}-selector/1.0.0/
+
+mkdir -p ~/.claude/plugins/cache/options-skill-pack/{STRATEGY}-monitor/1.0.0
+cp -r .claude/local-marketplace/plugins/{STRATEGY}-monitor/* ~/.claude/plugins/cache/options-skill-pack/{STRATEGY}-monitor/1.0.0/
+```
+
+### 5c. Register in `~/.claude/plugins/installed_plugins.json`
+
+Add entries for the new plugins in the `plugins` object, following the pattern of existing skills:
+
+```json
+"{STRATEGY}-selector@options-skill-pack": [
+  {
+    "scope": "project",
+    "projectPath": "/Users/sushant/python/options-skill-pack",
+    "installPath": "~/.claude/plugins/cache/options-skill-pack/{STRATEGY}-selector/1.0.0",
+    "version": "1.0.0",
+    "installedAt": "<current ISO timestamp>",
+    "lastUpdated": "<current ISO timestamp>"
+  }
+],
+"{STRATEGY}-monitor@options-skill-pack": [
+  {
+    "scope": "project",
+    "projectPath": "/Users/sushant/python/options-skill-pack",
+    "installPath": "~/.claude/plugins/cache/options-skill-pack/{STRATEGY}-monitor/1.0.0",
+    "version": "1.0.0",
+    "installedAt": "<current ISO timestamp>",
+    "lastUpdated": "<current ISO timestamp>"
+  }
+]
+```
+
+**Note:** The user must restart Claude Code after this step for the new skills to appear in `/skills`.
 
 ---
 
@@ -318,7 +374,9 @@ When done, every new strategy should have touched these files:
 - [ ] `app/main.py` — StrategyType, _STRATEGY_TO_TOOL, DEFAULT_PROFILE, portfolio check, zone logic
 - [ ] `app/static/index.html` — dropdowns
 - [ ] `app/static/app.js` — leg fields, save, edit, render, analysis, compare mode
-- [ ] `.claude/settings.json` — enabledPlugins
+- [ ] `.claude/local-marketplace/.claude-plugin/marketplace.json` — marketplace registry
+- [ ] `~/.claude/plugins/installed_plugins.json` — plugin registration
+- [ ] `~/.claude/plugins/cache/options-skill-pack/` — plugin files copied to cache
 - [ ] `portfolio.example.json` — example entry
 - [ ] `profile.example.json` — strategy defaults
 - [ ] `setup_monitor.sh` — echo messages

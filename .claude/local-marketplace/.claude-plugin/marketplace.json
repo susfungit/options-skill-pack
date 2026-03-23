@@ -75,6 +75,26 @@
       },
       "source": "./plugins/covered-call-monitor",
       "category": "finance"
+    },
+    {
+      "name": "cash-secured-put-selector",
+      "description": "Identifies the optimal put strike to sell for a cash-secured put on a given stock.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/cash-secured-put-selector",
+      "category": "finance"
+    },
+    {
+      "name": "cash-secured-put-monitor",
+      "description": "Monitors cash-secured put positions and classifies health into SAFE/WATCH/WARNING/DANGER/ACT NOW zones.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/cash-secured-put-monitor",
+      "category": "finance"
     }
   ]
 }

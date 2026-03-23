@@ -155,14 +155,14 @@ def select_short_strike(df, price, T, target_delta, side="put"):
 
     valid = otm[otm["calc_delta"] > 0].copy()
     if valid.empty:
-        return None, otm
+        return None, otm, otm
 
     valid["delta_diff"] = (valid["calc_delta"] - target_delta).abs()
     short_row = valid.loc[valid["delta_diff"].idxmin()]
-    return short_row.to_dict(), valid
+    return short_row.to_dict(), valid, otm
 
 
-def select_wing(valid_df, short_strike, short_mid, side="put"):
+def select_wing(valid_df, otm_df, short_strike, short_mid, side="put"):
     """Select long (wing) strike further OTM than short strike, ~$5 wide."""
     if side == "put":
         candidates = valid_df[valid_df["strike"] < short_strike].copy()
@@ -172,13 +172,18 @@ def select_wing(valid_df, short_strike, short_mid, side="put"):
         wing_target = short_strike + 5
 
     if candidates.empty:
-        return None
+        # Fallback: use full OTM chain (includes strikes without computable delta)
+        if side == "put":
+            candidates = otm_df[otm_df["strike"] < short_strike].copy()
+        else:
+            candidates = otm_df[otm_df["strike"] > short_strike].copy()
+        if candidates.empty:
+            return None
 
     # Filter to wings that cost less than the short (ensures positive leg credit)
-    candidates = candidates[candidates["mid_price"] < short_mid]
-    if candidates.empty:
-        # Fallback: just pick further OTM even if credit is thin
-        candidates = valid_df[valid_df["strike"] < short_strike].copy() if side == "put" else valid_df[valid_df["strike"] > short_strike].copy()
+    affordable = candidates[candidates["mid_price"] < short_mid]
+    if not affordable.empty:
+        candidates = affordable
 
     candidates["wing_diff"] = (candidates["strike"] - wing_target).abs()
     wing_row = candidates.loc[candidates["wing_diff"].idxmin()]
@@ -216,14 +221,32 @@ def main():
     if expiry_result is None:
         print(json.dumps({"error": f"No expiry within {dte_min}–{dte_max} DTE"}))
         sys.exit(1)
-    expiry_str, dte = expiry_result
+
+    # Try preferred expiry first, then later expiries if chain is too thin
+    today = date.today()
+    sorted_expiries = sorted(
+        [(e, (datetime.strptime(e, "%Y-%m-%d").date() - today).days) for e in expirations],
+        key=lambda x: x[1]
+    )
+    start_idx = next((i for i, (e, _) in enumerate(sorted_expiries) if e == expiry_result[0]), 0)
+
+    expiry_str, dte, chain = None, None, None
+    for exp_str, exp_dte in sorted_expiries[start_idx:]:
+        ch = tk.option_chain(exp_str)
+        puts_otm = ch.puts[ch.puts["strike"] < price]
+        calls_otm = ch.calls[ch.calls["strike"] > price]
+        if len(puts_otm) >= 4 and len(calls_otm) >= 4:
+            expiry_str, dte, chain = exp_str, exp_dte, ch
+            break
+
+    if chain is None:
+        print(json.dumps({"error": "No expiry with enough OTM strikes — chain too thin"}))
+        sys.exit(1)
+
     T = dte / 365.0
 
-    # Option chain
-    chain = tk.option_chain(expiry_str)
-
     # ── Put side ──────────────────────────────────────────────────────────────
-    short_put_row, put_valid = select_short_strike(chain.puts, price, T, target_delta, "put")
+    short_put_row, put_valid, put_otm = select_short_strike(chain.puts, price, T, target_delta, "put")
     if short_put_row is None:
         print(json.dumps({"error": "No usable OTM put strikes — try during market hours"}))
         sys.exit(1)
@@ -235,7 +258,7 @@ def main():
     short_put_bid = round(float(short_put_row.get("bid", 0) or 0), 2)
     short_put_ask = round(float(short_put_row.get("ask", 0) or 0), 2)
 
-    long_put_row = select_wing(put_valid, short_put_strike, short_put_mid, "put")
+    long_put_row = select_wing(put_valid, put_otm, short_put_strike, short_put_mid, "put")
     if long_put_row is None:
         print(json.dumps({"error": "No valid put wing strike found"}))
         sys.exit(1)
@@ -248,7 +271,7 @@ def main():
     put_width = round(short_put_strike - long_put_strike, 2)
 
     # ── Call side ─────────────────────────────────────────────────────────────
-    short_call_row, call_valid = select_short_strike(chain.calls, price, T, target_delta, "call")
+    short_call_row, call_valid, call_otm = select_short_strike(chain.calls, price, T, target_delta, "call")
     if short_call_row is None:
         print(json.dumps({"error": "No usable OTM call strikes — try during market hours"}))
         sys.exit(1)
@@ -260,7 +283,7 @@ def main():
     short_call_bid = round(float(short_call_row.get("bid", 0) or 0), 2)
     short_call_ask = round(float(short_call_row.get("ask", 0) or 0), 2)
 
-    long_call_row = select_wing(call_valid, short_call_strike, short_call_mid, "call")
+    long_call_row = select_wing(call_valid, call_otm, short_call_strike, short_call_mid, "call")
     if long_call_row is None:
         print(json.dumps({"error": "No valid call wing strike found"}))
         sys.exit(1)
