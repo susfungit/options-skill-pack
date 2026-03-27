@@ -670,6 +670,13 @@ body {
   border-top: 1px solid var(--border);
 }
 
+.chain-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  border-top: 1px dashed var(--border);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
 .metric { text-align: center; }
 
 .metric-value {
@@ -1594,6 +1601,7 @@ body {
 
   #main-content { height: 55vh; }
   .card-metrics { grid-template-columns: repeat(2, 1fr); }
+  .chain-metrics { grid-template-columns: repeat(2, 1fr); }
   .form-row { flex-direction: column; gap: 8px; }
   .portfolio-header { flex-direction: column; gap: 12px; }
   .modal { width: 95%; }

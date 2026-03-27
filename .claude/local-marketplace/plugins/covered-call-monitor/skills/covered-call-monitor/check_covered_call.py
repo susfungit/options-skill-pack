@@ -148,6 +148,8 @@ def main():
     call_mid = float(call_row["mid_price"]) if call_row["mid_price"] > 0 else None
     call_bid = round(float(call_row.get("bid", 0) or 0), 2)
     call_ask = round(float(call_row.get("ask", 0) or 0), 2)
+    call_volume = int(float(call_row.get("volume", 0) or 0))
+    call_oi     = int(float(call_row.get("openInterest", 0) or 0))
 
     # Compute delta and IV
     current_delta = None
@@ -188,6 +190,8 @@ def main():
             "current_mid": call_mid,
             "bid": call_bid,
             "ask": call_ask,
+            "volume": call_volume,
+            "open_interest": call_oi,
             "current_delta": current_delta,
             "current_iv_pct": current_iv,
         },
@@ -199,6 +203,7 @@ def main():
         "buffer_pct": buffer_pct,
         "intrinsic_value": intrinsic,
         "time_value": time_value,
+        "cost_to_close": round(call_ask * 100, 2) if call_ask > 0 else None,
         "data_source": "yfinance",
     }
 

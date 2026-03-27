@@ -43,3 +43,6 @@ app/.env
 
 # Screenshots (dev artifacts)
 *.png
+
+# Architecture plans (local dev artifacts)
+PLUGGABLE_ARCHITECTURE_PLAN.md

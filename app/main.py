@@ -814,6 +814,23 @@ def _check_single_position(p: dict) -> dict:
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
                 "loss_pct_of_max": data.get("loss_pct_of_max"),
+                "chain_data": {
+                    "short_leg": {
+                        "bid": data.get("short_put", {}).get("bid"),
+                        "ask": data.get("short_put", {}).get("ask"),
+                        "iv_pct": data.get("short_put", {}).get("current_iv_pct"),
+                        "delta": data.get("short_put", {}).get("current_delta"),
+                        "volume": data.get("short_put", {}).get("volume"),
+                        "open_interest": data.get("short_put", {}).get("open_interest"),
+                    },
+                    "long_leg": {
+                        "bid": data.get("long_put", {}).get("bid"),
+                        "ask": data.get("long_put", {}).get("ask"),
+                        "volume": data.get("long_put", {}).get("volume"),
+                        "open_interest": data.get("long_put", {}).get("open_interest"),
+                    },
+                    "cost_to_close": data.get("cost_to_close"),
+                },
             }
             if suggestion:
                 result["suggestion"] = suggestion
@@ -850,6 +867,23 @@ def _check_single_position(p: dict) -> dict:
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
                 "loss_pct_of_max": data.get("loss_pct_of_max"),
+                "chain_data": {
+                    "short_leg": {
+                        "bid": data.get("short_call", {}).get("bid"),
+                        "ask": data.get("short_call", {}).get("ask"),
+                        "iv_pct": data.get("short_call", {}).get("current_iv_pct"),
+                        "delta": data.get("short_call", {}).get("current_delta"),
+                        "volume": data.get("short_call", {}).get("volume"),
+                        "open_interest": data.get("short_call", {}).get("open_interest"),
+                    },
+                    "long_leg": {
+                        "bid": data.get("long_call", {}).get("bid"),
+                        "ask": data.get("long_call", {}).get("ask"),
+                        "volume": data.get("long_call", {}).get("volume"),
+                        "open_interest": data.get("long_call", {}).get("open_interest"),
+                    },
+                    "cost_to_close": data.get("cost_to_close"),
+                },
             }
             if suggestion:
                 result["suggestion"] = suggestion
@@ -891,6 +925,43 @@ def _check_single_position(p: dict) -> dict:
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
                 "loss_pct_of_max": data.get("loss_pct_of_max"),
+                "chain_data": {
+                    "put_side": {
+                        "short_leg": {
+                            "bid": data.get("short_put", {}).get("bid"),
+                            "ask": data.get("short_put", {}).get("ask"),
+                            "iv_pct": data.get("short_put", {}).get("current_iv_pct"),
+                            "delta": data.get("short_put", {}).get("current_delta"),
+                            "volume": data.get("short_put", {}).get("volume"),
+                            "open_interest": data.get("short_put", {}).get("open_interest"),
+                        },
+                        "long_leg": {
+                            "bid": data.get("long_put", {}).get("bid"),
+                            "ask": data.get("long_put", {}).get("ask"),
+                            "volume": data.get("long_put", {}).get("volume"),
+                            "open_interest": data.get("long_put", {}).get("open_interest"),
+                        },
+                    },
+                    "call_side": {
+                        "short_leg": {
+                            "bid": data.get("short_call", {}).get("bid"),
+                            "ask": data.get("short_call", {}).get("ask"),
+                            "iv_pct": data.get("short_call", {}).get("current_iv_pct"),
+                            "delta": data.get("short_call", {}).get("current_delta"),
+                            "volume": data.get("short_call", {}).get("volume"),
+                            "open_interest": data.get("short_call", {}).get("open_interest"),
+                        },
+                        "long_leg": {
+                            "bid": data.get("long_call", {}).get("bid"),
+                            "ask": data.get("long_call", {}).get("ask"),
+                            "volume": data.get("long_call", {}).get("volume"),
+                            "open_interest": data.get("long_call", {}).get("open_interest"),
+                        },
+                    },
+                    "cost_to_close": data.get("cost_to_close"),
+                    "put_cost_to_close": data.get("put_cost_to_close"),
+                    "call_cost_to_close": data.get("call_cost_to_close"),
+                },
             }
             if suggestion:
                 result["suggestion"] = suggestion
@@ -929,6 +1000,17 @@ def _check_single_position(p: dict) -> dict:
                 "buffer_pct": data.get("buffer_pct"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
+                "chain_data": {
+                    "short_leg": {
+                        "bid": data.get("short_call", {}).get("bid"),
+                        "ask": data.get("short_call", {}).get("ask"),
+                        "iv_pct": data.get("short_call", {}).get("current_iv_pct"),
+                        "delta": data.get("short_call", {}).get("current_delta"),
+                        "volume": data.get("short_call", {}).get("volume"),
+                        "open_interest": data.get("short_call", {}).get("open_interest"),
+                    },
+                    "cost_to_close": data.get("cost_to_close"),
+                },
             }
             if suggestion:
                 result["suggestion"] = suggestion
@@ -963,6 +1045,17 @@ def _check_single_position(p: dict) -> dict:
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
                 "loss_pct_of_max": data.get("loss_pct_of_max"),
+                "chain_data": {
+                    "short_leg": {
+                        "bid": data.get("short_put", {}).get("bid"),
+                        "ask": data.get("short_put", {}).get("ask"),
+                        "iv_pct": data.get("short_put", {}).get("current_iv_pct"),
+                        "delta": data.get("short_put", {}).get("current_delta"),
+                        "volume": data.get("short_put", {}).get("volume"),
+                        "open_interest": data.get("short_put", {}).get("open_interest"),
+                    },
+                    "cost_to_close": data.get("cost_to_close"),
+                },
             }
             if suggestion:
                 result["suggestion"] = suggestion

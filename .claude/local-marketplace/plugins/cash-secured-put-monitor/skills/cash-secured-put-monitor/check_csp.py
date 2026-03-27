@@ -147,6 +147,8 @@ def main():
     put_mid = float(put_row["mid_price"]) if put_row["mid_price"] > 0 else None
     put_bid = round(float(put_row.get("bid", 0) or 0), 2)
     put_ask = round(float(put_row.get("ask", 0) or 0), 2)
+    put_volume = int(float(put_row.get("volume", 0) or 0))
+    put_oi     = int(float(put_row.get("openInterest", 0) or 0))
 
     # Compute delta and IV
     current_delta = None
@@ -198,6 +200,8 @@ def main():
             "current_mid":      put_mid,
             "bid":              put_bid,
             "ask":              put_ask,
+            "volume":           put_volume,
+            "open_interest":    put_oi,
             "current_delta":    current_delta,
             "current_iv_pct":   current_iv,
         },
@@ -214,6 +218,7 @@ def main():
         "loss_pct_of_max":      loss_pct_of_max,
         "effective_buy_price":  effective_buy_price,
         "discount_pct":         discount_pct,
+        "cost_to_close":        round(put_ask * 100, 2) if put_ask > 0 else None,
         "data_source":          "yfinance",
     }
 

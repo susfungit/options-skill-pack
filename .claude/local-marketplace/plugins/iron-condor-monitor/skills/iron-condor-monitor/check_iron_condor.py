@@ -71,6 +71,20 @@ def implied_vol(S, K, T, market_price, option_type="put", r=0.045, tol=1e-5, max
     return (lo + hi) / 2
 
 
+def bs_put_delta_abs(S, K, T, sigma, r=0.045):
+    if T <= 0 or sigma <= 0:
+        return 0.0
+    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+    return abs(_norm_cdf(d1) - 1)
+
+
+def bs_call_delta(S, K, T, sigma, r=0.045):
+    if T <= 0 or sigma <= 0:
+        return 0.0
+    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+    return _norm_cdf(d1)
+
+
 def option_mid(row):
     bid = float(row.get("bid", 0) or 0)
     ask = float(row.get("ask", 0) or 0)
@@ -80,19 +94,23 @@ def option_mid(row):
     return round(last, 2) if last > 0 else 0.0
 
 
-def find_strike_price(chain_df, target_strike):
-    """Find the row for a given strike, or the nearest available."""
+def find_strike_data(chain_df, target_strike):
+    """Find the row for a given strike, or the nearest available. Return full data."""
     exact = chain_df[chain_df["strike"] == target_strike]
     if not exact.empty:
         row = exact.iloc[0].to_dict()
-        mid = option_mid(row)
-        return mid, round(float(row.get("bid", 0) or 0), 2), round(float(row.get("ask", 0) or 0), 2)
-    # Nearest strike
-    chain_df = chain_df.copy()
-    chain_df["_diff"] = (chain_df["strike"] - target_strike).abs()
-    nearest = chain_df.nsmallest(1, "_diff").iloc[0].to_dict()
-    mid = option_mid(nearest)
-    return mid, round(float(nearest.get("bid", 0) or 0), 2), round(float(nearest.get("ask", 0) or 0), 2)
+    else:
+        df = chain_df.copy()
+        df["_diff"] = (df["strike"] - target_strike).abs()
+        row = df.nsmallest(1, "_diff").iloc[0].to_dict()
+    mid = option_mid(row)
+    return {
+        "mid": mid,
+        "bid": round(float(row.get("bid", 0) or 0), 2),
+        "ask": round(float(row.get("ask", 0) or 0), 2),
+        "volume": int(float(row.get("volume", 0) or 0)),
+        "open_interest": int(float(row.get("openInterest", 0) or 0)),
+    }
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -162,10 +180,40 @@ def main():
         sys.exit(1)
 
     # Look up all 4 legs
-    sp_mid, sp_bid, sp_ask = find_strike_price(puts, short_put)
-    lp_mid, lp_bid, lp_ask = find_strike_price(puts, long_put)
-    sc_mid, sc_bid, sc_ask = find_strike_price(calls, short_call)
-    lc_mid, lc_bid, lc_ask = find_strike_price(calls, long_call)
+    sp = find_strike_data(puts, short_put)
+    lp = find_strike_data(puts, long_put)
+    sc = find_strike_data(calls, short_call)
+    lc = find_strike_data(calls, long_call)
+
+    sp_mid, sp_bid, sp_ask = sp["mid"], sp["bid"], sp["ask"]
+    lp_mid, lp_bid, lp_ask = lp["mid"], lp["bid"], lp["ask"]
+    sc_mid, sc_bid, sc_ask = sc["mid"], sc["bid"], sc["ask"]
+    lc_mid, lc_bid, lc_ask = lc["mid"], lc["bid"], lc["ask"]
+
+    T = max(dte / 365.0, 0.001)
+
+    # IV and delta for short put
+    sp_iv, sp_delta = None, None
+    if sp_mid and sp_mid > 0:
+        iv = implied_vol(stock_price, short_put, T, sp_mid, option_type="put")
+        if iv and iv > 0:
+            sp_delta = round(bs_put_delta_abs(stock_price, short_put, T, iv), 3)
+            sp_iv = round(iv * 100, 1)
+
+    # IV and delta for short call
+    sc_iv, sc_delta = None, None
+    if sc_mid and sc_mid > 0:
+        iv = implied_vol(stock_price, short_call, T, sc_mid, option_type="call")
+        if iv and iv > 0:
+            sc_delta = round(bs_call_delta(stock_price, short_call, T, iv), 3)
+            sc_iv = round(iv * 100, 1)
+
+    # Cost to close each side and total
+    put_cost_to_close = round((sp_ask - lp_bid) * 100, 2) if sp_ask > 0 else None
+    call_cost_to_close = round((sc_ask - lc_bid) * 100, 2) if sc_ask > 0 else None
+    cost_to_close = None
+    if put_cost_to_close is not None and call_cost_to_close is not None:
+        cost_to_close = round(put_cost_to_close + call_cost_to_close, 2)
 
     # Current spread values
     put_spread_value  = round(sp_mid - lp_mid, 2) if sp_mid and lp_mid else None
@@ -218,24 +266,36 @@ def main():
             "current_mid": sp_mid,
             "bid":         sp_bid,
             "ask":         sp_ask,
+            "volume":      sp["volume"],
+            "open_interest": sp["open_interest"],
+            "current_iv_pct": sp_iv,
+            "current_delta": sp_delta,
         },
         "long_put": {
             "strike":      long_put,
             "current_mid": lp_mid,
             "bid":         lp_bid,
             "ask":         lp_ask,
+            "volume":      lp["volume"],
+            "open_interest": lp["open_interest"],
         },
         "short_call": {
             "strike":      short_call,
             "current_mid": sc_mid,
             "bid":         sc_bid,
             "ask":         sc_ask,
+            "volume":      sc["volume"],
+            "open_interest": sc["open_interest"],
+            "current_iv_pct": sc_iv,
+            "current_delta": sc_delta,
         },
         "long_call": {
             "strike":      long_call,
             "current_mid": lc_mid,
             "bid":         lc_bid,
             "ask":         lc_ask,
+            "volume":      lc["volume"],
+            "open_interest": lc["open_interest"],
         },
         "original_credit":       net_credit,
         "put_spread_value":      put_spread_value,
@@ -252,6 +312,9 @@ def main():
         "worst_buffer_pct":      worst_buffer_pct,
         "worst_side":            worst_side,
         "loss_pct_of_max":       loss_pct_of_max,
+        "cost_to_close":         cost_to_close,
+        "put_cost_to_close":     put_cost_to_close,
+        "call_cost_to_close":    call_cost_to_close,
         "data_source":           "yfinance",
     }
 

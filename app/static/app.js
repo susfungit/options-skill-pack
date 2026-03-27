@@ -195,13 +195,33 @@ function renderPortfolio() {
     const suggestion = p.suggestion || null;
     const contracts = p.contracts || 1;
     const maxLoss = computeMaxLoss(p);
+    const maxProfit = p.net_credit * 100 * contracts;
+    const capturedPct = (pnl != null && maxProfit > 0) ? Math.round((pnl / (maxProfit / contracts)) * 100) : null;
+
+    // Chain data from last check
+    const cd = p.chain_data || {};
+    const isIC = p.strategy === 'iron-condor';
+    const isSingleLeg = (p.strategy === 'covered-call' || p.strategy === 'cash-secured-put');
+    let shortLeg, longLeg, costToClose;
+    if (isIC) {
+      const ws = p.worst_side || 'put';
+      const side = ws === 'put' ? (cd.put_side || {}) : (cd.call_side || {});
+      shortLeg = side.short_leg || {};
+      longLeg = side.long_leg || {};
+      costToClose = cd.cost_to_close;
+    } else {
+      shortLeg = cd.short_leg || {};
+      longLeg = cd.long_leg || {};
+      costToClose = cd.cost_to_close;
+    }
+    const hasChainData = shortLeg.iv_pct != null || costToClose != null;
 
     return `
       <div class="position-card ${isClosed ? 'closed' : ''} ${zone ? 'zone-' + zoneClass : ''}" style="animation-delay: ${i * 0.05}s" id="card-${i}">
         <div class="card-top">
           <div>
             <div style="display:flex; align-items:center; gap:8px;">
-              <div class="card-ticker">${esc(p.ticker)}</div>
+              <div class="card-ticker">${esc(p.ticker)}${p.stock_price ? ` <span style="font-weight:400;font-size:0.85em;color:var(--text-muted)">$${p.stock_price.toFixed(2)}</span>` : ''}</div>
               ${zone && !isClosed ? `
                 <div class="zone-info">
                   <span class="zone-dot ${zoneClass}"></span>
@@ -240,10 +260,40 @@ function renderPortfolio() {
             <div class="metric-label">Contracts</div>
           </div>
           <div class="metric">
-            <div class="metric-value">${p.expiry || '--'}</div>
-            <div class="metric-label">Expiry</div>
+            <div class="metric-value">${dteStr || '--'}</div>
+            <div class="metric-label">DTE</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value" style="${capturedPct != null ? (capturedPct >= 50 ? 'color:var(--pnl-positive)' : '') : ''}">${capturedPct != null ? capturedPct + '%' : '--'}</div>
+            <div class="metric-label">Captured</div>
           </div>
         </div>
+        ${!isClosed && hasChainData ? `
+        <div class="card-metrics chain-metrics">
+          <div class="metric">
+            <div class="metric-value">${costToClose != null ? '$' + costToClose.toFixed(0) : '--'}</div>
+            <div class="metric-label">Close Cost</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${shortLeg.iv_pct != null ? shortLeg.iv_pct.toFixed(0) + '%' : '--'}</div>
+            <div class="metric-label">IV</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${shortLeg.delta != null ? shortLeg.delta.toFixed(2) : '--'}</div>
+            <div class="metric-label">Delta</div>
+          </div>
+          <div class="metric">
+            <div class="metric-value">${shortLeg.volume != null ? (shortLeg.volume > 999 ? (shortLeg.volume/1000).toFixed(1)+'k' : shortLeg.volume) : '--'}/${shortLeg.open_interest != null ? fmtOI(shortLeg.open_interest) : '--'}</div>
+            <div class="metric-label">Vol/OI (short)</div>
+          </div>
+          ${!isSingleLeg ? `
+          <div class="metric">
+            <div class="metric-value">${longLeg.volume != null ? (longLeg.volume > 999 ? (longLeg.volume/1000).toFixed(1)+'k' : longLeg.volume) : '--'}/${longLeg.open_interest != null ? fmtOI(longLeg.open_interest) : '--'}</div>
+            <div class="metric-label">Vol/OI (long)</div>
+          </div>
+          ` : ''}
+        </div>
+        ` : ''}
         ${suggestion && !isClosed ? `<div class="card-suggestion ${zoneClass}">${esc(suggestion)}</div>` : ''}
         <div class="card-actions">
           <button class="card-btn" onclick="editPosition(${i})">Edit</button>

@@ -60,6 +60,14 @@ def implied_vol(S, K, T, market_price, r=0.045, tol=1e-5, max_iter=100):
     return (lo + hi) / 2
 
 
+def bs_put_delta_abs(S, K, T, sigma, r=0.045):
+    """Absolute value of BS put delta."""
+    if T <= 0 or sigma <= 0:
+        return 0.0
+    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
+    return abs(_norm_cdf(d1) - 1)
+
+
 def option_mid(row):
     bid = float(row.get("bid", 0) or 0)
     ask = float(row.get("ask", 0) or 0)
@@ -142,6 +150,8 @@ def main():
     short_mid  = float(short_row["mid_price"]) if short_row["mid_price"] > 0 else None
     short_bid  = round(float(short_row.get("bid", 0) or 0), 2)
     short_ask  = round(float(short_row.get("ask", 0) or 0), 2)
+    short_volume = int(float(short_row.get("volume", 0) or 0))
+    short_oi     = int(float(short_row.get("openInterest", 0) or 0))
 
     # Look up long put
     long_rows = puts[puts["strike"] == long_strike]
@@ -152,6 +162,8 @@ def main():
     long_mid  = float(long_row["mid_price"]) if long_row["mid_price"] > 0 else None
     long_bid  = round(float(long_row.get("bid", 0) or 0), 2)
     long_ask  = round(float(long_row.get("ask", 0) or 0), 2)
+    long_volume = int(float(long_row.get("volume", 0) or 0))
+    long_oi     = int(float(long_row.get("openInterest", 0) or 0))
 
     # Current spread value and P&L
     if short_mid is not None and long_mid is not None:
@@ -182,6 +194,18 @@ def main():
     breakeven  = round(short_strike - net_credit, 2)
     be_buffer_pct = round((stock_price - breakeven) / stock_price * 100, 2)
 
+    # IV and delta for short leg
+    short_iv = None
+    short_delta = None
+    if short_mid and short_mid > 0:
+        iv = implied_vol(stock_price, short_strike, T, short_mid)
+        if iv and iv > 0:
+            short_delta = round(bs_put_delta_abs(stock_price, short_strike, T, iv), 3)
+            short_iv = round(iv * 100, 1)
+
+    # Cost to close the spread (buy back short at ask, sell long at bid)
+    cost_to_close = round((short_ask - long_bid) * 100, 2) if short_ask > 0 else None
+
     result = {
         "ticker":               ticker_sym,
         "stock_price":          stock_price,
@@ -192,12 +216,18 @@ def main():
             "current_mid": short_mid,
             "bid":     short_bid,
             "ask":     short_ask,
+            "volume":  short_volume,
+            "open_interest": short_oi,
+            "current_iv_pct": short_iv,
+            "current_delta": short_delta,
         },
         "long_put": {
             "strike":  long_strike,
             "current_mid": long_mid,
             "bid":     long_bid,
             "ask":     long_ask,
+            "volume":  long_volume,
+            "open_interest": long_oi,
         },
         "original_credit":       net_credit,
         "current_spread_value":  current_spread_value,
@@ -209,6 +239,7 @@ def main():
         "buffer_pct":            buffer_pct,
         "be_buffer_pct":         be_buffer_pct,
         "loss_pct_of_max":       loss_pct_of_max,
+        "cost_to_close":         cost_to_close,
         "data_source":           "yfinance"
     }
 
