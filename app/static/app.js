@@ -42,7 +42,7 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'portfolio') loadPortfolio();
-    if (tab.dataset.tab === 'profile') loadProfile();
+    if (tab.dataset.tab === 'profile') { loadProfile(); loadModels(); }
   });
 });
 
@@ -1647,6 +1647,19 @@ async function viewChain(strategyOverride, dataOverride) {
 
 let cachedProfile = null;
 
+async function loadModels() {
+  try {
+    const res = await fetch('/api/models');
+    const data = await res.json();
+    const sel = document.getElementById('pf-model');
+    const current = sel.value;
+    sel.innerHTML = data.models.map(m => `<option value="${m.id}">${m.display_name} — ${m.id}</option>`).join('');
+    if (current) sel.value = current;
+  } catch (err) {
+    console.error('Failed to load models:', err);
+  }
+}
+
 async function loadProfile() {
   try {
     const res = await fetch('/api/profile');
@@ -1655,6 +1668,7 @@ async function loadProfile() {
 
     // Personal
     document.getElementById('pf-name').value = profile.name || '';
+    if (profile.model) document.getElementById('pf-model').value = profile.model;
     const nameEl = document.getElementById('user-name');
     nameEl.textContent = profile.name || '';
 
@@ -1699,6 +1713,7 @@ async function saveProfile() {
 
   const body = {
     name: document.getElementById('pf-name').value.trim(),
+    model: document.getElementById('pf-model').value,
     strategy_defaults: {
       'bull-put-spread': {
         delta: parseFloat(document.getElementById('pf-bps-delta').value) || 0.20,

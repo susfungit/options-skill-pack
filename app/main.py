@@ -25,8 +25,11 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORTFOLIO_PATH = os.path.join(PROJECT_ROOT, "portfolio.json")
 PROFILE_PATH = os.path.join(PROJECT_ROOT, "profile.json")
 
+DEFAULT_MODEL = "claude-sonnet-4-20250514"
+
 DEFAULT_PROFILE = {
     "name": "",
+    "model": DEFAULT_MODEL,
     "strategy_defaults": {
         "bull-put-spread": {"delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10},
         "bear-call-spread": {"delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10},
@@ -60,6 +63,24 @@ def get_client() -> anthropic.Anthropic:
     return _client
 
 
+@app.get("/api/models")
+async def list_models():
+    try:
+        client = get_client()
+        models = client.models.list()
+        cutoff = datetime.now(tz=models.data[0].created_at.tzinfo) if models.data else datetime.now()
+        cutoff = cutoff.replace(year=cutoff.year - 1)
+        result = [
+            {"id": m.id, "display_name": m.display_name}
+            for m in models.data
+            if m.created_at >= cutoff
+        ]
+        result.sort(key=lambda m: m["id"])
+        return {"models": result}
+    except HTTPException:
+        return {"models": [{"id": DEFAULT_MODEL, "display_name": "Claude Sonnet 4"}]}
+
+
 # ── Chat models & endpoint ───────────────────────────────────────────────────
 
 class MessageRole(str, Enum):
@@ -91,9 +112,11 @@ async def chat(req: ChatRequest):
     messages = [{"role": m.role, "content": m.content} for m in req.history]
     messages.append({"role": "user", "content": req.message})
 
+    model = _read_profile().get("model", DEFAULT_MODEL)
+
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=model,
             max_tokens=4096,
             system=SYSTEM_PROMPT,
             tools=TOOLS,
@@ -125,7 +148,7 @@ async def chat(req: ChatRequest):
             messages.append({"role": "user", "content": tool_results})
 
             response = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model=model,
                 max_tokens=4096,
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,
@@ -541,6 +564,7 @@ async def get_profile():
 
 class ProfileUpdate(BaseModel):
     name: Optional[str] = None
+    model: Optional[str] = None
     strategy_defaults: Optional[dict] = None
     profit_rules: Optional[dict] = None
 
@@ -550,6 +574,8 @@ async def update_profile(req: ProfileUpdate):
     profile = _read_profile()
     if req.name is not None:
         profile["name"] = req.name
+    if req.model is not None:
+        profile["model"] = req.model
     if req.strategy_defaults is not None:
         profile["strategy_defaults"] = req.strategy_defaults
     if req.profit_rules is not None:
