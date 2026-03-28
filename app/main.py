@@ -43,6 +43,7 @@ DEFAULT_PROFILE = {
         "near_expiry_pct": 25,
         "near_expiry_dte": 14,
     },
+    "chat_history_limit": 4,
 }
 
 # ── Claude API client ────────────────────────────────────────────────────────
@@ -117,7 +118,7 @@ async def chat(req: ChatRequest):
     try:
         response = client.messages.create(
             model=model,
-            max_tokens=4096,
+            max_tokens=8192,
             system=SYSTEM_PROMPT,
             tools=TOOLS,
             messages=messages,
@@ -149,7 +150,7 @@ async def chat(req: ChatRequest):
 
             response = client.messages.create(
                 model=model,
-                max_tokens=4096,
+                max_tokens=8192,
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,
                 messages=messages,
@@ -567,6 +568,7 @@ class ProfileUpdate(BaseModel):
     model: Optional[str] = None
     strategy_defaults: Optional[dict] = None
     profit_rules: Optional[dict] = None
+    chat_history_limit: Optional[int] = None
 
 
 @app.put("/api/profile")
@@ -580,6 +582,8 @@ async def update_profile(req: ProfileUpdate):
         profile["strategy_defaults"] = req.strategy_defaults
     if req.profit_rules is not None:
         profile["profit_rules"] = req.profit_rules
+    if req.chat_history_limit is not None:
+        profile["chat_history_limit"] = max(2, req.chat_history_limit)
     _write_profile(profile)
     return profile
 

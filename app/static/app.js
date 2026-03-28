@@ -120,7 +120,8 @@ async function sendMessage() {
 
     history.push({ role: 'user', content: text });
     history.push({ role: 'assistant', content: data.response });
-    if (history.length > 20) history = history.slice(-20);
+    const histLimit = cachedProfile?.chat_history_limit ?? 4;
+    if (history.length > histLimit) history = history.slice(-histLimit);
   } catch (err) {
     loadingEl.classList.remove('loading');
     loadingEl.textContent = 'Error: ' + err.message;
@@ -899,23 +900,24 @@ async function runCompareAnalysis(ticker, btn) {
 }
 
 function buildAnalysisChatPrompt(strategy, d) {
+  const prefix = ``;
   if (strategy === 'bull-put-spread') {
-    return `Assess this bull put spread on ${d.ticker} ($${d.price}): sell $${d.short_put.strike}P (Δ${d.short_put.delta}, IV ${d.short_put.iv_pct}%) / buy $${d.long_put.strike}P, credit $${d.net_credit}, max loss $${d.max_loss}, breakeven $${d.breakeven}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, ${d.dte} DTE. Is this a good trade?`;
+    return `${prefix}Assess this bull put spread on ${d.ticker} ($${d.price}): sell $${d.short_put.strike}P (Δ${d.short_put.delta}, IV ${d.short_put.iv_pct}%) / buy $${d.long_put.strike}P, credit $${d.net_credit}, max loss $${d.max_loss}, breakeven $${d.breakeven}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, expiry ${d.expiry} (${d.dte} DTE). Is this a good trade?`;
   }
   if (strategy === 'bear-call-spread') {
-    return `Assess this bear call spread on ${d.ticker} ($${d.price}): sell $${d.short_call.strike}C (Δ${d.short_call.delta}, IV ${d.short_call.iv_pct}%) / buy $${d.long_call.strike}C, credit $${d.net_credit}, max loss $${d.max_loss}, breakeven $${d.breakeven}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, ${d.dte} DTE. Is this a good trade?`;
+    return `${prefix}Assess this bear call spread on ${d.ticker} ($${d.price}): sell $${d.short_call.strike}C (Δ${d.short_call.delta}, IV ${d.short_call.iv_pct}%) / buy $${d.long_call.strike}C, credit $${d.net_credit}, max loss $${d.max_loss}, breakeven $${d.breakeven}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, expiry ${d.expiry} (${d.dte} DTE). Is this a good trade?`;
   }
   if (strategy === 'iron-condor') {
     const ps = d.put_side, cs = d.call_side;
-    return `Assess this iron condor on ${d.ticker} ($${d.price}): puts ${ps.short_put.strike}/${ps.long_put.strike} (Δ${ps.short_put.delta}, IV ${ps.short_put.iv_pct}%), calls ${cs.short_call.strike}/${cs.long_call.strike} (Δ${cs.short_call.delta}, IV ${cs.short_call.iv_pct}%), total credit $${d.total_credit}, max loss $${d.max_loss}, profit zone ${d.profit_zone}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, ${d.dte} DTE. Is this a good trade?`;
+    return `${prefix}Assess this iron condor on ${d.ticker} ($${d.price}): puts ${ps.short_put.strike}/${ps.long_put.strike} (Δ${ps.short_put.delta}, IV ${ps.short_put.iv_pct}%), calls ${cs.short_call.strike}/${cs.long_call.strike} (Δ${cs.short_call.delta}, IV ${cs.short_call.iv_pct}%), total credit $${d.total_credit}, max loss $${d.max_loss}, profit zone ${d.profit_zone}, ${d.return_on_risk_pct}% return, ${d.prob_profit_pct}% prob profit, expiry ${d.expiry} (${d.dte} DTE). Is this a good trade?`;
   }
   if (strategy === 'covered-call') {
-    return `Assess this covered call on ${d.ticker} ($${d.stock_price}): sell $${d.short_call.strike}C (Δ${d.short_call.delta}, IV ${d.short_call.iv_pct}%), premium $${d.premium_per_share}, static ${d.static_return_pct}%, annualized ${d.annualized_return_pct}%, downside protection ${d.downside_protection_pct}%, called away return ${d.called_away_return_pct}%, ${d.prob_called_pct}% prob called, ${d.dte} DTE. Is this a good trade?`;
+    return `${prefix}Assess this covered call on ${d.ticker} ($${d.stock_price}): sell $${d.short_call.strike}C (Δ${d.short_call.delta}, IV ${d.short_call.iv_pct}%), premium $${d.premium_per_share}, static ${d.static_return_pct}%, annualized ${d.annualized_return_pct}%, downside protection ${d.downside_protection_pct}%, called away return ${d.called_away_return_pct}%, ${d.prob_called_pct}% prob called, expiry ${d.expiry} (${d.dte} DTE). Is this a good trade?`;
   }
   if (strategy === 'cash-secured-put') {
-    return `Assess this cash-secured put on ${d.ticker} ($${d.stock_price}): sell $${d.short_put.strike}P (Δ${d.short_put.delta}, IV ${d.short_put.iv_pct}%), premium $${d.premium_per_share}, return on capital ${d.return_on_capital_pct}%, annualized ${d.annualized_return_pct}%, effective buy price $${d.effective_buy_price} (${d.discount_pct}% discount), ${d.prob_profit_pct}% prob profit, cash required $${d.cash_required}, ${d.dte} DTE. Is this a good trade?`;
+    return `${prefix}Assess this cash-secured put on ${d.ticker} ($${d.stock_price}): sell $${d.short_put.strike}P (Δ${d.short_put.delta}, IV ${d.short_put.iv_pct}%), premium $${d.premium_per_share}, return on capital ${d.return_on_capital_pct}%, annualized ${d.annualized_return_pct}%, effective buy price $${d.effective_buy_price} (${d.discount_pct}% discount), ${d.prob_profit_pct}% prob profit, cash required $${d.cash_required}, expiry ${d.expiry} (${d.dte} DTE). Is this a good trade?`;
   }
-  return `Assess this ${formatStrategy(strategy)} result: ${JSON.stringify(d)}`;
+  return `${prefix}Assess this ${formatStrategy(strategy)} result: ${JSON.stringify(d)}`;
 }
 
 let lastAnalysis = null;
@@ -1122,22 +1124,23 @@ function buildCompareChatPrompt(data) {
   const csp = data.cash_secured_put || {};
   const ticker = data.ticker;
 
+  const expiry = bps.expiry || bcs.expiry || ic.expiry || cc.expiry || csp.expiry || '';
   const count = [bps, bcs, ic, cc, csp].filter(s => s.short_put || s.short_call || s.put_side).length;
-  let prompt = `Compare these ${count} strategies for ${ticker} and recommend which is best right now:\n\n`;
+  let prompt = `Compare these ${count} strategies for ${ticker}${expiry ? ` with expiry ${expiry}` : ''} and recommend which is best right now:\n\n`;
   if (bps.short_put && !bps.error) {
-    prompt += `Bull Put Spread: sell $${bps.short_put.strike}P / buy $${bps.long_put.strike}P, credit $${bps.net_credit}, ${bps.return_on_risk_pct}% return, ${bps.prob_profit_pct}% prob profit, ${bps.dte} DTE\n`;
+    prompt += `Bull Put Spread: sell $${bps.short_put.strike}P / buy $${bps.long_put.strike}P, credit $${bps.net_credit}, ${bps.return_on_risk_pct}% return, ${bps.prob_profit_pct}% prob profit, expiry ${bps.expiry} (${bps.dte} DTE)\n`;
   }
   if (bcs.short_call && !bcs.error) {
-    prompt += `Bear Call Spread: sell $${bcs.short_call.strike}C / buy $${bcs.long_call.strike}C, credit $${bcs.net_credit}, ${bcs.return_on_risk_pct}% return, ${bcs.prob_profit_pct}% prob profit, ${bcs.dte} DTE\n`;
+    prompt += `Bear Call Spread: sell $${bcs.short_call.strike}C / buy $${bcs.long_call.strike}C, credit $${bcs.net_credit}, ${bcs.return_on_risk_pct}% return, ${bcs.prob_profit_pct}% prob profit, expiry ${bcs.expiry} (${bcs.dte} DTE)\n`;
   }
   if (ic.put_side && !ic.error) {
-    prompt += `Iron Condor: puts ${ic.put_side.short_put.strike}/${ic.put_side.long_put.strike}, calls ${ic.call_side.short_call.strike}/${ic.call_side.long_call.strike}, credit $${ic.total_credit}, ${ic.return_on_risk_pct}% return, ${ic.prob_profit_pct}% prob profit, ${ic.dte} DTE\n`;
+    prompt += `Iron Condor: puts ${ic.put_side.short_put.strike}/${ic.put_side.long_put.strike}, calls ${ic.call_side.short_call.strike}/${ic.call_side.long_call.strike}, credit $${ic.total_credit}, ${ic.return_on_risk_pct}% return, ${ic.prob_profit_pct}% prob profit, expiry ${ic.expiry} (${ic.dte} DTE)\n`;
   }
   if (cc.short_call && !cc.error) {
-    prompt += `Covered Call: sell $${cc.short_call.strike}C, premium $${cc.premium_per_share}, ${cc.annualized_return_pct}% annualized, ${cc.prob_called_pct}% prob called, ${cc.dte} DTE\n`;
+    prompt += `Covered Call: sell $${cc.short_call.strike}C, premium $${cc.premium_per_share}, ${cc.annualized_return_pct}% annualized, ${cc.prob_called_pct}% prob called, expiry ${cc.expiry} (${cc.dte} DTE)\n`;
   }
   if (csp.short_put && !csp.error) {
-    prompt += `Cash-Secured Put: sell $${csp.short_put.strike}P, premium $${csp.premium_per_share}, ${csp.return_on_capital_pct}% return on capital, ${csp.annualized_return_pct}% annualized, ${csp.prob_profit_pct}% prob profit, eff. buy $${csp.effective_buy_price}, ${csp.dte} DTE\n`;
+    prompt += `Cash-Secured Put: sell $${csp.short_put.strike}P, premium $${csp.premium_per_share}, ${csp.return_on_capital_pct}% return on capital, ${csp.annualized_return_pct}% annualized, ${csp.prob_profit_pct}% prob profit, eff. buy $${csp.effective_buy_price}, expiry ${csp.expiry} (${csp.dte} DTE)\n`;
   }
   if (data.market_context && !data.market_context.error) {
     const mc = data.market_context;
@@ -1699,6 +1702,8 @@ async function loadProfile() {
     document.getElementById('pf-near-pct').value = pr.near_expiry_pct ?? '';
     document.getElementById('pf-near-dte').value = pr.near_expiry_dte ?? '';
 
+    document.getElementById('pf-chat-history').value = profile.chat_history_limit ?? 4;
+
     updateAnalyzerPlaceholders();
   } catch (err) {
     console.error('Failed to load profile:', err);
@@ -1743,6 +1748,7 @@ async function saveProfile() {
       near_expiry_pct: parseInt(document.getElementById('pf-near-pct').value) || 25,
       near_expiry_dte: parseInt(document.getElementById('pf-near-dte').value) || 14,
     },
+    chat_history_limit: parseInt(document.getElementById('pf-chat-history').value) || 4,
   };
 
   try {

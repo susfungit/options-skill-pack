@@ -1,6 +1,7 @@
 """Tool definitions and executors for Claude API tool use."""
 
 import json
+import math
 import os
 import re
 import subprocess
@@ -355,6 +356,17 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
 _TICKER_RE = re.compile(r'^[A-Z]{1,5}$')
 
 
+def _sanitize_nan(obj):
+    """Recursively replace NaN floats with None so FastAPI can serialize the response."""
+    if isinstance(obj, float) and math.isnan(obj):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_nan(v) for v in obj]
+    return obj
+
+
 def execute_tool(tool_name: str, tool_input: dict) -> str:
     """Execute a tool by running the corresponding Python script.
 
@@ -385,8 +397,19 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
         if result.returncode != 0:
             stderr = result.stderr.strip()
             stdout = result.stdout.strip()
-            return stdout if stdout else json.dumps({"error": f"Script failed: {stderr}"})
-        return result.stdout.strip()
+            if stdout:
+                try:
+                    json.loads(stdout)
+                    return stdout
+                except json.JSONDecodeError:
+                    pass
+            return json.dumps({"error": stdout or f"Script failed: {stderr}"})
+        output = result.stdout.strip()
+        try:
+            return json.dumps(_sanitize_nan(json.loads(output)))
+        except json.JSONDecodeError:
+            return json.dumps({"error": f"Script returned non-JSON output: {output[:200]}"})
+
     except subprocess.TimeoutExpired:
         return json.dumps({"error": "Script timed out (30s). Try again — yfinance may be slow."})
     except Exception as e:
