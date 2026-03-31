@@ -124,7 +124,10 @@ async def chat(req: ChatRequest):
             messages=messages,
         )
 
-        while response.stop_reason == "tool_use":
+        max_tool_rounds = 5
+        tool_round = 0
+        while response.stop_reason == "tool_use" and tool_round < max_tool_rounds:
+            tool_round += 1
             tool_uses = [block for block in response.content if block.type == "tool_use"]
             tool_results = []
 
@@ -154,6 +157,11 @@ async def chat(req: ChatRequest):
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,
                 messages=messages,
+            )
+
+        if tool_round >= max_tool_rounds and response.stop_reason == "tool_use":
+            return ChatResponse(
+                response="**Stopped:** Too many tool calls. Please simplify your request."
             )
 
         text_parts = [block.text for block in response.content if hasattr(block, "text")]

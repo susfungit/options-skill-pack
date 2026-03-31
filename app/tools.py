@@ -354,6 +354,51 @@ def _build_args(tool_name: str, tool_input: dict) -> list[str]:
 
 
 _TICKER_RE = re.compile(r'^[A-Z]{1,5}$')
+_EXPIRY_RE = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+
+
+def _validate_tool_input(tool_input: dict) -> str | None:
+    """Validate numeric and string fields in tool input.
+
+    Returns an error message string if invalid, or None if valid.
+    """
+    # Validate numeric fields that must be positive
+    _POSITIVE_FIELDS = {
+        "short_strike", "long_strike", "short_put", "long_put",
+        "short_call", "long_call", "short_put_strike", "short_call_strike",
+        "net_credit", "cost_basis", "spread_width",
+    }
+    for field in _POSITIVE_FIELDS:
+        if field in tool_input:
+            v = tool_input[field]
+            if not isinstance(v, (int, float)) or v <= 0:
+                return f"Invalid {field}: must be a positive number"
+
+    # Delta must be between 0 and 1
+    if "target_delta" in tool_input:
+        v = tool_input["target_delta"]
+        if not isinstance(v, (int, float)) or not (0 < v < 1):
+            return "Invalid target_delta: must be between 0 and 1"
+
+    # DTE must be positive integers
+    for field in ("dte_min", "dte_max"):
+        if field in tool_input:
+            v = tool_input[field]
+            if not isinstance(v, (int, float)) or v < 1:
+                return f"Invalid {field}: must be a positive integer"
+
+    # Expiry must be YYYY-MM-DD
+    if "expiry" in tool_input:
+        v = tool_input["expiry"]
+        if not isinstance(v, str) or not _EXPIRY_RE.match(v):
+            return "Invalid expiry: must be YYYY-MM-DD format"
+
+    # roll_side must be put or call
+    if "roll_side" in tool_input:
+        if tool_input["roll_side"] not in ("put", "call"):
+            return "Invalid roll_side: must be 'put' or 'call'"
+
+    return None
 
 
 def _sanitize_nan(obj):
@@ -376,6 +421,11 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
     ticker = tool_input.get("ticker", "")
     if ticker and not _TICKER_RE.match(ticker.upper()):
         return json.dumps({"error": f"Invalid ticker: {ticker}"})
+
+    # Validate all numeric/string fields before passing to subprocess
+    validation_error = _validate_tool_input(tool_input)
+    if validation_error:
+        return json.dumps({"error": validation_error})
 
     script_path = SCRIPT_MAP.get(tool_name)
     if not script_path:
