@@ -8,7 +8,7 @@ async function loadModels() {
     const data = await res.json();
     const sel = document.getElementById('pf-model');
     const current = sel.value;
-    sel.innerHTML = data.models.map(m => `<option value="${m.id}">${m.display_name} — ${m.id}</option>`).join('');
+    sel.innerHTML = data.models.map(m => `<option value="${esc(m.id)}">${esc(m.display_name)} — ${esc(m.id)}</option>`).join('');
     if (current) sel.value = current;
   } catch (err) {
     console.error('Failed to load models:', err);

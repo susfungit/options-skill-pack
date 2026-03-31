@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import hmac
+import logging
 import os
 import json
 import re
@@ -10,6 +11,7 @@ import secrets
 import stat
 import tempfile
 import threading
+import time
 import uuid
 from datetime import datetime
 from enum import Enum
@@ -27,6 +29,12 @@ import anthropic
 
 from app.tools import TOOLS, SKILL_GUIDANCE, execute_tool
 from app.prompts import SYSTEM_PROMPT
+
+logger = logging.getLogger("options_skill_pack")
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 app = FastAPI(title="Options Skill Pack")
 
@@ -48,29 +56,51 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["*"],
+    allow_headers=["content-type", "authorization"],
 )
+
+
+# ── Security headers ──────────────────────────────────────────────────────────
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
 
 # ── API key auth (optional — set APP_API_KEY env var to enable) ─────────────
 
 _APP_API_KEY = os.environ.get("APP_API_KEY")
 _SESSION_SECRET = secrets.token_hex(32)
 _COOKIE_NAME = "osp_session"
+_SESSION_TTL = int(os.environ.get("SESSION_TTL", 86400))  # 24 hours
 
 
 def _make_session_token() -> str:
-    """Create an HMAC-signed session token tied to this server instance."""
+    """Create an HMAC-signed session token with expiry, tied to this server instance."""
     nonce = secrets.token_hex(16)
-    sig = hmac.new(_SESSION_SECRET.encode(), nonce.encode(), hashlib.sha256).hexdigest()
-    return f"{nonce}.{sig}"
+    issued = str(int(time.time()))
+    payload = f"{nonce}.{issued}"
+    sig = hmac.new(_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{nonce}.{issued}.{sig}"
 
 
 def _valid_session_token(token: str) -> bool:
-    parts = token.split(".", 1)
-    if len(parts) != 2:
+    parts = token.split(".")
+    if len(parts) != 3:
         return False
-    nonce, sig = parts
-    expected = hmac.new(_SESSION_SECRET.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+    nonce, issued, sig = parts
+    try:
+        if int(time.time()) - int(issued) > _SESSION_TTL:
+            return False
+    except ValueError:
+        return False
+    payload = f"{nonce}.{issued}"
+    expected = hmac.new(_SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
     return hmac.compare_digest(sig, expected)
 
 
@@ -80,13 +110,14 @@ async def auth_middleware(request: Request, call_next):
         return await call_next(request)
     path = request.url.path
     # Serve the page and static assets freely
-    if path == "/" or path.startswith("/static"):
+    if path == "/" or path.startswith("/static") or path == "/health":
         return await call_next(request)
     # Allow if valid Bearer token (machine clients) OR valid session cookie (browser)
     bearer = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
     cookie = request.cookies.get(_COOKIE_NAME, "")
-    if bearer == _APP_API_KEY or _valid_session_token(cookie):
+    if hmac.compare_digest(bearer, _APP_API_KEY) or _valid_session_token(cookie):
         return await call_next(request)
+    logger.warning("Auth failure: %s %s from %s", request.method, path, request.client.host if request.client else "unknown")
     return JSONResponse(status_code=401, content={"detail": "Invalid or missing API key"})
 
 
@@ -245,7 +276,8 @@ async def chat(request: Request, req: ChatRequest):
         return ChatResponse(response="\n".join(text_parts))
 
     except anthropic.BadRequestError as e:
-        return ChatResponse(response=f"**API error:** {e.message}")
+        logger.error("Anthropic API error: %s", e.message)
+        return ChatResponse(response="**API error:** The request could not be processed. Check server logs.")
     except anthropic.AuthenticationError as e:
         return ChatResponse(response="**Authentication failed.** Check your ANTHROPIC_API_KEY.")
     except Exception:
@@ -454,7 +486,8 @@ def _fetch_market_context(ticker: str) -> dict:
         }
 
     except Exception as e:
-        return {"error": str(e)}
+        logger.error("Market context fetch failed: %s", e)
+        return {"error": "Failed to fetch market context"}
 
 
 def _pick_best_strategy(bps, bcs, ic, cc, csp) -> dict | None:
@@ -566,7 +599,8 @@ async def get_expirations(ticker: str):
         expirations = await asyncio.to_thread(_fetch)
         return {"ticker": ticker, "expirations": expirations}
     except Exception as e:
-        return {"ticker": ticker, "expirations": [], "error": str(e)}
+        logger.error("Expirations fetch failed for %s: %s", ticker, e)
+        return {"ticker": ticker, "expirations": [], "error": "Failed to fetch expirations"}
 
 
 # ── Ticker info (company name, cached) ─────────────────────────────────────
@@ -634,7 +668,8 @@ async def get_chain(request: Request, req: ChainRequest):
         capture_output=True, text=True, timeout=30,
     )
     if result.returncode != 0:
-        raise HTTPException(status_code=500, detail=result.stderr.strip() or "Chain fetch failed")
+        logger.error("Chain fetch failed for %s %s: %s", ticker, req.expiry, result.stderr.strip())
+        raise HTTPException(status_code=500, detail="Chain fetch failed")
     return json.loads(result.stdout.strip())
 
 
@@ -789,18 +824,31 @@ async def add_position(position: Position):
 async def check_all_positions(request: Request):
     """Run monitors for all open positions, save zones to portfolio.json."""
     portfolio = _read_portfolio()
+    # Compute zone data outside the lock (may take 30+ seconds for API calls)
+    zone_updates: dict[str, dict] = {}
     results = []
 
-    for i, p in enumerate(portfolio):
+    for p in portfolio:
+        pid = p.get("id")
         if p.get("status") != "open":
-            results.append({"id": p.get("id"), "zone": "CLOSED"})
+            results.append({"id": pid, "zone": "CLOSED"})
             continue
-
         zone_data = _check_single_position(p)
-        portfolio[i].update(zone_data)
-        results.append({"id": p.get("id"), **zone_data})
+        zone_updates[pid] = zone_data
+        results.append({"id": pid, **zone_data})
 
-    _write_portfolio(portfolio)
+    # Re-read and merge under lock to avoid overwriting concurrent changes
+    with _portfolio_lock:
+        if os.path.exists(PORTFOLIO_PATH):
+            with open(PORTFOLIO_PATH, "r") as f:
+                fresh = json.load(f)
+        else:
+            fresh = []
+        for fp in fresh:
+            zd = zone_updates.get(fp.get("id"))
+            if zd:
+                fp.update(zd)
+        _atomic_write_json(PORTFOLIO_PATH, fresh)
     return results
 
 
@@ -1241,19 +1289,39 @@ def _check_single_position(p: dict) -> dict:
             return {"zone": "UNKNOWN", "zone_error": f"Unsupported strategy: {strategy}"}
 
     except Exception as e:
-        return {"zone": "UNKNOWN", "zone_error": str(e)}
+        logger.error("Position check failed for %s: %s", p.get("id"), e)
+        return {"zone": "UNKNOWN", "zone_error": "Monitor check failed"}
 
 
 @app.post("/api/portfolio/{pos_id}/check")
 async def check_single(pos_id: str):
     """Run monitor for a single position, save zone to portfolio.json."""
     portfolio = _read_portfolio()
-    idx, p = _find_position(portfolio, pos_id)
+    _idx, p = _find_position(portfolio, pos_id)
 
     zone_data = _check_single_position(p)
-    portfolio[idx].update(zone_data)
-    _write_portfolio(portfolio)
+
+    # Re-read and merge under lock to avoid overwriting concurrent changes
+    with _portfolio_lock:
+        if os.path.exists(PORTFOLIO_PATH):
+            with open(PORTFOLIO_PATH, "r") as f:
+                fresh = json.load(f)
+        else:
+            fresh = []
+        for fp in fresh:
+            if fp.get("id") == pos_id:
+                fp.update(zone_data)
+                break
+        _atomic_write_json(PORTFOLIO_PATH, fresh)
     return {"id": pos_id, **zone_data}
+
+
+# ── Health check (unauthenticated) ────────────────────────────────────────────
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 # ── Static files ─────────────────────────────────────────────────────────────
@@ -1269,5 +1337,6 @@ if os.path.exists(static_dir):
             response.set_cookie(
                 _COOKIE_NAME, _make_session_token(),
                 httponly=True, samesite="strict",
+                secure=os.environ.get("SECURE_COOKIES", "").lower() in ("1", "true"),
             )
         return response

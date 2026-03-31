@@ -21,6 +21,8 @@ def tmp_data_dir(tmp_path, monkeypatch):
 
     monkeypatch.setattr("app.main.PORTFOLIO_PATH", portfolio_path)
     monkeypatch.setattr("app.main.PROFILE_PATH", profile_path)
+    # Disable auth in tests so endpoints are accessible
+    monkeypatch.setattr("app.main._APP_API_KEY", None)
     # Reset lazy client so it doesn't leak between tests
     monkeypatch.setattr("app.main._client", None)
 
