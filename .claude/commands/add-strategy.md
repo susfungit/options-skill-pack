@@ -142,20 +142,31 @@ If the new strategy needs different zone logic, add a new `_classify_zone_{strat
 
 These files wire the new strategy into the FastAPI app.
 
-### 3a. `app/tools.py` — 4 changes
+### 3a. `app/tools.py` — Add entries to `TOOL_REGISTRY`
 
-1. **Add selector tool to `TOOLS[]`** — Claude API tool definition with input_schema
-2. **Add monitor tool to `TOOLS[]`** (if applicable)
-3. **Add both to `SCRIPT_MAP`** — maps tool name to the Python script path
-4. **Add arg builders in `_build_args()`** — converts tool_input dict to CLI args
+Add one entry per tool (selector, monitor) to the `TOOL_REGISTRY` dict. Each entry contains everything in one place:
 
-### 3b. `app/prompts.py` — 2 changes
+```python
+"find_{strategy}": {
+    "description": "...",
+    "input_schema": { ... },
+    "plugin": "{STRATEGY}-selector",
+    "skill": "{STRATEGY}-selector",
+    "script": "fetch_{script}.py",
+    "args": [
+        {"field": "ticker", "kind": "positional", "required": True},
+        {"field": "target_delta", "kind": "positional"},
+        {"field": "dte_min", "kind": "positional"},
+        {"field": "dte_max", "kind": "positional"},
+        {"field": "expiry", "kind": "named", "flag": "--expiry"},
+    ],
+    "guidance": """Strike selection context, risk checklist, key formulas...""",
+},
+```
 
-Add entries to `SKILL_GUIDANCE` dict for:
-1. The selector tool — strike selection context, risk checklist, key formulas, output hints
-2. The monitor tool — zone interpretation, action guidance per zone
+`TOOLS[]`, `SCRIPT_MAP`, `SKILL_GUIDANCE`, and `_build_args()` are all derived automatically from the registry — no other changes needed in tools.py.
 
-### 3c. `app/main.py` — 5 changes
+### 3b. `app/main.py` — 5 changes
 
 1. **`StrategyType` enum** (~line 153) — add the new strategy value
 2. **`_STRATEGY_TO_TOOL` mapping** — map strategy name to selector tool name
@@ -369,8 +380,7 @@ When done, every new strategy should have touched these files:
 - [ ] `.claude/local-marketplace/plugins/{STRATEGY}-monitor/skills/{STRATEGY}-monitor/evals/evals.json`
 
 **Existing files modified:**
-- [ ] `app/tools.py` — TOOLS[], SCRIPT_MAP, _build_args()
-- [ ] `app/prompts.py` — SKILL_GUIDANCE entries
+- [ ] `app/tools.py` — TOOL_REGISTRY entries (schema, script path, args, guidance)
 - [ ] `app/main.py` — StrategyType, _STRATEGY_TO_TOOL, DEFAULT_PROFILE, portfolio check, zone logic
 - [ ] `app/static/index.html` — dropdowns
 - [ ] `app/static/app.js` — leg fields, save, edit, render, analysis, compare mode

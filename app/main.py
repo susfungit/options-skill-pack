@@ -14,8 +14,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 import anthropic
 
-from app.tools import TOOLS, execute_tool
-from app.prompts import SYSTEM_PROMPT, SKILL_GUIDANCE
+from app.tools import TOOLS, SKILL_GUIDANCE, execute_tool
+from app.prompts import SYSTEM_PROMPT
 
 app = FastAPI(title="Options Skill Pack")
 
