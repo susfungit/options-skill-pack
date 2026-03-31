@@ -60,6 +60,8 @@ function renderPortfolio() {
     const pnl = p.pnl_per_contract;
     const buffer = p.buffer_pct;
     const suggestion = p.suggestion || null;
+    const priceSource = p.price_source || null;
+    const isDelayed = priceSource === 'delayed';
     const contracts = p.contracts || 1;
     const maxLoss = computeMaxLoss(p);
     const maxProfit = p.net_credit * 100 * contracts;
@@ -102,7 +104,7 @@ function renderPortfolio() {
           <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
             <span class="card-strategy">${esc(formatStrategy(p.strategy))}</span>
             ${isClosed ? '<span class="zone-badge" style="color:var(--text-muted);border-color:var(--border);">CLOSED</span>' : ''}
-            ${zoneUpdated && !isClosed ? `<span class="zone-updated">${esc(zoneUpdated)}</span>` : ''}
+            ${zoneUpdated && !isClosed ? `<span class="zone-updated">${esc(zoneUpdated)}${isDelayed ? ' <span class="delayed-badge" title="Bid/ask unavailable — using last traded price">Delayed</span>' : ''}</span>` : ''}
           </div>
         </div>
         <div class="card-metrics">
@@ -216,24 +218,29 @@ async function checkPosition(index) {
   if (!aiEnabled) return;
 
   let prompt = '';
+  const priceStr = p.stock_price ? ` (stock at $${p.stock_price})` : '';
 
   if (p.strategy === 'bull-put-spread') {
     const short = p.legs.find(l => l.action === 'sell');
     const long = p.legs.find(l => l.action === 'buy');
-    prompt = `Check my ${p.ticker} ${short.strike}/${long.strike} bull put spread, credit $${p.net_credit}, expires ${p.expiry}`;
+    prompt = `Check my ${p.ticker}${priceStr} ${short.strike}/${long.strike} bull put spread, credit $${p.net_credit}, expires ${p.expiry}`;
+  } else if (p.strategy === 'bear-call-spread') {
+    const short = p.legs.find(l => l.action === 'sell');
+    const long = p.legs.find(l => l.action === 'buy');
+    prompt = `Check my ${p.ticker}${priceStr} ${short.strike}/${long.strike} bear call spread, credit $${p.net_credit}, expires ${p.expiry}`;
   } else if (p.strategy === 'iron-condor') {
     const sp = p.legs.find(l => l.type === 'put' && l.action === 'sell');
     const lp = p.legs.find(l => l.type === 'put' && l.action === 'buy');
     const sc = p.legs.find(l => l.type === 'call' && l.action === 'sell');
     const lc = p.legs.find(l => l.type === 'call' && l.action === 'buy');
-    prompt = `Check my ${p.ticker} iron condor: ${sp.strike}/${lp.strike} puts, ${sc.strike}/${lc.strike} calls, credit $${p.net_credit}, expires ${p.expiry}`;
+    prompt = `Check my ${p.ticker}${priceStr} iron condor: ${sp.strike}/${lp.strike} puts, ${sc.strike}/${lc.strike} calls, credit $${p.net_credit}, expires ${p.expiry}`;
   } else if (p.strategy === 'covered-call') {
     const call = p.legs.find(l => l.type === 'call');
-    prompt = `Check my ${p.ticker} covered call, sold $${call.strike} call for $${p.net_credit}, expires ${p.expiry}` +
+    prompt = `Check my ${p.ticker}${priceStr} covered call, sold $${call.strike} call for $${p.net_credit}, expires ${p.expiry}` +
       (p.cost_basis ? `, I bought shares at $${p.cost_basis}` : '');
   } else if (p.strategy === 'cash-secured-put') {
     const put = p.legs.find(l => l.type === 'put');
-    prompt = `Check my ${p.ticker} cash-secured put, sold $${put.strike} put for $${p.net_credit}, expires ${p.expiry}`;
+    prompt = `Check my ${p.ticker}${priceStr} cash-secured put, sold $${put.strike} put for $${p.net_credit}, expires ${p.expiry}`;
   }
 
   inputEl.value = prompt;

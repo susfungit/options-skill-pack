@@ -1,3 +1,21 @@
+// ── Session recovery ────────────────────────────────────────────────────────
+// When the server restarts it generates a new session secret, invalidating
+// existing cookies.  Intercept 401s on API calls and reload once to get a
+// fresh cookie from the index route.
+
+(function patchFetchFor401() {
+  const _fetch = window.fetch;
+  let reloading = false;
+  window.fetch = async function (url, opts) {
+    const res = await _fetch.call(this, url, opts);
+    if (res.status === 401 && typeof url === 'string' && url.startsWith('/api/') && !reloading) {
+      reloading = true;
+      window.location.reload();
+    }
+    return res;
+  };
+})();
+
 // ── Theme Toggle ─────────────────────────────────────────────────────────────
 
 (function initTheme() {

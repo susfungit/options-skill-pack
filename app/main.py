@@ -7,6 +7,8 @@ import os
 import json
 import re
 import secrets
+import stat
+import tempfile
 import threading
 import uuid
 from datetime import datetime
@@ -18,12 +20,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import anthropic
 
 from app.tools import TOOLS, SKILL_GUIDANCE, execute_tool
 from app.prompts import SYSTEM_PROMPT
 
 app = FastAPI(title="Options Skill Pack")
+
+# ── Rate limiting ──────────────────────────────────────────────────────────
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(status_code=429, content={"error": "Rate limit exceeded. Please slow down."})
+
 
 # ── CORS ────────────────────────────────────────────────────────────────────
 
@@ -164,7 +180,8 @@ class ChatResponse(BaseModel):
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
+@limiter.limit("10/minute")
+async def chat(request: Request, req: ChatRequest):
     try:
         client = get_client()
     except HTTPException as e:
@@ -265,7 +282,8 @@ class AnalyzeRequest(BaseModel):
 
 
 @app.post("/api/analyze")
-async def analyze(req: AnalyzeRequest):
+@limiter.limit("30/minute")
+async def analyze(request: Request, req: AnalyzeRequest):
     tool_name = _STRATEGY_TO_TOOL.get(req.strategy.value)
     if not tool_name:
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {req.strategy}")
@@ -473,7 +491,8 @@ def _pick_best_strategy(bps, bcs, ic, cc, csp) -> dict | None:
 
 
 @app.post("/api/analyze/compare")
-async def analyze_compare(req: CompareRequest):
+@limiter.limit("10/minute")
+async def analyze_compare(request: Request, req: CompareRequest):
     """Run all 4 selectors + market context in parallel and return results."""
     import asyncio
 
@@ -565,7 +584,8 @@ class ChainRequest(BaseModel):
 
 
 @app.post("/api/chain")
-async def get_chain(req: ChainRequest):
+@limiter.limit("30/minute")
+async def get_chain(request: Request, req: ChainRequest):
     """Fetch the full option chain for a ticker + expiry."""
     import asyncio
 
@@ -600,10 +620,26 @@ def _read_portfolio() -> list[dict]:
             return json.load(f)
 
 
+def _atomic_write_json(path: str, data):
+    """Write JSON atomically: temp file + rename. Sets 0600 permissions."""
+    dir_name = os.path.dirname(path)
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.chmod(tmp_path, stat.S_IRUSR | stat.S_IWUSR)  # 0600
+        os.rename(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def _write_portfolio(data: list[dict]):
     with _portfolio_lock:
-        with open(PORTFOLIO_PATH, "w") as f:
-            json.dump(data, f, indent=2)
+        _atomic_write_json(PORTFOLIO_PATH, data)
 
 
 # ── Profile helpers ──────────────────────────────────────────────────────────
@@ -626,8 +662,7 @@ def _read_profile() -> dict:
 
 def _write_profile(data: dict):
     with _profile_lock:
-        with open(PROFILE_PATH, "w") as f:
-            json.dump(data, f, indent=2)
+        _atomic_write_json(PROFILE_PATH, data)
 
 
 @app.get("/api/profile")
@@ -722,7 +757,8 @@ async def add_position(position: Position):
 
 
 @app.post("/api/portfolio/check")
-async def check_all_positions():
+@limiter.limit("5/minute")
+async def check_all_positions(request: Request):
     """Run monitors for all open positions, save zones to portfolio.json."""
     portfolio = _read_portfolio()
     results = []
@@ -941,6 +977,7 @@ def _check_single_position(p: dict) -> dict:
             }
             if suggestion:
                 result["suggestion"] = suggestion
+            result["price_source"] = data.get("price_source", "unknown")
             return result
 
         elif strategy == "bear-call-spread":
@@ -994,6 +1031,7 @@ def _check_single_position(p: dict) -> dict:
             }
             if suggestion:
                 result["suggestion"] = suggestion
+            result["price_source"] = data.get("price_source", "unknown")
             return result
 
         elif strategy == "iron-condor":
@@ -1072,6 +1110,7 @@ def _check_single_position(p: dict) -> dict:
             }
             if suggestion:
                 result["suggestion"] = suggestion
+            result["price_source"] = data.get("price_source", "unknown")
             return result
 
         elif strategy == "covered-call":
@@ -1121,6 +1160,7 @@ def _check_single_position(p: dict) -> dict:
             }
             if suggestion:
                 result["suggestion"] = suggestion
+            result["price_source"] = data.get("price_source", "unknown")
             return result
 
         elif strategy == "cash-secured-put":
@@ -1166,6 +1206,7 @@ def _check_single_position(p: dict) -> dict:
             }
             if suggestion:
                 result["suggestion"] = suggestion
+            result["price_source"] = data.get("price_source", "unknown")
             return result
 
         else:

@@ -4,6 +4,7 @@ All skill scripts import from here to avoid duplication.
 """
 
 import math
+import time
 from datetime import date, datetime
 
 import pytz
@@ -90,6 +91,45 @@ def option_mid(row):
         return round((bid + ask) / 2, 2)
     last = float(row.get("lastPrice", 0) or 0)
     return round(last, 2) if last > 0 else 0.0
+
+
+def option_mid_ex(row):
+    """Like option_mid but also returns the price source.
+
+    Returns (mid_price, source) where source is one of:
+      "live"      — computed from bid/ask midpoint
+      "lastPrice" — fallback to last traded price
+      "none"      — no price data available
+    """
+    bid = float(row.get("bid", 0) or 0)
+    ask = float(row.get("ask", 0) or 0)
+    if bid > 0 and ask > 0 and ask > bid:
+        return round((bid + ask) / 2, 2), "live"
+    last = float(row.get("lastPrice", 0) or 0)
+    if last > 0:
+        return round(last, 2), "lastPrice"
+    return 0.0, "none"
+
+
+def fetch_chain_with_retry(ticker_obj, expiry_str, side="puts", max_retries=2, delay=1.5):
+    """Fetch option chain, retrying if bid/ask are mostly zeros.
+
+    Returns the DataFrame (puts or calls) after up to *max_retries* attempts.
+    Yahoo's API intermittently returns zeroed-out bid/ask; a short retry
+    usually gets real data.
+    """
+    for attempt in range(max_retries):
+        chain = ticker_obj.option_chain(expiry_str)
+        df = chain.puts.copy() if side == "puts" else chain.calls.copy()
+        if df.empty:
+            return df
+        # Check if we got real bid/ask on at least some rows
+        has_bids = (df["bid"] > 0).sum()
+        if has_bids >= max(1, len(df) * 0.2):
+            return df
+        if attempt < max_retries - 1:
+            time.sleep(delay)
+    return df
 
 
 def is_market_open():

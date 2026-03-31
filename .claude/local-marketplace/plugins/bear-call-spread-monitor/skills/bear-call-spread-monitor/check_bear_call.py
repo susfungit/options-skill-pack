@@ -24,7 +24,8 @@ import math
 from datetime import date, datetime
 
 from _shared.options_lib import (
-    bs_call_delta, implied_vol, option_mid,
+    bs_call_delta, implied_vol, option_mid, option_mid_ex,
+    fetch_chain_with_retry,
 )
 
 try:
@@ -87,8 +88,7 @@ def main():
             sys.exit(1)
         expiry_str = nearest
 
-    chain = tk.option_chain(expiry_str)
-    calls = chain.calls.copy()
+    calls = fetch_chain_with_retry(tk, expiry_str, side="calls")
     if calls.empty:
         print(json.dumps({"error": f"No calls available for {ticker_sym} {expiry_str}"}))
         sys.exit(1)
@@ -102,7 +102,8 @@ def main():
         calls["strike_diff"] = (calls["strike"] - short_strike).abs()
         short_rows = calls.nsmallest(1, "strike_diff")
     short_row = short_rows.iloc[0].to_dict()
-    short_mid = float(short_row["mid_price"]) if short_row["mid_price"] > 0 else None
+    short_mid, short_src = option_mid_ex(short_row)
+    short_mid = short_mid if short_mid > 0 else None
     short_bid = round(float(short_row.get("bid", 0) or 0), 2)
     short_ask = round(float(short_row.get("ask", 0) or 0), 2)
     short_volume = int(float(short_row.get("volume", 0) or 0))
@@ -114,11 +115,15 @@ def main():
         calls["strike_diff"] = (calls["strike"] - long_strike).abs()
         long_rows = calls.nsmallest(1, "strike_diff")
     long_row = long_rows.iloc[0].to_dict()
-    long_mid = float(long_row["mid_price"]) if long_row["mid_price"] > 0 else None
+    long_mid, long_src = option_mid_ex(long_row)
+    long_mid = long_mid if long_mid > 0 else None
     long_bid = round(float(long_row.get("bid", 0) or 0), 2)
     long_ask = round(float(long_row.get("ask", 0) or 0), 2)
     long_volume = int(float(long_row.get("volume", 0) or 0))
     long_oi     = int(float(long_row.get("openInterest", 0) or 0))
+
+    # Price source: "live" only if both legs have live bid/ask
+    price_source = "live" if (short_src == "live" and long_src == "live") else "delayed"
 
     # Current spread value and P&L
     spread_width = round(long_strike - short_strike, 2)
@@ -192,6 +197,7 @@ def main():
         "be_buffer_pct":         be_buffer_pct,
         "loss_pct_of_max":       loss_pct_of_max,
         "cost_to_close":         cost_to_close,
+        "price_source":          price_source,
         "data_source":           "yfinance",
     }
 

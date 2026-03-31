@@ -23,7 +23,8 @@ import math
 from datetime import date, datetime
 
 from _shared.options_lib import (
-    bs_put_delta_abs, implied_vol, option_mid,
+    bs_put_delta_abs, implied_vol, option_mid, option_mid_ex,
+    fetch_chain_with_retry,
 )
 
 try:
@@ -86,8 +87,7 @@ def main():
             sys.exit(1)
         use_expiry = nearest
 
-    chain = tk.option_chain(use_expiry)
-    puts = chain.puts.copy()
+    puts = fetch_chain_with_retry(tk, use_expiry, side="puts")
     if puts.empty:
         print(json.dumps({"error": f"No puts available for {ticker_sym} {use_expiry}"}))
         sys.exit(1)
@@ -101,11 +101,14 @@ def main():
         puts["strike_diff"] = (puts["strike"] - short_strike).abs()
         put_rows = puts.nsmallest(1, "strike_diff")
     put_row = put_rows.iloc[0].to_dict()
-    put_mid = float(put_row["mid_price"]) if put_row["mid_price"] > 0 else None
+    put_mid, put_src = option_mid_ex(put_row)
+    put_mid = put_mid if put_mid > 0 else None
     put_bid = round(float(put_row.get("bid", 0) or 0), 2)
     put_ask = round(float(put_row.get("ask", 0) or 0), 2)
     put_volume = int(float(put_row.get("volume", 0) or 0))
     put_oi     = int(float(put_row.get("openInterest", 0) or 0))
+
+    price_source = "live" if put_src == "live" else "delayed"
 
     # Compute delta and IV
     current_delta = None
@@ -176,6 +179,7 @@ def main():
         "effective_buy_price":  effective_buy_price,
         "discount_pct":         discount_pct,
         "cost_to_close":        round(put_ask * 100, 2) if put_ask > 0 else None,
+        "price_source":         price_source,
         "data_source":          "yfinance",
     }
 

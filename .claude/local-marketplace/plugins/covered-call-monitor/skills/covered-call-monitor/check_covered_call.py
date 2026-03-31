@@ -24,7 +24,8 @@ import math
 from datetime import date, datetime
 
 from _shared.options_lib import (
-    bs_call_delta, implied_vol, option_mid,
+    bs_call_delta, implied_vol, option_mid, option_mid_ex,
+    fetch_chain_with_retry,
 )
 
 try:
@@ -88,8 +89,7 @@ def main():
             sys.exit(1)
         use_expiry = nearest
 
-    chain = tk.option_chain(use_expiry)
-    calls = chain.calls.copy()
+    calls = fetch_chain_with_retry(tk, use_expiry, side="calls")
     if calls.empty:
         print(json.dumps({"error": f"No calls available for {ticker_sym} {use_expiry}"}))
         sys.exit(1)
@@ -103,11 +103,14 @@ def main():
         calls["strike_diff"] = (calls["strike"] - short_strike).abs()
         call_rows = calls.nsmallest(1, "strike_diff")
     call_row = call_rows.iloc[0].to_dict()
-    call_mid = float(call_row["mid_price"]) if call_row["mid_price"] > 0 else None
+    call_mid, call_src = option_mid_ex(call_row)
+    call_mid = call_mid if call_mid > 0 else None
     call_bid = round(float(call_row.get("bid", 0) or 0), 2)
     call_ask = round(float(call_row.get("ask", 0) or 0), 2)
     call_volume = int(float(call_row.get("volume", 0) or 0))
     call_oi     = int(float(call_row.get("openInterest", 0) or 0))
+
+    price_source = "live" if call_src == "live" else "delayed"
 
     # Compute delta and IV
     current_delta = None
@@ -162,6 +165,7 @@ def main():
         "intrinsic_value": intrinsic,
         "time_value": time_value,
         "cost_to_close": round(call_ask * 100, 2) if call_ask > 0 else None,
+        "price_source": price_source,
         "data_source": "yfinance",
     }
 

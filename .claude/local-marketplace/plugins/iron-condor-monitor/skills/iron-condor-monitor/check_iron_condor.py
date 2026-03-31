@@ -26,7 +26,8 @@ import math
 from datetime import date, datetime
 
 from _shared.options_lib import (
-    bs_put_delta_abs, bs_call_delta, implied_vol, option_mid,
+    bs_put_delta_abs, bs_call_delta, implied_vol, option_mid, option_mid_ex,
+    fetch_chain_with_retry,
 )
 
 try:
@@ -45,9 +46,10 @@ def find_strike_data(chain_df, target_strike):
         df = chain_df.copy()
         df["_diff"] = (df["strike"] - target_strike).abs()
         row = df.nsmallest(1, "_diff").iloc[0].to_dict()
-    mid = option_mid(row)
+    mid, src = option_mid_ex(row)
     return {
         "mid": mid,
+        "src": src,
         "bid": round(float(row.get("bid", 0) or 0), 2),
         "ask": round(float(row.get("ask", 0) or 0), 2),
         "volume": int(float(row.get("volume", 0) or 0)),
@@ -113,9 +115,8 @@ def main():
             sys.exit(1)
         target_expiry = nearest
 
-    chain = tk.option_chain(target_expiry)
-    puts = chain.puts.copy()
-    calls = chain.calls.copy()
+    puts = fetch_chain_with_retry(tk, target_expiry, side="puts")
+    calls = fetch_chain_with_retry(tk, target_expiry, side="calls")
 
     if puts.empty or calls.empty:
         print(json.dumps({"error": f"No options data for {ticker_sym} {target_expiry}"}))
@@ -126,6 +127,10 @@ def main():
     lp = find_strike_data(puts, long_put)
     sc = find_strike_data(calls, short_call)
     lc = find_strike_data(calls, long_call)
+
+    # Price source: "live" only if all 4 legs have live bid/ask
+    all_live = all(leg["src"] == "live" for leg in [sp, lp, sc, lc])
+    price_source = "live" if all_live else "delayed"
 
     sp_mid, sp_bid, sp_ask = sp["mid"], sp["bid"], sp["ask"]
     lp_mid, lp_bid, lp_ask = lp["mid"], lp["bid"], lp["ask"]
@@ -257,6 +262,7 @@ def main():
         "cost_to_close":         cost_to_close,
         "put_cost_to_close":     put_cost_to_close,
         "call_cost_to_close":    call_cost_to_close,
+        "price_source":          price_source,
         "data_source":           "yfinance",
     }
 
