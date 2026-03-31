@@ -569,12 +569,40 @@ async def get_expirations(ticker: str):
         return {"ticker": ticker, "expirations": [], "error": str(e)}
 
 
-# ── Chain viewer (no Claude, no tokens) ─────────────────────────────────────
+# ── Ticker info (company name, cached) ─────────────────────────────────────
 
 import re
 import subprocess
 
 _TICKER_RE = re.compile(r"^[A-Z]{1,5}$")
+_ticker_name_cache: dict[str, str] = {}
+
+
+@app.get("/api/ticker-info/{ticker}")
+async def ticker_info(ticker: str):
+    """Return company short name for a ticker, cached in memory."""
+    import asyncio
+    ticker = ticker.upper()
+    if not _TICKER_RE.match(ticker):
+        raise HTTPException(status_code=400, detail="Invalid ticker format")
+    if ticker in _ticker_name_cache:
+        return {"ticker": ticker, "name": _ticker_name_cache[ticker]}
+
+    def _fetch():
+        import yfinance as yf
+        tk = yf.Ticker(ticker)
+        info = tk.info or {}
+        return info.get("shortName") or info.get("longName") or ticker
+
+    try:
+        name = await asyncio.to_thread(_fetch)
+        _ticker_name_cache[ticker] = name
+        return {"ticker": ticker, "name": name}
+    except Exception:
+        return {"ticker": ticker, "name": ticker}
+
+
+# ── Chain viewer (no Claude, no tokens) ─────────────────────────────────────
 
 
 class ChainRequest(BaseModel):

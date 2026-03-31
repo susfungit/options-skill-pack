@@ -111,3 +111,77 @@ function computeMaxLoss(p) {
   if (p.strategy === 'covered-call') return null;
   return null;
 }
+
+// ── Ticker name resolution (cached) ─────────────────────────────────────────
+
+const _tickerNameCache = {};
+const _tickerNamePending = {};
+
+async function resolveTickerName(ticker) {
+  if (_tickerNameCache[ticker]) return _tickerNameCache[ticker];
+  if (_tickerNamePending[ticker]) return _tickerNamePending[ticker];
+  _tickerNamePending[ticker] = fetch(`/api/ticker-info/${ticker}`)
+    .then(r => r.json())
+    .then(d => { _tickerNameCache[ticker] = d.name; return d.name; })
+    .catch(() => ticker);
+  return _tickerNamePending[ticker];
+}
+
+async function resolveAllTickerNames(tickers) {
+  const unique = [...new Set(tickers)];
+  await Promise.all(unique.map(t => resolveTickerName(t)));
+}
+
+function getTickerName(ticker) {
+  return _tickerNameCache[ticker] || null;
+}
+
+// ── Market status ───────────────────────────────────────────────────────────
+
+function getMarketStatus() {
+  const now = new Date();
+  const et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay();
+  const h = et.getHours();
+  const m = et.getMinutes();
+  const mins = h * 60 + m;
+  const openMins = 9 * 60 + 30;  // 9:30 AM
+  const closeMins = 16 * 60;      // 4:00 PM
+
+  const timeStr = et.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  if (day === 0 || day === 6) {
+    const daysToMon = day === 0 ? 1 : 2;
+    return { open: false, time: timeStr, label: 'Closed', detail: `Opens Monday 9:30 AM ET`, className: 'closed' };
+  }
+  if (mins < openMins) {
+    const diff = openMins - mins;
+    const hh = Math.floor(diff / 60);
+    const mm = diff % 60;
+    const countdown = hh > 0 ? `${hh}h ${mm}m` : `${mm}m`;
+    return { open: false, time: timeStr, label: 'Pre-Market', detail: `Opens in ${countdown}`, className: 'pre-market' };
+  }
+  if (mins < closeMins) {
+    const diff = closeMins - mins;
+    const hh = Math.floor(diff / 60);
+    const mm = diff % 60;
+    const countdown = hh > 0 ? `${hh}h ${mm}m` : `${mm}m`;
+    return { open: true, time: timeStr, label: 'Market Open', detail: `Closes in ${countdown}`, className: 'market-open' };
+  }
+  return { open: false, time: timeStr, label: 'After Hours', detail: 'Opens tomorrow 9:30 AM ET', className: 'after-hours' };
+}
+
+function renderMarketStatus() {
+  const el = document.getElementById('market-status');
+  if (!el) return;
+  const s = getMarketStatus();
+  el.innerHTML = `
+    <span class="ms-time">${s.time} ET</span>
+    <span class="ms-dot ${s.className}"></span>
+    <span class="ms-label ${s.className}">${s.label}</span>
+    <span class="ms-detail">${s.detail}</span>
+  `;
+}
+
+// Update market status every 30 seconds
+setInterval(renderMarketStatus, 30000);

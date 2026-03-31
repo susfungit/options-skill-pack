@@ -35,6 +35,7 @@ document.getElementById('az-delta').addEventListener('blur', function() {
 // ── Startup ──────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  renderMarketStatus();
   loadPortfolio();
   loadProfile();
 });

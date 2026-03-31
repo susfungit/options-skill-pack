@@ -409,6 +409,71 @@ body {
 
 /* ── Main Nav ───────────────────────────────────────────────────────────── */
 
+/* ── Market Status Bar ──────────────────────────────────────────────────── */
+
+.market-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 24px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.ms-time {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.ms-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.ms-dot.market-open { background: var(--zone-safe); box-shadow: 0 0 6px var(--zone-safe); }
+.ms-dot.pre-market { background: var(--zone-watch); }
+.ms-dot.after-hours { background: var(--zone-watch); }
+.ms-dot.closed { background: var(--text-muted); }
+
+.ms-label {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ms-label.market-open { color: var(--zone-safe); }
+.ms-label.pre-market { color: var(--zone-watch); }
+.ms-label.after-hours { color: var(--zone-watch); }
+.ms-label.closed { color: var(--text-muted); }
+
+.ms-detail {
+  color: var(--text-muted);
+}
+
+/* ── Ticker Name / Price ───────────────────────────────────────────────── */
+
+.ticker-name {
+  font-weight: 400;
+  font-size: 0.72em;
+  color: var(--text-muted);
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+
+.ticker-price {
+  font-weight: 400;
+  font-size: 0.85em;
+  color: var(--text-secondary);
+  margin-left: 6px;
+}
+
 .main-nav {
   display: flex;
   gap: 0;

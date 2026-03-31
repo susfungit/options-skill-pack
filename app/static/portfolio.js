@@ -7,6 +7,12 @@ async function loadPortfolio() {
     const res = await fetch('/api/portfolio');
     portfolio = await res.json();
     renderPortfolio();
+    // Resolve company names in background, re-render when ready
+    const tickers = portfolio.map(p => p.ticker).filter(Boolean);
+    if (tickers.length) {
+      await resolveAllTickerNames(tickers);
+      renderPortfolio();
+    }
   } catch (err) {
     console.error('Failed to load portfolio:', err);
   }
@@ -90,7 +96,7 @@ function renderPortfolio() {
         <div class="card-top">
           <div>
             <div style="display:flex; align-items:center; gap:8px;">
-              <div class="card-ticker">${esc(p.ticker)}${p.stock_price ? ` <span style="font-weight:400;font-size:0.85em;color:var(--text-muted)">$${p.stock_price.toFixed(2)}</span>` : ''}</div>
+              <div class="card-ticker">${esc(p.ticker)}${getTickerName(p.ticker) ? `<span class="ticker-name">${esc(getTickerName(p.ticker))}</span>` : ''}${p.stock_price ? `<span class="ticker-price">$${p.stock_price.toFixed(2)}</span>` : ''}</div>
               ${zone && !isClosed ? `
                 <div class="zone-info">
                   <span class="zone-dot ${zoneClass}"></span>

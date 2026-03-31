@@ -85,6 +85,8 @@ async function runSingleAnalysis(ticker, strategy, btn) {
       return;
     }
 
+    // Resolve company name then render
+    await resolveTickerName(ticker);
     renderAnalysisResult(strategy, data);
     document.getElementById('btn-clear').style.display = 'inline-block';
 
@@ -119,6 +121,7 @@ async function runCompareAnalysis(ticker, btn) {
       body: JSON.stringify(body),
     });
     const data = await res.json();
+    await resolveTickerName(ticker);
     renderCompareResult(data);
     document.getElementById('btn-clear').style.display = 'inline-block';
 
@@ -221,7 +224,7 @@ function renderCompareResult(data) {
 
   results.innerHTML = `
     <div class="az-compare-header">
-      <span class="az-ticker">${esc(ticker)}</span>
+      <span class="az-ticker">${esc(ticker)}${getTickerName(ticker) ? `<span class="ticker-name">${esc(getTickerName(ticker))}</span>` : ''}</span>
       <span class="az-price">$${price.toFixed(2)}</span>
       <span class="az-strategy-label" style="margin-left:12px;margin-bottom:0;">STRATEGY COMPARISON</span>
     </div>
@@ -398,7 +401,7 @@ function renderAnalysisResult(strategy, d) {
       <div class="az-result-card">
         <div class="az-header">
           <div>
-            <span class="az-ticker">${esc(d.ticker)}</span>
+            <span class="az-ticker">${esc(d.ticker)}${getTickerName(d.ticker) ? `<span class="ticker-name">${esc(getTickerName(d.ticker))}</span>` : ''}</span>
             <span class="az-price">$${d.price.toFixed(2)}</span>
           </div>
           <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
@@ -462,7 +465,7 @@ function renderAnalysisResult(strategy, d) {
       <div class="az-result-card">
         <div class="az-header">
           <div>
-            <span class="az-ticker">${esc(d.ticker)}</span>
+            <span class="az-ticker">${esc(d.ticker)}${getTickerName(d.ticker) ? `<span class="ticker-name">${esc(getTickerName(d.ticker))}</span>` : ''}</span>
             <span class="az-price">$${d.price.toFixed(2)}</span>
           </div>
           <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
@@ -527,7 +530,7 @@ function renderAnalysisResult(strategy, d) {
       <div class="az-result-card">
         <div class="az-header">
           <div>
-            <span class="az-ticker">${esc(d.ticker)}</span>
+            <span class="az-ticker">${esc(d.ticker)}${getTickerName(d.ticker) ? `<span class="ticker-name">${esc(getTickerName(d.ticker))}</span>` : ''}</span>
             <span class="az-price">$${d.price.toFixed(2)}</span>
           </div>
           <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
@@ -615,7 +618,7 @@ function renderAnalysisResult(strategy, d) {
       <div class="az-result-card">
         <div class="az-header">
           <div>
-            <span class="az-ticker">${esc(d.ticker)}</span>
+            <span class="az-ticker">${esc(d.ticker)}${getTickerName(d.ticker) ? `<span class="ticker-name">${esc(getTickerName(d.ticker))}</span>` : ''}</span>
             <span class="az-price">$${d.stock_price.toFixed(2)}</span>
           </div>
           <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
@@ -669,7 +672,7 @@ function renderAnalysisResult(strategy, d) {
       <div class="az-result-card">
         <div class="az-header">
           <div>
-            <span class="az-ticker">${esc(d.ticker)}</span>
+            <span class="az-ticker">${esc(d.ticker)}${getTickerName(d.ticker) ? `<span class="ticker-name">${esc(getTickerName(d.ticker))}</span>` : ''}</span>
             <span class="az-price">$${d.stock_price.toFixed(2)}</span>
           </div>
           <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
