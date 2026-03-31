@@ -40,14 +40,21 @@ def load_config():
     return json.loads(CONFIG_FILE.read_text())
 
 
+def _applescript_escape(s: str) -> str:
+    """Escape a string for safe interpolation into AppleScript double-quoted strings."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def send_macos(positions):
     if platform.system() != "Darwin":
         return 0
     sent = 0
     for p in positions:
         emoji = ZONE_EMOJI.get(p["zone"], "❓")
-        title = f"Options Monitor — {p.get('label', p.get('ticker', ''))}"
-        msg = f"{emoji} {p['zone']}  |  buffer {p.get('buffer_pct', 0):.1f}%  |  P&L ${p.get('pnl_per_contract', 0):.0f}"
+        title = _applescript_escape(f"Options Monitor — {p.get('label', p.get('ticker', ''))}")
+        msg = _applescript_escape(
+            f"{emoji} {p['zone']}  |  buffer {p.get('buffer_pct', 0):.1f}%  |  P&L ${p.get('pnl_per_contract', 0):.0f}"
+        )
         script = f'display notification "{msg}" with title "{title}"'
         subprocess.run(["osascript", "-e", script], capture_output=True)
         sent += 1

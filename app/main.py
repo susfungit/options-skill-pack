@@ -1,16 +1,22 @@
 """FastAPI app for the Options Skill Pack."""
 
 import copy
+import hashlib
+import hmac
 import os
 import json
+import re
+import secrets
+import threading
 import uuid
 from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 import anthropic
 
@@ -18,6 +24,60 @@ from app.tools import TOOLS, SKILL_GUIDANCE, execute_tool
 from app.prompts import SYSTEM_PROMPT
 
 app = FastAPI(title="Options Skill Pack")
+
+# ── CORS ────────────────────────────────────────────────────────────────────
+
+_cors_origins = os.environ.get("CORS_ORIGINS", "http://localhost:8000").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["*"],
+)
+
+# ── API key auth (optional — set APP_API_KEY env var to enable) ─────────────
+
+_APP_API_KEY = os.environ.get("APP_API_KEY")
+_SESSION_SECRET = secrets.token_hex(32)
+_COOKIE_NAME = "osp_session"
+
+
+def _make_session_token() -> str:
+    """Create an HMAC-signed session token tied to this server instance."""
+    nonce = secrets.token_hex(16)
+    sig = hmac.new(_SESSION_SECRET.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+    return f"{nonce}.{sig}"
+
+
+def _valid_session_token(token: str) -> bool:
+    parts = token.split(".", 1)
+    if len(parts) != 2:
+        return False
+    nonce, sig = parts
+    expected = hmac.new(_SESSION_SECRET.encode(), nonce.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(sig, expected)
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if not _APP_API_KEY:
+        return await call_next(request)
+    path = request.url.path
+    # Serve the page and static assets freely
+    if path == "/" or path.startswith("/static"):
+        return await call_next(request)
+    # Allow if valid Bearer token (machine clients) OR valid session cookie (browser)
+    bearer = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    cookie = request.cookies.get(_COOKIE_NAME, "")
+    if bearer == _APP_API_KEY or _valid_session_token(cookie):
+        return await call_next(request)
+    return JSONResponse(status_code=401, content={"detail": "Invalid or missing API key"})
+
+
+# ── File locks ──────────────────────────────────────────────────────────────
+
+_portfolio_lock = threading.Lock()
+_profile_lock = threading.Lock()
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -533,15 +593,17 @@ async def get_chain(req: ChainRequest):
 # ── Portfolio helpers ────────────────────────────────────────────────────────
 
 def _read_portfolio() -> list[dict]:
-    if not os.path.exists(PORTFOLIO_PATH):
-        return []
-    with open(PORTFOLIO_PATH, "r") as f:
-        return json.load(f)
+    with _portfolio_lock:
+        if not os.path.exists(PORTFOLIO_PATH):
+            return []
+        with open(PORTFOLIO_PATH, "r") as f:
+            return json.load(f)
 
 
 def _write_portfolio(data: list[dict]):
-    with open(PORTFOLIO_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+    with _portfolio_lock:
+        with open(PORTFOLIO_PATH, "w") as f:
+            json.dump(data, f, indent=2)
 
 
 # ── Profile helpers ──────────────────────────────────────────────────────────
@@ -549,21 +611,23 @@ def _write_portfolio(data: list[dict]):
 
 def _read_profile() -> dict:
     """Return saved profile merged over defaults (so new fields always exist)."""
-    profile = copy.deepcopy(DEFAULT_PROFILE)
-    if os.path.exists(PROFILE_PATH):
-        with open(PROFILE_PATH, "r") as f:
-            saved = json.load(f)
-        for key in profile:
-            if key in saved and isinstance(profile[key], dict):
-                profile[key].update(saved[key])
-            elif key in saved:
-                profile[key] = saved[key]
-    return profile
+    with _profile_lock:
+        profile = copy.deepcopy(DEFAULT_PROFILE)
+        if os.path.exists(PROFILE_PATH):
+            with open(PROFILE_PATH, "r") as f:
+                saved = json.load(f)
+            for key in profile:
+                if key in saved and isinstance(profile[key], dict):
+                    profile[key].update(saved[key])
+                elif key in saved:
+                    profile[key] = saved[key]
+        return profile
 
 
 def _write_profile(data: dict):
-    with open(PROFILE_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+    with _profile_lock:
+        with open(PROFILE_PATH, "w") as f:
+            json.dump(data, f, indent=2)
 
 
 @app.get("/api/profile")
@@ -579,12 +643,17 @@ class ProfileUpdate(BaseModel):
     chat_history_limit: Optional[int] = None
 
 
+_MODEL_RE = re.compile(r"^claude-[a-z0-9\-]+$")
+
+
 @app.put("/api/profile")
 async def update_profile(req: ProfileUpdate):
     profile = _read_profile()
     if req.name is not None:
         profile["name"] = req.name
     if req.model is not None:
+        if not _MODEL_RE.match(req.model):
+            raise HTTPException(status_code=400, detail="Invalid model ID format")
         profile["model"] = req.model
     if req.strategy_defaults is not None:
         profile["strategy_defaults"] = req.strategy_defaults
@@ -1126,4 +1195,10 @@ if os.path.exists(static_dir):
 
     @app.get("/")
     async def index():
-        return FileResponse(os.path.join(static_dir, "index.html"))
+        response = FileResponse(os.path.join(static_dir, "index.html"))
+        if _APP_API_KEY:
+            response.set_cookie(
+                _COOKIE_NAME, _make_session_token(),
+                httponly=True, samesite="strict",
+            )
+        return response

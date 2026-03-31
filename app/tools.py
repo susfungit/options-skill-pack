@@ -696,7 +696,7 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
     if not os.path.exists(script_path):
-        return json.dumps({"error": f"Script not found: {script_path}"})
+        return json.dumps({"error": f"Script not found for tool: {tool_name}"})
 
     args = _build_args(tool_name, tool_input)
     cmd = ["python3", script_path] + args
@@ -717,14 +717,14 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
                     return stdout
                 except json.JSONDecodeError:
                     pass
-            return json.dumps({"error": stdout or f"Script failed: {stderr}"})
+            return json.dumps({"error": stdout or f"Script failed for {tool_name}. Check server logs."})
         output = result.stdout.strip()
         try:
             return json.dumps(_sanitize_nan(json.loads(output)))
         except json.JSONDecodeError:
-            return json.dumps({"error": f"Script returned non-JSON output: {output[:200]}"})
+            return json.dumps({"error": f"Script returned invalid output for {tool_name}"})
 
     except subprocess.TimeoutExpired:
         return json.dumps({"error": "Script timed out (30s). Try again — yfinance may be slow."})
     except Exception as e:
-        return json.dumps({"error": f"Failed to run script: {str(e)}"})
+        return json.dumps({"error": f"Failed to run {tool_name}. Check server logs."})
