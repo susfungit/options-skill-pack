@@ -15,65 +15,23 @@ Outputs JSON to stdout with current position metrics.
 Errors output JSON with an "error" key.
 """
 
+import os
 import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
 import json
 import math
 from datetime import date, datetime
+
+from _shared.options_lib import (
+    bs_call_delta, implied_vol, option_mid,
+)
 
 try:
     import yfinance as yf
 except ImportError:
     print(json.dumps({"error": "yfinance not installed — run: pip3 install yfinance"}))
     sys.exit(1)
-
-
-# ── Black-Scholes helpers ─────────────────────────────────────────────────────
-
-def _norm_cdf(x):
-    return 0.5 * (1 + math.erf(x / math.sqrt(2)))
-
-
-def bs_call_price(S, K, T, sigma, r=0.045):
-    if T <= 0 or sigma <= 0:
-        return max(S - K, 0)
-    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
-    d2 = d1 - sigma * math.sqrt(T)
-    return S * _norm_cdf(d1) - K * math.exp(-r * T) * _norm_cdf(d2)
-
-
-def implied_vol(S, K, T, market_price, r=0.045, tol=1e-5, max_iter=100):
-    if market_price <= 0 or T <= 0:
-        return None
-    intrinsic = max(S - K * math.exp(-r * T), 0)
-    if market_price <= intrinsic:
-        return None
-    lo, hi = 0.001, 20.0
-    for _ in range(max_iter):
-        mid_v = (lo + hi) / 2
-        price = bs_call_price(S, K, T, mid_v, r)
-        if abs(price - market_price) < tol:
-            return mid_v
-        if price < market_price:
-            lo = mid_v
-        else:
-            hi = mid_v
-    return (lo + hi) / 2
-
-
-def bs_call_delta(S, K, T, sigma, r=0.045):
-    if T <= 0 or sigma <= 0:
-        return 0.0
-    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
-    return _norm_cdf(d1)
-
-
-def option_mid(row):
-    bid = float(row.get("bid", 0) or 0)
-    ask = float(row.get("ask", 0) or 0)
-    if bid > 0 and ask > 0 and ask > bid:
-        return round((bid + ask) / 2, 2)
-    last = float(row.get("lastPrice", 0) or 0)
-    return round(last, 2) if last > 0 else 0.0
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -192,7 +150,7 @@ def main():
     short_iv = None
     short_delta = None
     if short_mid and short_mid > 0:
-        iv = implied_vol(stock_price, short_strike, T, short_mid)
+        iv = implied_vol(stock_price, short_strike, T, short_mid, "call")
         if iv and iv > 0:
             short_delta = round(bs_call_delta(stock_price, short_strike, T, iv), 3)
             short_iv = round(iv * 100, 1)

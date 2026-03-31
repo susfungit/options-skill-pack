@@ -1112,8 +1112,7 @@ function addCompareToPortfolio(strategy) {
   if (!lastAnalysis || lastAnalysis.strategy !== 'compare') return;
   const data = lastAnalysis.data[strategy];
   if (!data || data.error) return;
-  lastAnalysis = { strategy, data };
-  addAnalysisToPortfolio();
+  addAnalysisToPortfolio(strategy, data);
 }
 
 function buildCompareChatPrompt(data) {
@@ -1492,9 +1491,10 @@ function renderAnalysisResult(strategy, d) {
   }
 }
 
-function addAnalysisToPortfolio() {
-  if (!lastAnalysis) return;
-  const { strategy, data } = lastAnalysis;
+function addAnalysisToPortfolio(strategyOverride, dataOverride) {
+  const strategy = strategyOverride || (lastAnalysis && lastAnalysis.strategy);
+  const data = dataOverride || (lastAnalysis && lastAnalysis.data);
+  if (!strategy || !data) return;
 
   // Pre-fill the add position form
   const form = document.getElementById('position-form');
@@ -1611,6 +1611,8 @@ async function viewChain(strategyOverride, dataOverride) {
 
   const sideMap = {
     'bull-put-spread': 'puts',
+    'bear-call-spread': 'calls',
+    'cash-secured-put': 'puts',
     'covered-call': 'calls',
     'iron-condor': 'both',
   };
@@ -1619,14 +1621,15 @@ async function viewChain(strategyOverride, dataOverride) {
   const expiry = data.expiry;
   const highlights = extractHighlightStrikes(strategy, data);
 
-  // Toggle off if already showing
+  // Remove any existing chain display before loading new one
   const existing = document.getElementById('az-chain-container');
-  if (existing) { existing.remove(); return; }
+  if (existing) existing.remove();
 
   // Show loading
   const resultsEl = document.getElementById('az-results');
   const loadingDiv = document.createElement('div');
   loadingDiv.id = 'az-chain-container';
+  loadingDiv.dataset.strategy = strategy;
   loadingDiv.innerHTML = '<div class="az-chain-loading">Loading option chain...</div>';
   resultsEl.appendChild(loadingDiv);
 

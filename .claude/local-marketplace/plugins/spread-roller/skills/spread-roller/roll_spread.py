@@ -14,97 +14,24 @@ Usage (iron condor — 8 positional args after ticker):
 Outputs JSON to stdout. Errors output JSON with an "error" key.
 """
 
+import os
 import sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+
 import json
 import math
 from datetime import date, datetime, timedelta
-import pytz
+
+from _shared.options_lib import (
+    bs_put_delta_abs, bs_call_delta, implied_vol,
+    option_mid, is_market_open,
+)
 
 try:
     import yfinance as yf
 except ImportError:
     print(json.dumps({"error": "yfinance not installed — run: pip3 install yfinance"}))
     sys.exit(1)
-
-
-# ── Black-Scholes helpers ─────────────────────────────────────────────────────
-
-def _norm_cdf(x):
-    return 0.5 * (1 + math.erf(x / math.sqrt(2)))
-
-
-def bs_put_price(S, K, T, sigma, r=0.045):
-    if T <= 0 or sigma <= 0:
-        return max(K - S, 0)
-    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
-    d2 = d1 - sigma * math.sqrt(T)
-    return K * math.exp(-r * T) * _norm_cdf(-d2) - S * _norm_cdf(-d1)
-
-
-def bs_call_price(S, K, T, sigma, r=0.045):
-    if T <= 0 or sigma <= 0:
-        return max(S - K, 0)
-    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
-    d2 = d1 - sigma * math.sqrt(T)
-    return S * _norm_cdf(d1) - K * math.exp(-r * T) * _norm_cdf(d2)
-
-
-def bs_put_delta_abs(S, K, T, sigma, r=0.045):
-    if T <= 0 or sigma <= 0:
-        return 0.0
-    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
-    return abs(_norm_cdf(d1) - 1)
-
-
-def bs_call_delta(S, K, T, sigma, r=0.045):
-    if T <= 0 or sigma <= 0:
-        return 0.0
-    d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * math.sqrt(T))
-    return _norm_cdf(d1)
-
-
-def implied_vol(S, K, T, market_price, option_type="put", r=0.045, tol=1e-5, max_iter=100):
-    if market_price <= 0 or T <= 0:
-        return None
-    price_fn = bs_put_price if option_type == "put" else bs_call_price
-    intrinsic = max(K * math.exp(-r * T) - S, 0) if option_type == "put" else max(S - K * math.exp(-r * T), 0)
-    if market_price <= intrinsic:
-        return None
-    lo, hi = 0.001, 20.0
-    for _ in range(max_iter):
-        mid = (lo + hi) / 2
-        price = price_fn(S, K, T, mid, r)
-        if abs(price - market_price) < tol:
-            return mid
-        if price < market_price:
-            lo = mid
-        else:
-            hi = mid
-    return (lo + hi) / 2
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def option_mid(row):
-    bid = float(row.get("bid", 0) or 0)
-    ask = float(row.get("ask", 0) or 0)
-    if bid > 0 and ask > 0 and ask > bid:
-        return round((bid + ask) / 2, 2)
-    last = float(row.get("lastPrice", 0) or 0)
-    return round(last, 2) if last > 0 else 0.0
-
-
-def is_market_open():
-    try:
-        et = pytz.timezone("America/New_York")
-        now = datetime.now(et)
-        if now.weekday() >= 5:
-            return False
-        market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
-        market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
-        return market_open <= now <= market_close
-    except Exception:
-        return False
 
 
 def find_future_expiries(expirations, current_expiry_str, offsets_days=(14, 28, 42)):
