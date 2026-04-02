@@ -18,36 +18,27 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 import json
-import math
 from datetime import date, datetime
 
 from _shared.options_lib import (
-    _safe_int, bs_put_price, bs_put_delta_abs, implied_vol,
-    option_mid, is_market_open, find_best_expiry,
+    _safe_int, error_exit, get_stock_price, parse_expiry_flag,
+    resolve_selector_expiry, classify_price_source, build_spread_metrics,
+    option_mid, implied_vol, bs_put_delta_abs,
 )
 
 try:
     import yfinance as yf
 except ImportError:
-    print(json.dumps({"error": "yfinance not installed — run: pip3 install yfinance"}))
-    sys.exit(1)
+    error_exit("yfinance not installed — run: pip3 install yfinance")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: fetch_chain.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX]"}))
-        sys.exit(1)
+        error_exit("Usage: fetch_chain.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX]")
 
-    # Extract --expiry flag before positional parsing
-    explicit_expiry = None
-    argv = list(sys.argv)
-    if "--expiry" in argv:
-        idx = argv.index("--expiry")
-        if idx + 1 < len(argv):
-            explicit_expiry = argv[idx + 1]
-        argv = argv[:idx] + argv[idx + 2:]
+    argv, explicit_expiry = parse_expiry_flag(sys.argv)
 
     ticker_sym = argv[1].upper()
     target_delta = float(argv[2]) if len(argv) > 2 else 0.20
@@ -56,30 +47,10 @@ def main():
     spread_width_pct = float(argv[5]) if len(argv) > 5 else 10.0
 
     tk = yf.Ticker(ticker_sym)
+    price = get_stock_price(tk, ticker_sym)
 
-    # Stock price
-    hist = tk.history(period="2d")
-    if hist.empty:
-        print(json.dumps({"error": f"No price data for {ticker_sym}"}))
-        sys.exit(1)
-    price = float(hist["Close"].iloc[-1])
-
-    # Best expiry
     expirations = tk.options
-    if not expirations:
-        print(json.dumps({"error": f"No options listed for {ticker_sym}"}))
-        sys.exit(1)
-
-    if explicit_expiry:
-        if explicit_expiry not in expirations:
-            print(json.dumps({"error": f"Expiry {explicit_expiry} not available for {ticker_sym}"}))
-            sys.exit(1)
-        expiry_result = (explicit_expiry, (datetime.strptime(explicit_expiry, "%Y-%m-%d").date() - date.today()).days)
-    else:
-        expiry_result = find_best_expiry(expirations, dte_min, dte_max)
-        if expiry_result is None:
-            print(json.dumps({"error": f"No expiry within {dte_min}–{dte_max} DTE"}))
-            sys.exit(1)
+    expiry_result = resolve_selector_expiry(tk, expirations, dte_min, dte_max, explicit_expiry, ticker_sym)
 
     # Try preferred expiry first, then later expiries if chain is too thin
     today = date.today()
@@ -87,7 +58,6 @@ def main():
         [(e, (datetime.strptime(e, "%Y-%m-%d").date() - today).days) for e in expirations],
         key=lambda x: x[1]
     )
-    # Start from the best expiry and try later ones
     start_idx = next((i for i, (e, _) in enumerate(sorted_expiries) if e == expiry_result[0]), 0)
 
     expiry_str, dte, puts_otm = None, None, None
@@ -104,8 +74,7 @@ def main():
             break
 
     if puts_otm is None or puts_otm.empty:
-        print(json.dumps({"error": "No expiry with enough OTM put strikes — chain too thin"}))
-        sys.exit(1)
+        error_exit("No expiry with enough OTM put strikes — chain too thin")
 
     T = dte / 365.0
 
@@ -121,8 +90,7 @@ def main():
     # Select short put: closest delta to target
     valid = puts_otm[puts_otm["calc_delta"] > 0].copy()
     if valid.empty:
-        print(json.dumps({"error": "Could not compute delta for any strike — try during market hours"}))
-        sys.exit(1)
+        error_exit("Could not compute delta for any strike — try during market hours")
 
     valid["delta_diff"] = (valid["calc_delta"] - target_delta).abs()
     short_row = valid.loc[valid["delta_diff"].idxmin()].to_dict()
@@ -133,21 +101,13 @@ def main():
     short_mid = float(short_row["mid_price"])
     short_bid = round(float(short_row.get("bid", 0) or 0), 2)
     short_ask = round(float(short_row.get("ask", 0) or 0), 2)
-    live = is_market_open()
-    has_bid_ask = (short_bid > 0 and short_ask > 0)
-    if live and has_bid_ask:
-        price_source = "live_bid_ask_mid"
-    elif has_bid_ask:
-        price_source = "prev_close_bid_ask_mid"
-    else:
-        price_source = "last_trade_price"
+    price_source = classify_price_source(short_bid, short_ask)
 
     # Long put: nearest listed strike at spread_width_pct below short
     long_target = short_strike * (1 - spread_width_pct / 100)
     long_candidates = puts_otm[puts_otm["strike"] < short_strike].copy()
     if long_candidates.empty:
-        print(json.dumps({"error": f"No strikes available below short strike {short_strike}"}))
-        sys.exit(1)
+        error_exit(f"No strikes available below short strike {short_strike}")
     long_candidates["long_diff"] = (long_candidates["strike"] - long_target).abs()
     long_row = long_candidates.loc[long_candidates["long_diff"].idxmin()].to_dict()
     long_strike = float(long_row["strike"])
@@ -156,18 +116,10 @@ def main():
     long_ask = round(float(long_row.get("ask", 0) or 0), 2)
 
     # Metrics
-    net_credit = round(short_mid - long_mid, 2)
     natural_credit = round(short_bid - long_ask, 2) if short_bid > 0 and long_ask > 0 else None
-    spread_width = round(short_strike - long_strike, 2)
-    if spread_width <= 0 or net_credit <= 0:
-        print(json.dumps({"error": f"Degenerate spread: short={short_strike}, long={long_strike}, credit={net_credit}"}))
-        sys.exit(1)
-
-    max_profit = round(net_credit * 100, 2)
-    max_loss = round((spread_width - net_credit) * 100, 2)
-    breakeven = round(short_strike - net_credit, 2)
-    ror = round(net_credit / (spread_width - net_credit) * 100, 1)
-    pop = round((1 - short_delta) * 100, 1)
+    m = build_spread_metrics(short_mid, long_mid, short_strike, long_strike, short_delta, "put")
+    if m["spread_width"] <= 0 or m["net_credit"] <= 0:
+        error_exit(f"Degenerate spread: short={short_strike}, long={long_strike}, credit={m['net_credit']}")
 
     result = {
         "ticker": ticker_sym,
@@ -192,14 +144,14 @@ def main():
             "oi": _safe_int(long_row.get("openInterest")),
             "volume": _safe_int(long_row.get("volume")),
         },
-        "net_credit": net_credit,
+        "net_credit": m["net_credit"],
         "natural_credit": natural_credit,
-        "spread_width": spread_width,
-        "max_profit": max_profit,
-        "max_loss": max_loss,
-        "breakeven": breakeven,
-        "return_on_risk_pct": ror,
-        "prob_profit_pct": pop,
+        "spread_width": m["spread_width"],
+        "max_profit": m["max_profit"],
+        "max_loss": m["max_loss"],
+        "breakeven": m["breakeven"],
+        "return_on_risk_pct": m["return_on_risk_pct"],
+        "prob_profit_pct": m["prob_profit_pct"],
         "price_source": price_source,
         "delta_source": "bs_from_option_price",
         "data_source": "yfinance"

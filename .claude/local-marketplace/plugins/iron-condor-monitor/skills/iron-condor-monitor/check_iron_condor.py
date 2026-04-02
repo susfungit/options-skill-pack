@@ -22,49 +22,24 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 import json
-import math
 from datetime import date, datetime
 
 from _shared.options_lib import (
-    bs_put_delta_abs, bs_call_delta, implied_vol, option_mid, option_mid_ex,
-    fetch_chain_with_retry,
+    error_exit, get_stock_price, resolve_monitor_expiry, compute_iv_delta,
+    compute_spread_pnl, find_strike_data, fetch_chain_with_retry,
 )
 
 try:
     import yfinance as yf
 except ImportError:
-    print(json.dumps({"error": "yfinance not installed — run: pip3 install yfinance"}))
-    sys.exit(1)
-
-
-def find_strike_data(chain_df, target_strike):
-    """Find the row for a given strike, or the nearest available. Return full data."""
-    exact = chain_df[chain_df["strike"] == target_strike]
-    if not exact.empty:
-        row = exact.iloc[0].to_dict()
-    else:
-        df = chain_df.copy()
-        df["_diff"] = (df["strike"] - target_strike).abs()
-        row = df.nsmallest(1, "_diff").iloc[0].to_dict()
-    mid, src = option_mid_ex(row)
-    return {
-        "mid": mid,
-        "src": src,
-        "bid": round(float(row.get("bid", 0) or 0), 2),
-        "ask": round(float(row.get("ask", 0) or 0), 2),
-        "volume": int(float(row.get("volume", 0) or 0)),
-        "open_interest": int(float(row.get("openInterest", 0) or 0)),
-    }
+    error_exit("yfinance not installed — run: pip3 install yfinance")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     if len(sys.argv) < 8:
-        print(json.dumps({
-            "error": "Usage: check_iron_condor.py TICKER SHORT_PUT LONG_PUT SHORT_CALL LONG_CALL NET_CREDIT EXPIRY"
-        }))
-        sys.exit(1)
+        error_exit("Usage: check_iron_condor.py TICKER SHORT_PUT LONG_PUT SHORT_CALL LONG_CALL NET_CREDIT EXPIRY")
 
     ticker_sym   = sys.argv[1].upper()
     short_put    = float(sys.argv[2])
@@ -74,53 +49,16 @@ def main():
     net_credit   = float(sys.argv[6])
     expiry_str   = sys.argv[7]
 
-    try:
-        expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date()
-    except ValueError:
-        print(json.dumps({"error": f"Invalid expiry format: {expiry_str} — use YYYY-MM-DD"}))
-        sys.exit(1)
-
-    today = date.today()
-    dte = (expiry_date - today).days
-
-    if dte < 0:
-        print(json.dumps({"error": f"Expiry {expiry_str} has already passed ({abs(dte)} days ago)"}))
-        sys.exit(1)
-
     tk = yf.Ticker(ticker_sym)
+    stock_price = get_stock_price(tk, ticker_sym)
 
-    # Current stock price
-    hist = tk.history(period="2d")
-    if hist.empty:
-        print(json.dumps({"error": f"No price data for {ticker_sym}"}))
-        sys.exit(1)
-    stock_price = round(float(hist["Close"].iloc[-1]), 2)
+    use_expiry, expiry_date, dte = resolve_monitor_expiry(tk, expiry_str, ticker_sym)
 
-    # Option chain for the specific expiry
-    available = tk.options
-    target_expiry = expiry_str
-    if expiry_str not in available:
-        nearest = None
-        for exp in available:
-            exp_date = datetime.strptime(exp, "%Y-%m-%d").date()
-            if abs((exp_date - expiry_date).days) <= 3:
-                nearest = exp
-                break
-        if nearest is None:
-            print(json.dumps({
-                "error": f"Expiry {expiry_str} not found in chain. Available: {list(available[:5])}",
-                "stock_price": stock_price,
-                "dte": dte
-            }))
-            sys.exit(1)
-        target_expiry = nearest
-
-    puts = fetch_chain_with_retry(tk, target_expiry, side="puts")
-    calls = fetch_chain_with_retry(tk, target_expiry, side="calls")
+    puts = fetch_chain_with_retry(tk, use_expiry, side="puts")
+    calls = fetch_chain_with_retry(tk, use_expiry, side="calls")
 
     if puts.empty or calls.empty:
-        print(json.dumps({"error": f"No options data for {ticker_sym} {target_expiry}"}))
-        sys.exit(1)
+        error_exit(f"No options data for {ticker_sym} {use_expiry}")
 
     # Look up all 4 legs
     sp = find_strike_data(puts, short_put)
@@ -140,20 +78,14 @@ def main():
     T = max(dte / 365.0, 0.001)
 
     # IV and delta for short put
-    sp_iv, sp_delta = None, None
-    if sp_mid and sp_mid > 0:
-        iv = implied_vol(stock_price, short_put, T, sp_mid, option_type="put")
-        if iv and iv > 0:
-            sp_delta = round(bs_put_delta_abs(stock_price, short_put, T, iv), 3)
-            sp_iv = round(iv * 100, 1)
+    sp_iv_raw, sp_delta_raw = compute_iv_delta(stock_price, short_put, T, sp_mid, "put")
+    sp_iv = round(sp_iv_raw * 100, 1) if sp_iv_raw else None
+    sp_delta = round(sp_delta_raw, 3) if sp_delta_raw else None
 
     # IV and delta for short call
-    sc_iv, sc_delta = None, None
-    if sc_mid and sc_mid > 0:
-        iv = implied_vol(stock_price, short_call, T, sc_mid, option_type="call")
-        if iv and iv > 0:
-            sc_delta = round(bs_call_delta(stock_price, short_call, T, iv), 3)
-            sc_iv = round(iv * 100, 1)
+    sc_iv_raw, sc_delta_raw = compute_iv_delta(stock_price, short_call, T, sc_mid, "call")
+    sc_iv = round(sc_iv_raw * 100, 1) if sc_iv_raw else None
+    sc_delta = round(sc_delta_raw, 3) if sc_delta_raw else None
 
     # Cost to close each side and total
     put_cost_to_close = round((sp_ask - lp_bid) * 100, 2) if sp_ask > 0 else None
@@ -166,33 +98,14 @@ def main():
     put_spread_value  = round(sp_mid - lp_mid, 2) if sp_mid and lp_mid else None
     call_spread_value = round(sc_mid - lc_mid, 2) if sc_mid and lc_mid else None
 
-    if put_spread_value is not None and call_spread_value is not None:
-        current_spread_value = round(put_spread_value + call_spread_value, 2)
-        pnl_per_share        = round(net_credit - current_spread_value, 2)
+    put_width   = round(short_put - long_put, 2)
+    call_width  = round(long_call - short_call, 2)
+    wider_width = max(put_width, call_width)
 
-        put_width   = round(short_put - long_put, 2)
-        call_width  = round(long_call - short_call, 2)
-        wider_width = max(put_width, call_width)
-
-        max_profit  = round(net_credit * 100, 2)
-        max_loss    = round((wider_width - net_credit) * 100, 2)
-
-        if max_loss > 0:
-            loss_pct_of_max = round(max(0, -pnl_per_share * 100) / max_loss * 100, 1)
-        else:
-            loss_pct_of_max = 0.0
-
-        pnl_total = round(pnl_per_share * 100, 2)
-    else:
-        current_spread_value = None
-        pnl_per_share        = None
-        pnl_total            = None
-        loss_pct_of_max      = None
-        put_width   = round(short_put - long_put, 2)
-        call_width  = round(long_call - short_call, 2)
-        wider_width = max(put_width, call_width)
-        max_profit  = round(net_credit * 100, 2)
-        max_loss    = round((wider_width - net_credit) * 100, 2)
+    # Combined short_mid/long_mid for the whole condor
+    combo_short = round(sp_mid + sc_mid, 2) if sp_mid and sc_mid else None
+    combo_long = round(lp_mid + lc_mid, 2) if lp_mid and lc_mid else None
+    pnl = compute_spread_pnl(combo_short, combo_long, net_credit, wider_width)
 
     # Distance metrics — two-sided
     buffer_pct_put  = round((stock_price - short_put) / stock_price * 100, 2)
@@ -206,7 +119,7 @@ def main():
     result = {
         "ticker":               ticker_sym,
         "stock_price":          stock_price,
-        "expiry":               target_expiry,
+        "expiry":               use_expiry,
         "dte":                  dte,
         "short_put": {
             "strike":      short_put,
@@ -247,18 +160,18 @@ def main():
         "original_credit":       net_credit,
         "put_spread_value":      put_spread_value,
         "call_spread_value":     call_spread_value,
-        "current_spread_value":  current_spread_value,
-        "pnl_per_share":         pnl_per_share,
-        "pnl_per_contract":      pnl_total,
-        "max_profit":            max_profit,
-        "max_loss":              max_loss,
+        "current_spread_value":  pnl["current_spread_value"],
+        "pnl_per_share":         pnl["pnl_per_share"],
+        "pnl_per_contract":      pnl["pnl_per_contract"],
+        "max_profit":            pnl["max_profit"],
+        "max_loss":              pnl["max_loss"],
         "breakeven_low":         breakeven_low,
         "breakeven_high":        breakeven_high,
         "buffer_pct_put":        buffer_pct_put,
         "buffer_pct_call":       buffer_pct_call,
         "worst_buffer_pct":      worst_buffer_pct,
         "worst_side":            worst_side,
-        "loss_pct_of_max":       loss_pct_of_max,
+        "loss_pct_of_max":       pnl["loss_pct_of_max"],
         "cost_to_close":         cost_to_close,
         "put_cost_to_close":     put_cost_to_close,
         "call_cost_to_close":    call_cost_to_close,

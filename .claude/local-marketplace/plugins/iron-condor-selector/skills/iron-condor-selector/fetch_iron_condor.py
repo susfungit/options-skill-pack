@@ -17,58 +17,18 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 import json
-import math
 from datetime import date, datetime
 
 from _shared.options_lib import (
-    _safe_int, bs_put_delta_abs, bs_call_delta, implied_vol,
-    option_mid, is_market_open, find_best_expiry,
+    _safe_int, error_exit, get_stock_price, parse_expiry_flag,
+    resolve_selector_expiry, select_strike_by_delta, classify_price_source,
+    build_spread_metrics, option_mid,
 )
 
 try:
     import yfinance as yf
 except ImportError:
-    print(json.dumps({"error": "yfinance not installed — run: pip3 install yfinance"}))
-    sys.exit(1)
-
-
-def select_short_strike(df, price, T, target_delta, side="put"):
-    """Select the OTM strike closest to target_delta."""
-    if side == "put":
-        otm = df[df["strike"] < price].copy()
-    else:
-        otm = df[df["strike"] > price].copy()
-
-    otm["mid_price"] = otm.apply(option_mid, axis=1)
-    otm = otm[otm["mid_price"] > 0].copy()
-
-    if otm.empty:
-        return None, None
-
-    # Compute IV and delta
-    opt_type = "put" if side == "put" else "call"
-    otm["calc_iv"] = otm.apply(
-        lambda r: implied_vol(price, r["strike"], T, r["mid_price"], opt_type) or 0, axis=1
-    )
-
-    if side == "put":
-        otm["calc_delta"] = otm.apply(
-            lambda r: bs_put_delta_abs(price, r["strike"], T, r["calc_iv"]) if r["calc_iv"] > 0 else 0,
-            axis=1
-        )
-    else:
-        otm["calc_delta"] = otm.apply(
-            lambda r: bs_call_delta(price, r["strike"], T, r["calc_iv"]) if r["calc_iv"] > 0 else 0,
-            axis=1
-        )
-
-    valid = otm[otm["calc_delta"] > 0].copy()
-    if valid.empty:
-        return None, otm, otm
-
-    valid["delta_diff"] = (valid["calc_delta"] - target_delta).abs()
-    short_row = valid.loc[valid["delta_diff"].idxmin()]
-    return short_row.to_dict(), valid, otm
+    error_exit("yfinance not installed — run: pip3 install yfinance")
 
 
 def select_wing(valid_df, otm_df, short_strike, short_mid, side="put"):
@@ -103,17 +63,9 @@ def select_wing(valid_df, otm_df, short_strike, short_mid, side="put"):
 
 def main():
     if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: fetch_iron_condor.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX]"}))
-        sys.exit(1)
+        error_exit("Usage: fetch_iron_condor.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX]")
 
-    # Extract --expiry flag before positional parsing
-    explicit_expiry = None
-    argv = list(sys.argv)
-    if "--expiry" in argv:
-        idx = argv.index("--expiry")
-        if idx + 1 < len(argv):
-            explicit_expiry = argv[idx + 1]
-        argv = argv[:idx] + argv[idx + 2:]
+    argv, explicit_expiry = parse_expiry_flag(sys.argv)
 
     ticker_sym = argv[1].upper()
     target_delta = float(argv[2]) if len(argv) > 2 else 0.16
@@ -121,30 +73,10 @@ def main():
     dte_max = int(argv[4]) if len(argv) > 4 else 45
 
     tk = yf.Ticker(ticker_sym)
+    price = get_stock_price(tk, ticker_sym)
 
-    # Stock price
-    hist = tk.history(period="2d")
-    if hist.empty:
-        print(json.dumps({"error": f"No price data for {ticker_sym}"}))
-        sys.exit(1)
-    price = float(hist["Close"].iloc[-1])
-
-    # Best expiry
     expirations = tk.options
-    if not expirations:
-        print(json.dumps({"error": f"No options listed for {ticker_sym}"}))
-        sys.exit(1)
-
-    if explicit_expiry:
-        if explicit_expiry not in expirations:
-            print(json.dumps({"error": f"Expiry {explicit_expiry} not available for {ticker_sym}"}))
-            sys.exit(1)
-        expiry_result = (explicit_expiry, (datetime.strptime(explicit_expiry, "%Y-%m-%d").date() - date.today()).days)
-    else:
-        expiry_result = find_best_expiry(expirations, dte_min, dte_max)
-        if expiry_result is None:
-            print(json.dumps({"error": f"No expiry within {dte_min}–{dte_max} DTE"}))
-            sys.exit(1)
+    expiry_result = resolve_selector_expiry(tk, expirations, dte_min, dte_max, explicit_expiry, ticker_sym)
 
     # Try preferred expiry first, then later expiries if chain is too thin
     today = date.today()
@@ -164,16 +96,14 @@ def main():
             break
 
     if chain is None:
-        print(json.dumps({"error": "No expiry with enough OTM strikes — chain too thin"}))
-        sys.exit(1)
+        error_exit("No expiry with enough OTM strikes — chain too thin")
 
     T = dte / 365.0
 
     # ── Put side ──────────────────────────────────────────────────────────────
-    short_put_row, put_valid, put_otm = select_short_strike(chain.puts, price, T, target_delta, "put")
+    short_put_row, put_valid, put_otm = select_strike_by_delta(chain.puts, price, T, target_delta, "put")
     if short_put_row is None:
-        print(json.dumps({"error": "No usable OTM put strikes — try during market hours"}))
-        sys.exit(1)
+        error_exit("No usable OTM put strikes — try during market hours")
 
     short_put_strike = float(short_put_row["strike"])
     short_put_delta = round(float(short_put_row["calc_delta"]), 3)
@@ -184,22 +114,21 @@ def main():
 
     long_put_row = select_wing(put_valid, put_otm, short_put_strike, short_put_mid, "put")
     if long_put_row is None:
-        print(json.dumps({"error": "No valid put wing strike found"}))
-        sys.exit(1)
+        error_exit("No valid put wing strike found")
     long_put_strike = float(long_put_row["strike"])
     long_put_mid = float(long_put_row["mid_price"])
     long_put_bid = round(float(long_put_row.get("bid", 0) or 0), 2)
     long_put_ask = round(float(long_put_row.get("ask", 0) or 0), 2)
 
-    put_credit = round(short_put_mid - long_put_mid, 2)
+    pm = build_spread_metrics(short_put_mid, long_put_mid, short_put_strike, long_put_strike, short_put_delta, "put")
+    put_credit = pm["net_credit"]
     put_natural = round(short_put_bid - long_put_ask, 2) if short_put_bid > 0 and long_put_ask > 0 else None
-    put_width = round(short_put_strike - long_put_strike, 2)
+    put_width = pm["spread_width"]
 
     # ── Call side ─────────────────────────────────────────────────────────────
-    short_call_row, call_valid, call_otm = select_short_strike(chain.calls, price, T, target_delta, "call")
+    short_call_row, call_valid, call_otm = select_strike_by_delta(chain.calls, price, T, target_delta, "call")
     if short_call_row is None:
-        print(json.dumps({"error": "No usable OTM call strikes — try during market hours"}))
-        sys.exit(1)
+        error_exit("No usable OTM call strikes — try during market hours")
 
     short_call_strike = float(short_call_row["strike"])
     short_call_delta = round(float(short_call_row["calc_delta"]), 3)
@@ -210,16 +139,16 @@ def main():
 
     long_call_row = select_wing(call_valid, call_otm, short_call_strike, short_call_mid, "call")
     if long_call_row is None:
-        print(json.dumps({"error": "No valid call wing strike found"}))
-        sys.exit(1)
+        error_exit("No valid call wing strike found")
     long_call_strike = float(long_call_row["strike"])
     long_call_mid = float(long_call_row["mid_price"])
     long_call_bid = round(float(long_call_row.get("bid", 0) or 0), 2)
     long_call_ask = round(float(long_call_row.get("ask", 0) or 0), 2)
 
-    call_credit = round(short_call_mid - long_call_mid, 2)
+    cm = build_spread_metrics(short_call_mid, long_call_mid, short_call_strike, long_call_strike, short_call_delta, "call")
+    call_credit = cm["net_credit"]
     call_natural = round(short_call_bid - long_call_ask, 2) if short_call_bid > 0 and long_call_ask > 0 else None
-    call_width = round(long_call_strike - short_call_strike, 2)
+    call_width = cm["spread_width"]
 
     # ── Combined metrics ──────────────────────────────────────────────────────
     total_credit = round(put_credit + call_credit, 2)
@@ -227,8 +156,7 @@ def main():
     wider_width = max(put_width, call_width)
 
     if wider_width <= 0 or total_credit <= 0:
-        print(json.dumps({"error": f"Degenerate iron condor: credit={total_credit}, widths=({put_width}, {call_width})"}))
-        sys.exit(1)
+        error_exit(f"Degenerate iron condor: credit={total_credit}, widths=({put_width}, {call_width})")
 
     max_profit = round(total_credit * 100, 2)
     max_loss = round((wider_width - total_credit) * 100, 2)
@@ -237,14 +165,7 @@ def main():
     ror = round(total_credit / (wider_width - total_credit) * 100, 1)
     pop = round((1 - short_put_delta - short_call_delta) * 100, 1)
 
-    live = is_market_open()
-    has_bid_ask = (short_put_bid > 0 and short_put_ask > 0)
-    if live and has_bid_ask:
-        price_source = "live_bid_ask_mid"
-    elif has_bid_ask:
-        price_source = "prev_close_bid_ask_mid"
-    else:
-        price_source = "last_trade_price"
+    price_source = classify_price_source(short_put_bid, short_put_ask)
 
     result = {
         "ticker": ticker_sym,

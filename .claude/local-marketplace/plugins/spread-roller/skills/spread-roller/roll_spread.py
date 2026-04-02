@@ -19,19 +19,18 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 import json
-import math
 from datetime import date, datetime, timedelta
 
 from _shared.options_lib import (
-    bs_put_delta_abs, bs_call_delta, implied_vol,
-    option_mid, is_market_open,
+    error_exit, get_stock_price, select_strike_by_delta, classify_price_source,
+    compute_iv_delta, option_mid, implied_vol,
+    bs_put_delta_abs, bs_call_delta,
 )
 
 try:
     import yfinance as yf
 except ImportError:
-    print(json.dumps({"error": "yfinance not installed — run: pip3 install yfinance"}))
-    sys.exit(1)
+    error_exit("yfinance not installed — run: pip3 install yfinance")
 
 
 def find_future_expiries(expirations, current_expiry_str, offsets_days=(14, 28, 42)):
@@ -55,44 +54,6 @@ def find_future_expiries(expirations, current_expiry_str, offsets_days=(14, 28, 
     return results
 
 
-def select_short_strike(df, price, T, target_delta, side="put"):
-    """Select the OTM strike closest to target_delta."""
-    if side == "put":
-        otm = df[df["strike"] < price].copy()
-    else:
-        otm = df[df["strike"] > price].copy()
-
-    otm["mid_price"] = otm.apply(option_mid, axis=1)
-    otm = otm[otm["mid_price"] > 0].copy()
-
-    if otm.empty:
-        return None, None
-
-    opt_type = "put" if side == "put" else "call"
-    otm["calc_iv"] = otm.apply(
-        lambda r: implied_vol(price, r["strike"], T, r["mid_price"], opt_type) or 0, axis=1
-    )
-
-    if side == "put":
-        otm["calc_delta"] = otm.apply(
-            lambda r: bs_put_delta_abs(price, r["strike"], T, r["calc_iv"]) if r["calc_iv"] > 0 else 0,
-            axis=1
-        )
-    else:
-        otm["calc_delta"] = otm.apply(
-            lambda r: bs_call_delta(price, r["strike"], T, r["calc_iv"]) if r["calc_iv"] > 0 else 0,
-            axis=1
-        )
-
-    valid = otm[otm["calc_delta"] > 0].copy()
-    if valid.empty:
-        return None, otm
-
-    valid["delta_diff"] = (valid["calc_delta"] - target_delta).abs()
-    short_row = valid.loc[valid["delta_diff"].idxmin()]
-    return short_row.to_dict(), valid
-
-
 def find_defensive_strike(df, price, T, current_short_strike, side="put"):
     """Find the next strike further OTM from the current short strike."""
     df = df.copy()
@@ -103,9 +64,6 @@ def find_defensive_strike(df, price, T, current_short_strike, side="put"):
         candidates = df[(df["strike"] < current_short_strike) & (df["strike"] < price)]
         if candidates.empty:
             return None
-        # Nearest strike below current short
-        row = candidates.loc[(candidates["strike"] - current_short_strike).abs().idxmin()]
-        # But it must actually be further OTM
         further = candidates[candidates["strike"] < current_short_strike].sort_values("strike", ascending=False)
         if further.empty:
             return None
@@ -199,17 +157,9 @@ def evaluate_roll(tk, price, new_expiry, new_short_strike, spread_width, side, c
     actual_short_strike = float(short_rows.iloc[0]["strike"])
 
     # Compute IV and delta for new short
-    opt_type = "put" if side == "put" else "call"
-    iv = implied_vol(price, actual_short_strike, T, new_short_mid, opt_type)
-    if iv and iv > 0:
-        if side == "put":
-            delta = round(bs_put_delta_abs(price, actual_short_strike, T, iv), 3)
-        else:
-            delta = round(bs_call_delta(price, actual_short_strike, T, iv), 3)
-        iv_pct = round(iv * 100, 1)
-    else:
-        delta = None
-        iv_pct = None
+    iv_raw, delta = compute_iv_delta(price, actual_short_strike, T, new_short_mid, side)
+    iv_pct = round(iv_raw * 100, 1) if iv_raw else None
+    delta = round(delta, 3) if delta else None
 
     # New long leg: maintain spread width
     if side == "put":
@@ -285,15 +235,14 @@ def main():
     argc = len(sys.argv)
 
     # Detect strategy from arg count
-    # Bull put: TICKER SHORT LONG CREDIT EXPIRY [DELTA] → 6-7 args
-    # Iron condor: TICKER SP LP SC LC CREDIT EXPIRY SIDE [DELTA] → 9-10 args
+    # Bull put: TICKER SHORT LONG CREDIT EXPIRY [DELTA] -> 6-7 args
+    # Iron condor: TICKER SP LP SC LC CREDIT EXPIRY SIDE [DELTA] -> 9-10 args
     if argc < 6:
-        print(json.dumps({"error": (
+        error_exit(
             "Usage:\n"
             "  Bull put:    roll_spread.py TICKER SHORT LONG NET_CREDIT EXPIRY [TARGET_DELTA]\n"
             "  Iron condor: roll_spread.py TICKER SHORT_PUT LONG_PUT SHORT_CALL LONG_CALL NET_CREDIT EXPIRY ROLL_SIDE [TARGET_DELTA]"
-        )}))
-        sys.exit(1)
+        )
 
     if argc <= 7:
         # Bull put spread mode
@@ -320,8 +269,7 @@ def main():
         target_delta = float(sys.argv[9]) if argc > 9 else 0.16
 
         if roll_side not in ("put", "call"):
-            print(json.dumps({"error": f"ROLL_SIDE must be 'put' or 'call', got '{roll_side}'"}))
-            sys.exit(1)
+            error_exit(f"ROLL_SIDE must be 'put' or 'call', got '{roll_side}'")
 
         if roll_side == "put":
             short_strike = short_put
@@ -336,41 +284,33 @@ def main():
     try:
         expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date()
     except ValueError:
-        print(json.dumps({"error": f"Invalid expiry format: {expiry_str} — use YYYY-MM-DD"}))
-        sys.exit(1)
+        error_exit(f"Invalid expiry format: {expiry_str} — use YYYY-MM-DD")
 
     today = date.today()
     dte_remaining = (expiry_date - today).days
 
     # Fetch stock data
     tk = yf.Ticker(ticker_sym)
-    hist = tk.history(period="2d")
-    if hist.empty:
-        print(json.dumps({"error": f"No price data for {ticker_sym}"}))
-        sys.exit(1)
-    price = round(float(hist["Close"].iloc[-1]), 2)
+    price = get_stock_price(tk, ticker_sym)
 
     # Price the close of current position
     close_data = price_close(tk, expiry_str, short_strike, long_strike, roll_side)
     if close_data is None:
-        print(json.dumps({"error": f"Cannot price current position — expiry {expiry_str} not found in chain"}))
-        sys.exit(1)
+        error_exit(f"Cannot price current position — expiry {expiry_str} not found in chain")
 
     realized_loss = round(net_credit - close_data["net_debit_to_close"], 2)
 
     # Find future expiries
     expirations = tk.options
     if not expirations:
-        print(json.dumps({"error": f"No options listed for {ticker_sym}"}))
-        sys.exit(1)
+        error_exit(f"No options listed for {ticker_sym}")
 
     future_expiries = find_future_expiries(expirations, expiry_str)
     if not future_expiries:
         # Try with shorter offsets if nothing found
         future_expiries = find_future_expiries(expirations, expiry_str, offsets_days=(7, 14, 21))
     if not future_expiries:
-        print(json.dumps({"error": "No future expiries available for rolling"}))
-        sys.exit(1)
+        error_exit("No future expiries available for rolling")
 
     # Evaluate roll candidates
     candidates = []
@@ -405,7 +345,7 @@ def main():
         try:
             chain = tk.option_chain(new_expiry)
             opts = chain.puts if roll_side == "put" else chain.calls
-            delta_row, _ = select_short_strike(opts, price, T, target_delta, roll_side)
+            delta_row, _, _ = select_strike_by_delta(opts, price, T, target_delta, roll_side)
             if delta_row:
                 agg_strike = float(delta_row["strike"])
                 if agg_strike != short_strike:
@@ -417,23 +357,14 @@ def main():
             pass
 
     if not candidates:
-        print(json.dumps({"error": "No viable roll candidates found — all returned zero or negative credit"}))
-        sys.exit(1)
+        error_exit("No viable roll candidates found — all returned zero or negative credit")
 
     # Rank by net roll credit (best first)
     candidates.sort(key=lambda c: c["net_roll_credit"], reverse=True)
     for i, c in enumerate(candidates):
         c["rank"] = i + 1
 
-    # Price source
-    live = is_market_open()
-    has_bid_ask = close_data["short_leg_bid"] > 0 and close_data["short_leg_ask"] > 0
-    if live and has_bid_ask:
-        price_source = "live_bid_ask_mid"
-    elif has_bid_ask:
-        price_source = "prev_close_bid_ask_mid"
-    else:
-        price_source = "last_trade_price"
+    price_source = classify_price_source(close_data["short_leg_bid"], close_data["short_leg_ask"])
 
     # Build current position summary
     current_position = {
