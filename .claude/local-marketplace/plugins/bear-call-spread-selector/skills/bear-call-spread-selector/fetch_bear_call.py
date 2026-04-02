@@ -156,6 +156,7 @@ def main():
 
     # Metrics
     net_credit = round(short_mid - long_mid, 2)
+    natural_credit = round(short_bid - long_ask, 2) if short_bid > 0 and long_ask > 0 else None
     spread_width = round(long_strike - short_strike, 2)
     if spread_width <= 0 or net_credit <= 0:
         print(json.dumps({"error": f"Degenerate spread: short={short_strike}, long={long_strike}, credit={net_credit}"}))
@@ -191,6 +192,7 @@ def main():
             "volume": _safe_int(long_row.get("volume")),
         },
         "net_credit": net_credit,
+        "natural_credit": natural_credit,
         "spread_width": spread_width,
         "max_profit": max_profit,
         "max_loss": max_loss,

@@ -238,7 +238,7 @@ function renderCompareResult(data) {
           <div><span class="leg-action buy">BUY</span> $${bps.long_put.strike}P <span class="leg-oi">OI:${fmtOI(bps.long_put.oi)}</span> <span class="leg-vol">Vol:${fmtOI(bps.long_put.volume)}</span></div>
         </div>
         <div class="az-compare-metrics">
-          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${bps.net_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit</span></div>
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${bps.net_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit (mid)${bps.natural_credit != null ? ` <span class="natural-price">nat $${bps.natural_credit.toFixed(2)}</span>` : ''}</span></div>
           <div class="az-cm"><span class="az-cm-val ${bestReturn === 'Bull Put Spread' ? 'az-best' : ''}">${bps.return_on_risk_pct}%</span><span class="az-cm-lbl">Return/Risk</span></div>
           <div class="az-cm"><span class="az-cm-val ${bestProb === 'Bull Put Spread' ? 'az-best' : ''}">${bps.prob_profit_pct}%</span><span class="az-cm-lbl">Prob Profit</span></div>
           <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-negative)">$${bps.max_loss.toFixed(0)}</span><span class="az-cm-lbl">Max Loss</span></div>
@@ -259,7 +259,7 @@ function renderCompareResult(data) {
           <div><span class="leg-action buy">BUY</span> $${bcs.long_call.strike}C <span class="leg-oi">OI:${fmtOI(bcs.long_call.oi)}</span> <span class="leg-vol">Vol:${fmtOI(bcs.long_call.volume)}</span></div>
         </div>
         <div class="az-compare-metrics">
-          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${bcs.net_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit</span></div>
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${bcs.net_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit (mid)${bcs.natural_credit != null ? ` <span class="natural-price">nat $${bcs.natural_credit.toFixed(2)}</span>` : ''}</span></div>
           <div class="az-cm"><span class="az-cm-val ${bestReturn === 'Bear Call Spread' ? 'az-best' : ''}">${bcs.return_on_risk_pct}%</span><span class="az-cm-lbl">Return/Risk</span></div>
           <div class="az-cm"><span class="az-cm-val ${bestProb === 'Bear Call Spread' ? 'az-best' : ''}">${bcs.prob_profit_pct}%</span><span class="az-cm-lbl">Prob Profit</span></div>
           <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-negative)">$${bcs.max_loss.toFixed(0)}</span><span class="az-cm-lbl">Max Loss</span></div>
@@ -280,7 +280,7 @@ function renderCompareResult(data) {
           <div><span class="leg-action buy">BUY</span> $${ic.put_side.long_put.strike}P / $${ic.call_side.long_call.strike}C <span class="leg-oi">OI:${fmtOI(ic.put_side.long_put.oi + ic.call_side.long_call.oi)}</span></div>
         </div>
         <div class="az-compare-metrics">
-          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${ic.total_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit</span></div>
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${ic.total_credit.toFixed(2)}</span><span class="az-cm-lbl">Credit (mid)${ic.total_natural_credit != null ? ` <span class="natural-price">nat $${ic.total_natural_credit.toFixed(2)}</span>` : ''}</span></div>
           <div class="az-cm"><span class="az-cm-val ${bestReturn === 'Iron Condor' ? 'az-best' : ''}">${ic.return_on_risk_pct}%</span><span class="az-cm-lbl">Return/Risk</span></div>
           <div class="az-cm"><span class="az-cm-val ${bestProb === 'Iron Condor' ? 'az-best' : ''}">${ic.prob_profit_pct}%</span><span class="az-cm-lbl">Prob Profit</span></div>
           <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-negative)">$${ic.max_loss.toFixed(0)}</span><span class="az-cm-lbl">Max Loss</span></div>
@@ -300,7 +300,7 @@ function renderCompareResult(data) {
           <div><span class="leg-action sell">SELL</span> $${cc.short_call.strike}C @ $${cc.premium_per_share.toFixed(2)} <span class="leg-oi">OI:${fmtOI(cc.short_call.oi)}</span> <span class="leg-vol">Vol:${fmtOI(cc.short_call.volume)}</span></div>
         </div>
         <div class="az-compare-metrics">
-          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${cc.premium_per_share.toFixed(2)}</span><span class="az-cm-lbl">Premium</span></div>
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${cc.premium_per_share.toFixed(2)}</span><span class="az-cm-lbl">Premium (mid)${cc.natural_premium != null ? ` <span class="natural-price">nat $${cc.natural_premium.toFixed(2)}</span>` : ''}</span></div>
           <div class="az-cm"><span class="az-cm-val ${bestReturn === 'Covered Call' ? 'az-best' : ''}">${cc.annualized_return_pct}%</span><span class="az-cm-lbl">Annualized</span></div>
           <div class="az-cm"><span class="az-cm-val ${bestProb === 'Covered Call' ? 'az-best' : ''}">${(100 - cc.prob_called_pct).toFixed(1)}%</span><span class="az-cm-lbl">Prob Profit</span></div>
           <div class="az-cm"><span class="az-cm-val">${cc.downside_protection_pct}%</span><span class="az-cm-lbl">Downside Prot.</span></div>
@@ -320,7 +320,7 @@ function renderCompareResult(data) {
           <div><span class="leg-action sell">SELL</span> $${csp.short_put.strike}P @ $${csp.premium_per_share.toFixed(2)} <span class="leg-oi">OI:${fmtOI(csp.short_put.oi)}</span> <span class="leg-vol">Vol:${fmtOI(csp.short_put.volume)}</span></div>
         </div>
         <div class="az-compare-metrics">
-          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${csp.premium_per_share.toFixed(2)}</span><span class="az-cm-lbl">Premium</span></div>
+          <div class="az-cm"><span class="az-cm-val" style="color:var(--pnl-positive)">$${csp.premium_per_share.toFixed(2)}</span><span class="az-cm-lbl">Premium (mid)${csp.natural_premium != null ? ` <span class="natural-price">nat $${csp.natural_premium.toFixed(2)}</span>` : ''}</span></div>
           <div class="az-cm"><span class="az-cm-val ${bestReturn === 'Cash-Secured Put' ? 'az-best' : ''}">${csp.annualized_return_pct}%</span><span class="az-cm-lbl">Annualized</span></div>
           <div class="az-cm"><span class="az-cm-val ${bestProb === 'Cash-Secured Put' ? 'az-best' : ''}">${csp.prob_profit_pct}%</span><span class="az-cm-lbl">Prob Profit</span></div>
           <div class="az-cm"><span class="az-cm-val">$${csp.effective_buy_price.toFixed(2)}</span><span class="az-cm-lbl">Eff. Buy Price</span></div>
@@ -432,7 +432,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-metrics">
           <div class="metric">
             <div class="metric-value" style="color:var(--pnl-positive)">$${d.net_credit.toFixed(2)}</div>
-            <div class="metric-label">Net Credit</div>
+            <div class="metric-label">Net Credit (mid)${d.natural_credit != null ? `<br><span class="natural-price">nat $${d.natural_credit.toFixed(2)}</span>` : ''}</div>
           </div>
           <div class="metric">
             <div class="metric-value">$${d.max_profit.toFixed(0)}</div>
@@ -496,7 +496,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-metrics">
           <div class="metric">
             <div class="metric-value" style="color:var(--pnl-positive)">$${d.net_credit.toFixed(2)}</div>
-            <div class="metric-label">Net Credit</div>
+            <div class="metric-label">Net Credit (mid)${d.natural_credit != null ? `<br><span class="natural-price">nat $${d.natural_credit.toFixed(2)}</span>` : ''}</div>
           </div>
           <div class="metric">
             <div class="metric-value">$${d.max_profit.toFixed(0)}</div>
@@ -585,7 +585,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-metrics">
           <div class="metric">
             <div class="metric-value" style="color:var(--pnl-positive)">$${d.total_credit.toFixed(2)}</div>
-            <div class="metric-label">Total Credit</div>
+            <div class="metric-label">Total Credit (mid)${d.total_natural_credit != null ? `<br><span class="natural-price">nat $${d.total_natural_credit.toFixed(2)}</span>` : ''}</div>
           </div>
           <div class="metric">
             <div class="metric-value">$${d.max_profit.toFixed(0)}</div>
@@ -639,7 +639,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-metrics">
           <div class="metric">
             <div class="metric-value" style="color:var(--pnl-positive)">$${d.premium_per_share.toFixed(2)}</div>
-            <div class="metric-label">Premium</div>
+            <div class="metric-label">Premium (mid)${d.natural_premium != null ? `<br><span class="natural-price">nat $${d.natural_premium.toFixed(2)}</span>` : ''}</div>
           </div>
           <div class="metric">
             <div class="metric-value">${d.static_return_pct}%</div>
@@ -693,7 +693,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-metrics">
           <div class="metric">
             <div class="metric-value" style="color:var(--pnl-positive)">$${d.premium_per_share.toFixed(2)}</div>
-            <div class="metric-label">Premium</div>
+            <div class="metric-label">Premium (mid)${d.natural_premium != null ? `<br><span class="natural-price">nat $${d.natural_premium.toFixed(2)}</span>` : ''}</div>
           </div>
           <div class="metric">
             <div class="metric-value">${d.return_on_capital_pct}%</div>

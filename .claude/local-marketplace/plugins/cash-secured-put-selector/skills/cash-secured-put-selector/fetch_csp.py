@@ -158,6 +158,7 @@ def main():
             "volume": _safe_int(short_put.get("volume")),
         },
         "premium_per_share": mid,
+        "natural_premium": bid if bid > 0 else None,
         "premium_per_contract": premium_per_contract,
         "cash_required": cash_required,
         "return_on_capital_pct": return_on_capital,

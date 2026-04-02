@@ -156,6 +156,7 @@ def main():
             "volume": _safe_int(short_call.get("volume")),
         },
         "premium_per_share": mid,
+        "natural_premium": bid if bid > 0 else None,
         "premium_per_contract": premium_per_contract,
         "static_return_pct": static_return,
         "annualized_return_pct": annualized_return,

@@ -192,6 +192,7 @@ def main():
     long_put_ask = round(float(long_put_row.get("ask", 0) or 0), 2)
 
     put_credit = round(short_put_mid - long_put_mid, 2)
+    put_natural = round(short_put_bid - long_put_ask, 2) if short_put_bid > 0 and long_put_ask > 0 else None
     put_width = round(short_put_strike - long_put_strike, 2)
 
     # ── Call side ─────────────────────────────────────────────────────────────
@@ -217,10 +218,12 @@ def main():
     long_call_ask = round(float(long_call_row.get("ask", 0) or 0), 2)
 
     call_credit = round(short_call_mid - long_call_mid, 2)
+    call_natural = round(short_call_bid - long_call_ask, 2) if short_call_bid > 0 and long_call_ask > 0 else None
     call_width = round(long_call_strike - short_call_strike, 2)
 
     # ── Combined metrics ──────────────────────────────────────────────────────
     total_credit = round(put_credit + call_credit, 2)
+    total_natural_credit = round(put_natural + call_natural, 2) if put_natural is not None and call_natural is not None else None
     wider_width = max(put_width, call_width)
 
     if wider_width <= 0 or total_credit <= 0:
@@ -268,6 +271,7 @@ def main():
                 "volume": _safe_int(long_put_row.get("volume")),
             },
             "credit": put_credit,
+            "natural_credit": put_natural,
             "width": put_width,
         },
         "call_side": {
@@ -290,9 +294,11 @@ def main():
                 "volume": _safe_int(long_call_row.get("volume")),
             },
             "credit": call_credit,
+            "natural_credit": call_natural,
             "width": call_width,
         },
         "total_credit": total_credit,
+        "total_natural_credit": total_natural_credit,
         "max_profit": max_profit,
         "max_loss": max_loss,
         "breakeven_low": breakeven_low,
