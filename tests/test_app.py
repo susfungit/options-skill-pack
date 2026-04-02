@@ -155,8 +155,8 @@ def test_build_args_check_bull_put():
 # ── 4. Chat max iterations test ─────────────────────────────────────────────
 
 
-@patch("app.main.execute_tool", return_value='{"result": "ok"}')
-@patch("app.main.get_client")
+@patch("app.chat.execute_tool", return_value='{"result": "ok"}')
+@patch("app.chat.get_client")
 def test_chat_max_iterations(mock_get_client, mock_exec, client):
     mock_tool_block = MagicMock()
     mock_tool_block.type = "tool_use"
@@ -254,7 +254,7 @@ def test_portfolio_reopen(client, sample_position):
 # ── 6. Analyzer endpoint tests ──────────────────────────────────────────────
 
 
-@patch("app.main.execute_tool", return_value='{"strikes": [180, 170]}')
+@patch("app.analyze.execute_tool", return_value='{"strikes": [180, 170]}')
 def test_analyze_calls_correct_tool(mock_exec, client):
     resp = client.post("/api/analyze", json={"ticker": "AAPL", "strategy": "bull-put-spread"})
     assert resp.status_code == 200

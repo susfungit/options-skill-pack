@@ -5,7 +5,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.main import app, DEFAULT_PROFILE
+from app.main import app
+from app.config import DEFAULT_PROFILE
 
 
 @pytest.fixture(autouse=True)
@@ -19,12 +20,12 @@ def tmp_data_dir(tmp_path, monkeypatch):
     with open(profile_path, "w") as f:
         json.dump(DEFAULT_PROFILE, f)
 
-    monkeypatch.setattr("app.main.PORTFOLIO_PATH", portfolio_path)
-    monkeypatch.setattr("app.main.PROFILE_PATH", profile_path)
+    monkeypatch.setattr("app.config.PORTFOLIO_PATH", portfolio_path)
+    monkeypatch.setattr("app.config.PROFILE_PATH", profile_path)
     # Disable auth in tests so endpoints are accessible
-    monkeypatch.setattr("app.main._APP_API_KEY", None)
+    monkeypatch.setattr("app.auth._APP_API_KEY", None)
     # Reset lazy client so it doesn't leak between tests
-    monkeypatch.setattr("app.main._client", None)
+    monkeypatch.setattr("app.chat._client", None)
 
 
 @pytest.fixture
