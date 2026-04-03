@@ -1,6 +1,6 @@
 # options-skill-pack
 
-Options trading toolkit — 9 skills for Claude Code + a self-hosted web chat app with portfolio management. Find spreads, monitor positions, evaluate rolls, and track your portfolio with AI-powered analysis.
+Options trading toolkit — 11 skills for Claude Code + a self-hosted web chat app with portfolio management. Find spreads, monitor positions, evaluate rolls, and track your portfolio with AI-powered analysis.
 
 **Three ways to use:**
 
@@ -62,9 +62,9 @@ python3 -m uvicorn app.main:app
 
 Open **http://localhost:8000**.
 
-**The app has three tabs:**
+**The app has four sections:**
 
-- **Chat** — AI-powered chat with all 9 skills available as tools. Toggle the AI switch off to run scripts without spending API tokens (Check and Analyze still work).
+- **Chat** — AI-powered chat with all 11 skills available as tools. Toggle the AI switch off to run scripts without spending API tokens (Check and Analyze still work).
 - **Portfolio** — Add, edit, check, close, and delete option positions. "Check All" runs monitors for every open position and classifies each into a zone (SAFE → ACT NOW). After each check, positions show actionable suggestions — profit-taking thresholds are configurable in the Profile tab, with gamma risk warnings near expiry and defensive guidance based on zone.
 - **Analyzer** — Run selector scripts directly (no AI tokens). Pick a ticker and strategy, click "Find Trade", or use "Compare All" to run all selectors in parallel with market context. Auto-suggests the best strategy based on 20-day trend, ATM IV level, and 52-week price position. After each analysis, click "View Chain" to see the full option chain for that expiry — recommended strikes are highlighted.
 - **Profile** — Configure your name (displayed in the sidebar), strategy defaults (delta, DTE range, spread width), and profit-taking rules. Settings persist server-side in `profile.json` and pre-fill the Analyzer inputs.
@@ -97,7 +97,7 @@ docker compose up
 
 Open **http://localhost:8000**. Same UI as Option 2.
 
-Portfolio and profile data persist via volume mounts to `portfolio.json` and `profile.json` in the project root. The container runs as a non-root user and includes a healthcheck on `/api/portfolio`.
+Portfolio and profile data persist via volume mounts to `portfolio.json` and `profile.json` in the project root. The container runs as a non-root user and includes a healthcheck on `/health`.
 
 To rebuild after pulling updates:
 
@@ -399,7 +399,7 @@ This creates `portfolio.json` and `monitor_config.json` from example templates (
 | Field | Required | Description |
 |---|---|---|
 | `label` | yes | Human-readable name |
-| `strategy` | yes | `bull-put-spread`, `iron-condor`, `covered-call`, or `cash-secured-put` |
+| `strategy` | yes | `bull-put-spread`, `bear-call-spread`, `iron-condor`, `covered-call`, or `cash-secured-put` |
 | `ticker` | yes | Stock symbol |
 | `legs` | yes | Array of legs (`type`, `action`, `strike`, optional `price`) |
 | `net_credit` | yes | Net credit received per share |
@@ -508,15 +508,27 @@ launchctl start com.options-monitor    # test immediately
 ```
 options-skill-pack/
 ├── app/                                          # Web chat app (Options 2 & 3)
-│   ├── main.py                                   # FastAPI server + Claude API integration
-│   ├── tools.py                                  # Tool definitions + script executors
+│   ├── main.py                                   # FastAPI setup, middleware, static files
+│   ├── chat.py                                   # Claude API client, /api/chat endpoint
+│   ├── analyze.py                                # /api/analyze, /api/analyze/compare, /api/expirations
+│   ├── portfolio.py                              # Portfolio CRUD, zone classification, monitoring
+│   ├── tools.py                                  # TOOL_REGISTRY (single source of truth)
 │   ├── prompts.py                                # System prompt + per-skill guidance
+│   ├── config.py                                 # Constants, paths, defaults, rate limiter
+│   ├── storage.py                                # JSON file I/O with locking
+│   ├── auth.py                                   # API key auth, session cookies, security headers
+│   ├── fetch_chain_view.py                       # Chain viewer script (used by /api/chain)
 │   ├── requirements.txt                          # Python dependencies
 │   ├── .env.example                              # API key template
-│   └── static/                                   # Chat UI
+│   └── static/                                   # Frontend SPA
 │       ├── index.html
 │       ├── style.css
-│       └── app.js
+│       ├── init.js                               # Tab init + routing
+│       ├── utils.js                              # Escaping, formatting, theme, market status
+│       ├── chat.js                               # Chat tab
+│       ├── portfolio.js                          # Portfolio tab
+│       ├── analyzer.js                           # Analyzer tab
+│       └── profile.js                            # Profile tab
 ├── Dockerfile                                    # Docker build
 ├── docker-compose.yml                            # Docker compose
 ├── .dockerignore                                 # Docker build exclusions
@@ -527,9 +539,15 @@ options-skill-pack/
 ├── portfolio.example.json                        # Template → portfolio.json
 ├── profile.example.json                          # Template → profile.json
 ├── monitor_config.example.json                   # Template → monitor_config.json
+├── tests/                                        # Test suite (all external calls mocked)
+│   ├── conftest.py                               # Shared fixtures
+│   └── test_app.py                               # Validation, tools, CRUD, chat tests
 └── .claude/local-marketplace/plugins/
+    ├── _shared/                                  # Shared options library (Black-Scholes, IV solver)
     ├── bull-put-spread-selector/                  # Find optimal put spread strikes
     ├── bull-put-spread-monitor/                   # Monitor put spread health
+    ├── bear-call-spread-selector/                 # Find optimal call spread strikes
+    ├── bear-call-spread-monitor/                  # Monitor call spread health
     ├── iron-condor-selector/                      # Find optimal iron condor strikes
     ├── iron-condor-monitor/                       # Monitor iron condor health
     ├── covered-call-selector/                     # Find optimal call to sell
@@ -563,7 +581,7 @@ Benchmark results (with_skill vs without_skill):
 
 ## Security notes
 
-- **No authentication** — the web app is designed for local/private use. Do not expose to the public internet without adding auth.
+- **Optional authentication** — set `APP_API_KEY` env var to enable token-based auth with HMAC-signed session cookies. Without it, the app is open (designed for local/private use).
 - **API key** — stored in `app/.env` (gitignored). Never committed to the repo.
 - **Portfolio data** — `portfolio.json` is gitignored. In Docker, it's persisted via volume mount.
 - **Profile data** — `profile.json` is gitignored. Contains strategy defaults and preferences only (no secrets).

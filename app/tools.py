@@ -6,8 +6,8 @@ import os
 import re
 import subprocess
 
-# Project root — one level up from app/
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from app.config import PROJECT_ROOT
+
 PLUGINS_DIR = os.path.join(PROJECT_ROOT, ".claude", "local-marketplace", "plugins")
 
 

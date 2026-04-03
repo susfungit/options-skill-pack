@@ -55,7 +55,11 @@ async def analyze(request: Request, req: AnalyzeRequest):
     if not tool_name:
         raise HTTPException(status_code=400, detail=f"Unknown strategy: {req.strategy}")
 
-    tool_input = {"ticker": req.ticker.upper()}
+    ticker = req.ticker.upper()
+    if not TICKER_RE.match(ticker):
+        raise HTTPException(status_code=400, detail="Invalid ticker format")
+
+    tool_input = {"ticker": ticker}
 
     profile = read_profile()
     defaults = profile["strategy_defaults"].get(req.strategy.value, {})
@@ -257,6 +261,8 @@ def _pick_best_strategy(bps, bcs, ic, cc, csp) -> dict | None:
 async def analyze_compare(request: Request, req: CompareRequest):
     """Run all 5 selectors + market context in parallel and return results."""
     ticker = req.ticker.upper()
+    if not TICKER_RE.match(ticker):
+        raise HTTPException(status_code=400, detail="Invalid ticker format")
     profile = read_profile()
     strategy_defaults = profile["strategy_defaults"]
 
@@ -316,6 +322,8 @@ async def analyze_compare(request: Request, req: CompareRequest):
 async def get_expirations(ticker: str):
     """Return available option expiry dates for a ticker."""
     ticker = ticker.upper()
+    if not TICKER_RE.match(ticker):
+        raise HTTPException(status_code=400, detail="Invalid ticker format")
 
     def _fetch():
         import yfinance as yf
