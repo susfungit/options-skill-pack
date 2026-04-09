@@ -42,6 +42,10 @@ class Position(BaseModel):
     opened: Optional[str] = None
     status: str = "open"
     cost_basis: Optional[float] = None
+    close_price: Optional[float] = None
+    closed_pnl: Optional[float] = None
+    closed_date: Optional[str] = None
+    close_notes: Optional[str] = None
 
 
 class CloseRequest(BaseModel):

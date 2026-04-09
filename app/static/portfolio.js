@@ -1,6 +1,43 @@
 // ── Portfolio ───────────────────────────────────────────────────────────────
 
 let portfolio = [];
+let dashboardExpanded = false;
+
+function computePortfolioStats(positions) {
+  const closed = positions.filter(p => p.status === 'closed' && p.closed_pnl != null);
+  if (closed.length === 0) return null;
+
+  const totalPnl = closed.reduce((s, p) => s + p.closed_pnl, 0);
+  const wins = closed.filter(p => p.closed_pnl > 0).length;
+  const winRate = Math.round((wins / closed.length) * 100);
+
+  // Avg hold time
+  const holdDays = closed
+    .filter(p => p.opened && p.closed_date)
+    .map(p => {
+      const open = new Date(p.opened + 'T00:00:00');
+      const close = new Date(p.closed_date + 'T00:00:00');
+      return Math.max(0, Math.round((close - open) / 86400000));
+    });
+  const avgHold = holdDays.length ? Math.round(holdDays.reduce((s, d) => s + d, 0) / holdDays.length) : null;
+
+  // Best / worst
+  const sorted = [...closed].sort((a, b) => b.closed_pnl - a.closed_pnl);
+  const best = sorted[0];
+  const worst = sorted[sorted.length - 1];
+
+  // Strategy breakdown
+  const byStrategy = {};
+  closed.forEach(p => {
+    const key = p.strategy || 'unknown';
+    if (!byStrategy[key]) byStrategy[key] = { trades: 0, pnl: 0, wins: 0 };
+    byStrategy[key].trades++;
+    byStrategy[key].pnl += p.closed_pnl;
+    if (p.closed_pnl > 0) byStrategy[key].wins++;
+  });
+
+  return { totalPnl, winRate, wins, total: closed.length, avgHold, best, worst, byStrategy };
+}
 
 async function loadPortfolio() {
   try {
@@ -35,25 +72,79 @@ function renderPortfolio() {
   empty.style.display = 'none';
 
   // Summary stats
-  const strategies = {};
-  openPositions.forEach(p => {
-    strategies[p.strategy] = (strategies[p.strategy] || 0) + 1;
-  });
+  const closedCount = portfolio.length - openPositions.length;
+  const stats = computePortfolioStats(portfolio);
 
-  summary.innerHTML = `
-    <div class="summary-stat">
-      <div class="stat-value">${openPositions.length}</div>
-      <div class="stat-label">Open</div>
-    </div>
-    <div class="summary-stat">
-      <div class="stat-value">${portfolio.length - openPositions.length}</div>
-      <div class="stat-label">Closed</div>
-    </div>
-    <div class="summary-stat">
-      <div class="stat-value">${Object.keys(strategies).length}</div>
-      <div class="stat-label">Strategies</div>
-    </div>
-  `;
+  let summaryHtml = `
+    <div class="dashboard-stats">
+      <div class="summary-stat">
+        <div class="stat-value">${openPositions.length}</div>
+        <div class="stat-label">Open</div>
+      </div>
+      <div class="summary-stat">
+        <div class="stat-value">${closedCount}</div>
+        <div class="stat-label">Closed</div>
+      </div>`;
+
+  if (stats) {
+    const pnlClass = stats.totalPnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+    const pnlSign = stats.totalPnl >= 0 ? '+' : '';
+    summaryHtml += `
+      <div class="summary-stat">
+        <div class="stat-value ${pnlClass}">${pnlSign}$${stats.totalPnl.toFixed(0)}</div>
+        <div class="stat-label">Realized P&L</div>
+      </div>
+      <div class="summary-stat">
+        <div class="stat-value">${stats.winRate}%</div>
+        <div class="stat-label">Win Rate (${stats.wins}/${stats.total})</div>
+      </div>`;
+  }
+
+  summaryHtml += `</div>`;
+
+  if (stats) {
+    const bestPnl = stats.best ? `+$${stats.best.closed_pnl.toFixed(0)}` : '--';
+    const worstPnl = stats.worst ? (stats.worst.closed_pnl >= 0 ? '+' : '') + '$' + stats.worst.closed_pnl.toFixed(0) : '--';
+
+    summaryHtml += `
+      <button class="dashboard-toggle" onclick="dashboardExpanded=!dashboardExpanded;renderPortfolio()">
+        ${dashboardExpanded ? '&#9662;' : '&#9656;'} Details
+      </button>`;
+
+    if (dashboardExpanded) {
+      summaryHtml += `<div class="dashboard-details">
+        <div class="dashboard-details-row">
+          <div class="detail-item">
+            <span class="detail-label">Avg Hold</span>
+            <span class="detail-value">${stats.avgHold != null ? stats.avgHold + 'd' : '--'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Best</span>
+            <span class="detail-value pnl-pos">${stats.best ? esc(stats.best.ticker) + ' ' + bestPnl : '--'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Worst</span>
+            <span class="detail-value ${stats.worst && stats.worst.closed_pnl < 0 ? 'pnl-neg' : ''}">${stats.worst ? esc(stats.worst.ticker) + ' ' + worstPnl : '--'}</span>
+          </div>
+        </div>
+        <table class="strategy-breakdown">
+          <thead><tr><th>Strategy</th><th>Trades</th><th>P&L</th><th>Win%</th></tr></thead>
+          <tbody>${Object.entries(stats.byStrategy).map(([strat, d]) => {
+            const sPnl = d.pnl >= 0 ? '+$' + d.pnl.toFixed(0) : '-$' + Math.abs(d.pnl).toFixed(0);
+            const sWr = Math.round((d.wins / d.trades) * 100);
+            return `<tr>
+              <td>${esc(formatStrategy(strat))}</td>
+              <td>${d.trades}</td>
+              <td class="${d.pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${sPnl}</td>
+              <td>${sWr}%</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+    }
+  }
+
+  summary.innerHTML = summaryHtml;
 
   // Position cards
   grid.innerHTML = portfolio.map((p, i) => {
@@ -259,6 +350,7 @@ function showAddForm() {
   document.getElementById('modal-title').textContent = 'New Position';
   document.getElementById('position-form').reset();
   document.querySelector('[name="edit_index"]').value = '';
+  document.getElementById('closed-fields-group').style.display = 'none';
   updateLegFields('bull-put-spread');
   document.getElementById('modal-overlay').style.display = 'flex';
 }
@@ -316,6 +408,16 @@ function editPosition(index) {
     const put = p.legs.find(l => l.type === 'put');
     form.querySelector('[name="csp_put_strike"]').value = put.strike;
     form.querySelector('[name="csp_put_price"]').value = put.price || '';
+  }
+
+  // Show close price field for closed positions
+  const closedGroup = document.getElementById('closed-fields-group');
+  if (p.status === 'closed') {
+    closedGroup.style.display = 'block';
+    form.querySelector('[name="edit_close_price"]').value = p.close_price != null ? p.close_price : '';
+  } else {
+    closedGroup.style.display = 'none';
+    form.querySelector('[name="edit_close_price"]').value = '';
   }
 
   document.getElementById('modal-overlay').style.display = 'flex';
@@ -444,6 +546,19 @@ async function savePosition(event) {
   if (strategy === 'covered-call') {
     const cb = form.querySelector('[name="cost_basis"]').value;
     if (cb) position.cost_basis = parseFloat(cb);
+  }
+
+  // Preserve closed position data when editing
+  if (editIndex !== '' && position.status === 'closed') {
+    const existing = portfolio[parseInt(editIndex)];
+    const closePrice = parseFloat(form.querySelector('[name="edit_close_price"]').value);
+    if (!isNaN(closePrice)) {
+      position.close_price = closePrice;
+      const pnlPerShare = position.net_credit - closePrice;
+      position.closed_pnl = Math.round(pnlPerShare * 100 * position.contracts * 100) / 100;
+    }
+    position.closed_date = existing.closed_date || new Date().toISOString().split('T')[0];
+    if (existing.close_notes) position.close_notes = existing.close_notes;
   }
 
   try {
