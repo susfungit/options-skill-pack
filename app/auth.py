@@ -58,6 +58,9 @@ async def auth_middleware(request: Request, call_next):
 
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
+    # Skip header injection for SSE streams — middleware buffering kills streaming
+    if response.headers.get("content-type", "").startswith("text/event-stream"):
+        return response
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"

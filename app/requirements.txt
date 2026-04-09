@@ -5,3 +5,4 @@ yfinance==0.2.31
 pytz==2024.1
 python-dotenv==1.0.0
 slowapi==0.1.9
+sse-starlette==1.8.2
