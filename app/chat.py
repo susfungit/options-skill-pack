@@ -90,7 +90,7 @@ async def chat(request: Request, req: ChatRequest):
     try:
         response = client.messages.create(
             model=model,
-            max_tokens=8192,
+            max_tokens=16384,
             system=SYSTEM_PROMPT,
             tools=TOOLS,
             messages=messages,
@@ -125,7 +125,7 @@ async def chat(request: Request, req: ChatRequest):
 
             response = client.messages.create(
                 model=model,
-                max_tokens=8192,
+                max_tokens=16384,
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,
                 messages=messages,
@@ -137,7 +137,10 @@ async def chat(request: Request, req: ChatRequest):
             )
 
         text_parts = [block.text for block in response.content if hasattr(block, "text")]
-        return ChatResponse(response="\n".join(text_parts))
+        text = "\n".join(text_parts)
+        if response.stop_reason == "max_tokens":
+            text += "\n\n*[Response truncated — hit token limit]*"
+        return ChatResponse(response=text)
 
     except anthropic.BadRequestError as e:
         logger.error("Anthropic API error: %s", e.message)
