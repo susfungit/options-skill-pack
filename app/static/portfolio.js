@@ -224,7 +224,7 @@ function renderPortfolio() {
         <div class="card-top">
           <div>
             <div style="display:flex; align-items:center; gap:8px;">
-              <div class="card-ticker">${esc(p.ticker)}${getTickerName(p.ticker) ? `<span class="ticker-name">${esc(getTickerName(p.ticker))}</span>` : ''}${p.stock_price ? `<span class="ticker-price">$${p.stock_price.toFixed(2)}</span>` : ''}</div>
+              <div class="card-ticker">${esc(p.ticker)}${getTickerName(p.ticker) ? `<span class="ticker-name">${esc(getTickerName(p.ticker))}</span>` : ''}${p.stock_price ? `<span class="ticker-price">$${p.stock_price.toFixed(2)}${formatPriceChange(p.stock_price, p.prev_close, p.change_pct)}</span>` : ''}</div>
               ${zone && !isClosed ? `
                 <div class="zone-info">
                   <span class="zone-dot ${zoneClass}"></span>

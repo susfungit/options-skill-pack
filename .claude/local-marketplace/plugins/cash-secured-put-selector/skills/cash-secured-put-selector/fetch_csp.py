@@ -44,7 +44,7 @@ def main():
     dte_max = int(argv[4]) if len(argv) > 4 else 45
 
     tk = yf.Ticker(ticker_sym)
-    price = get_stock_price(tk, ticker_sym)
+    price, prev_close, change_pct = get_stock_price(tk, ticker_sym)
 
     expirations = tk.options
     expiry_result = resolve_selector_expiry(tk, expirations, dte_min, dte_max, explicit_expiry, ticker_sym)
@@ -80,6 +80,8 @@ def main():
     result = {
         "ticker": ticker_sym,
         "stock_price": price,
+        "prev_close": prev_close,
+        "change_pct": change_pct,
         "expiry": expiry_str,
         "dte": dte,
         "short_put": {

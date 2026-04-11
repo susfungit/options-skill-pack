@@ -21,7 +21,7 @@ from datetime import date, datetime
 # Add shared library to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".claude", "local-marketplace", "plugins", "_shared"))
 from options_lib import (
-    bs_put_delta_abs, bs_call_delta, implied_vol, option_mid,
+    bs_put_delta_abs, bs_call_delta, implied_vol, option_mid, get_stock_price,
 )
 
 try:
@@ -35,12 +35,7 @@ except ImportError:
 
 def fetch_chain(ticker_str, expiry_str, side="both"):
     tk = yf.Ticker(ticker_str)
-    price = tk.fast_info.get("lastPrice") or tk.fast_info.get("regularMarketPrice")
-    if not price:
-        hist = tk.history(period="5d")
-        if hist.empty:
-            return {"error": f"Cannot fetch price for {ticker_str}"}
-        price = float(hist["Close"].iloc[-1])
+    price, prev_close, change_pct = get_stock_price(tk, ticker_str)
     price = float(price)
 
     chain = tk.option_chain(expiry_str)
@@ -52,6 +47,8 @@ def fetch_chain(ticker_str, expiry_str, side="both"):
     result = {
         "ticker": ticker_str,
         "price": round(price, 2),
+        "prev_close": prev_close,
+        "change_pct": change_pct,
         "expiry": expiry_str,
         "dte": dte,
     }

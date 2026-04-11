@@ -47,7 +47,7 @@ def main():
     spread_width_pct = float(argv[5]) if len(argv) > 5 else 10.0
 
     tk = yf.Ticker(ticker_sym)
-    price = get_stock_price(tk, ticker_sym)
+    price, prev_close, change_pct = get_stock_price(tk, ticker_sym)
 
     expirations = tk.options
     expiry_result = resolve_selector_expiry(tk, expirations, dte_min, dte_max, explicit_expiry, ticker_sym)
@@ -124,6 +124,8 @@ def main():
     result = {
         "ticker": ticker_sym,
         "price": round(price, 2),
+        "prev_close": prev_close,
+        "change_pct": change_pct,
         "expiry": expiry_str,
         "dte": dte,
         "short_call": {

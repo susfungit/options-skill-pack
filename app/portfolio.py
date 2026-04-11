@@ -307,6 +307,8 @@ def _check_single_position(p: dict) -> dict:
                 "buffer_pct": data.get("buffer_pct"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
+                "prev_close": data.get("prev_close"),
+                "change_pct": data.get("change_pct"),
                 "loss_pct_of_max": data.get("loss_pct_of_max"),
                 "chain_data": {
                     "short_leg": {
@@ -362,6 +364,8 @@ def _check_single_position(p: dict) -> dict:
                 "buffer_pct": data.get("buffer_pct"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
+                "prev_close": data.get("prev_close"),
+                "change_pct": data.get("change_pct"),
                 "loss_pct_of_max": data.get("loss_pct_of_max"),
                 "chain_data": {
                     "short_leg": {
@@ -422,6 +426,8 @@ def _check_single_position(p: dict) -> dict:
                 "worst_side": data.get("worst_side"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
+                "prev_close": data.get("prev_close"),
+                "change_pct": data.get("change_pct"),
                 "loss_pct_of_max": data.get("loss_pct_of_max"),
                 "chain_data": {
                     "put_side": {
@@ -500,6 +506,8 @@ def _check_single_position(p: dict) -> dict:
                 "buffer_pct": data.get("buffer_pct"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
+                "prev_close": data.get("prev_close"),
+                "change_pct": data.get("change_pct"),
                 "chain_data": {
                     "short_leg": {
                         "bid": data.get("short_call", {}).get("bid"),
@@ -546,6 +554,8 @@ def _check_single_position(p: dict) -> dict:
                 "buffer_pct": data.get("buffer_pct"),
                 "pnl_per_contract": data.get("pnl_per_contract"),
                 "stock_price": data.get("stock_price"),
+                "prev_close": data.get("prev_close"),
+                "change_pct": data.get("change_pct"),
                 "loss_pct_of_max": data.get("loss_pct_of_max"),
                 "chain_data": {
                     "short_leg": {
@@ -654,6 +664,8 @@ def _refresh_watchlist_item(item: dict) -> dict:
         result = _check_single_position(fake_position)
         return {
             "stock_price": result.get("stock_price"),
+            "prev_close": result.get("prev_close"),
+            "change_pct": result.get("change_pct"),
             "pnl_per_contract": result.get("pnl_per_contract"),
             "buffer_pct": result.get("buffer_pct"),
             "chain_data": result.get("chain_data"),

@@ -291,7 +291,7 @@ def main():
 
     # Fetch stock data
     tk = yf.Ticker(ticker_sym)
-    price = get_stock_price(tk, ticker_sym)
+    price, prev_close, change_pct = get_stock_price(tk, ticker_sym)
 
     # Price the close of current position
     close_data = price_close(tk, expiry_str, short_strike, long_strike, roll_side)
@@ -388,6 +388,8 @@ def main():
     result = {
         "ticker": ticker_sym,
         "stock_price": price,
+        "prev_close": prev_close,
+        "change_pct": change_pct,
         "current_position": current_position,
         "close_cost": close_cost,
         "roll_candidates": candidates,

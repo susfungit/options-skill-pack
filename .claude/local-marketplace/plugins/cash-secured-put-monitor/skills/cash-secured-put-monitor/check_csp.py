@@ -44,7 +44,7 @@ def main():
     expiry_str   = sys.argv[4]
 
     tk = yf.Ticker(ticker_sym)
-    stock_price = get_stock_price(tk, ticker_sym)
+    stock_price, prev_close, change_pct = get_stock_price(tk, ticker_sym)
 
     use_expiry, expiry_date, dte = resolve_monitor_expiry(tk, expiry_str, ticker_sym)
 
@@ -108,6 +108,8 @@ def main():
     result = {
         "ticker":               ticker_sym,
         "stock_price":          stock_price,
+        "prev_close":           prev_close,
+        "change_pct":           change_pct,
         "expiry":               use_expiry,
         "dte":                  dte,
         "short_put": {

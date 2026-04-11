@@ -1998,3 +1998,18 @@ body {
   background: var(--bg-elevated);
   color: var(--text-primary);
 }
+
+.price-change {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  vertical-align: middle;
+}
+.price-change.up { color: var(--pnl-positive); background: rgba(52, 211, 153, 0.12); }
+.price-change.down { color: var(--pnl-negative); background: rgba(244, 63, 94, 0.12); }
+.price-change.flat { color: var(--text-muted); background: transparent; }

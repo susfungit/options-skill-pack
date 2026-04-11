@@ -154,6 +154,8 @@ def _fetch_market_context(ticker: str) -> dict:
             return {"error": f"No price history for {ticker}"}
 
         current_price = float(hist["Close"].iloc[-1])
+        prev_close = float(hist["Close"].iloc[-2])
+        change_pct = round((current_price / prev_close - 1) * 100, 2) if prev_close else 0.0
         high_52w = float(hist["Close"].max())
         low_52w = float(hist["Close"].min())
         pct_range = high_52w - low_52w
@@ -203,6 +205,8 @@ def _fetch_market_context(ticker: str) -> dict:
 
         return {
             "current_price": round(current_price, 2),
+            "prev_close": round(prev_close, 2),
+            "change_pct": change_pct,
             "trend": {
                 "change_5d_pct": change_5d,
                 "change_20d_pct": change_20d,

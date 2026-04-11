@@ -51,6 +51,18 @@ function esc(str) {
 
 function fmtOI(v) { return (v || 0).toLocaleString(); }
 
+function formatPriceChange(price, prevClose, changePct) {
+  if (prevClose == null || price == null) return '';
+  const changeDollar = price - prevClose;
+  const pct = changePct != null ? changePct : (prevClose ? (price / prevClose - 1) * 100 : 0);
+  let cls = 'flat', arrow = '·', sign = '';
+  if (changeDollar > 0.005) { cls = 'up'; arrow = '▲'; sign = '+'; }
+  else if (changeDollar < -0.005) { cls = 'down'; arrow = '▼'; sign = '-'; }
+  const d = Math.abs(changeDollar).toFixed(2);
+  const p = Math.abs(pct).toFixed(2);
+  return `<span class="price-change ${cls}">${arrow} ${sign}$${d} (${sign}${p}%)</span>`;
+}
+
 // ── Formatting helpers ───────────────────────────────────────────────────────
 
 function formatLegs(p) {

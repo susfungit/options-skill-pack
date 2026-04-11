@@ -64,7 +64,7 @@ function renderWatchlist() {
         <div class="card-top">
           <div>
             <div style="display:flex; align-items:center; gap:8px;">
-              <div class="card-ticker">${esc(item.ticker)}${getTickerName(item.ticker) ? `<span class="ticker-name">${esc(getTickerName(item.ticker))}</span>` : ''}${hasRefresh ? `<span class="ticker-price">$${cur.stock_price.toFixed(2)}</span>` : (item.stock_price_at_save ? `<span class="ticker-price">$${item.stock_price_at_save.toFixed(2)}</span>` : '')}</div>
+              <div class="card-ticker">${esc(item.ticker)}${getTickerName(item.ticker) ? `<span class="ticker-name">${esc(getTickerName(item.ticker))}</span>` : ''}${hasRefresh ? `<span class="ticker-price">$${cur.stock_price.toFixed(2)}${formatPriceChange(cur.stock_price, cur.prev_close, cur.change_pct)}</span>` : (item.stock_price_at_save ? `<span class="ticker-price">$${item.stock_price_at_save.toFixed(2)}</span>` : '')}</div>
             </div>
             <div class="card-label">${esc(legsStr)}</div>
           </div>

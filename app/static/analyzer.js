@@ -174,6 +174,9 @@ function renderCompareResult(data) {
   const mc = data.market_context;
   const ticker = data.ticker;
   const price = bps.price || bcs.price || ic.price || cc.stock_price || csp.stock_price || 0;
+  const src = [bps, bcs, ic, cc, csp].find(s => s && (s.price || s.stock_price)) || {};
+  const prevClose = src.prev_close;
+  const changePct = src.change_pct;
 
   // Find best values for highlighting (skip strategies with errors)
   const returns = [
@@ -225,7 +228,7 @@ function renderCompareResult(data) {
   results.innerHTML = `
     <div class="az-compare-header">
       <span class="az-ticker">${esc(ticker)}${getTickerName(ticker) ? `<span class="ticker-name">${esc(getTickerName(ticker))}</span>` : ''}</span>
-      <span class="az-price">$${price.toFixed(2)}</span>
+      <span class="az-price">$${price.toFixed(2)}${formatPriceChange(price, prevClose, changePct)}</span>
       <span class="az-strategy-label" style="margin-left:12px;margin-bottom:0;">STRATEGY COMPARISON</span>
       <button class="btn-add-watchlist" onclick="addCompareToWatchlist()" title="Save best trade to Watchlist">&#9734; Save to Watchlist</button>
     </div>
@@ -426,7 +429,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-header">
           <div>
             <span class="az-ticker">${esc(d.ticker)}${getTickerName(d.ticker) ? `<span class="ticker-name">${esc(getTickerName(d.ticker))}</span>` : ''}</span>
-            <span class="az-price">$${d.price.toFixed(2)}</span>
+            <span class="az-price">$${d.price.toFixed(2)}${formatPriceChange(d.price, d.prev_close, d.change_pct)}</span>
           </div>
           <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
         </div>
@@ -491,7 +494,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-header">
           <div>
             <span class="az-ticker">${esc(d.ticker)}${getTickerName(d.ticker) ? `<span class="ticker-name">${esc(getTickerName(d.ticker))}</span>` : ''}</span>
-            <span class="az-price">$${d.price.toFixed(2)}</span>
+            <span class="az-price">$${d.price.toFixed(2)}${formatPriceChange(d.price, d.prev_close, d.change_pct)}</span>
           </div>
           <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
         </div>
@@ -557,7 +560,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-header">
           <div>
             <span class="az-ticker">${esc(d.ticker)}${getTickerName(d.ticker) ? `<span class="ticker-name">${esc(getTickerName(d.ticker))}</span>` : ''}</span>
-            <span class="az-price">$${d.price.toFixed(2)}</span>
+            <span class="az-price">$${d.price.toFixed(2)}${formatPriceChange(d.price, d.prev_close, d.change_pct)}</span>
           </div>
           <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
         </div>
@@ -646,7 +649,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-header">
           <div>
             <span class="az-ticker">${esc(d.ticker)}${getTickerName(d.ticker) ? `<span class="ticker-name">${esc(getTickerName(d.ticker))}</span>` : ''}</span>
-            <span class="az-price">$${d.stock_price.toFixed(2)}</span>
+            <span class="az-price">$${d.stock_price.toFixed(2)}${formatPriceChange(d.stock_price, d.prev_close, d.change_pct)}</span>
           </div>
           <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
         </div>
@@ -701,7 +704,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-header">
           <div>
             <span class="az-ticker">${esc(d.ticker)}${getTickerName(d.ticker) ? `<span class="ticker-name">${esc(getTickerName(d.ticker))}</span>` : ''}</span>
-            <span class="az-price">$${d.stock_price.toFixed(2)}</span>
+            <span class="az-price">$${d.stock_price.toFixed(2)}${formatPriceChange(d.stock_price, d.prev_close, d.change_pct)}</span>
           </div>
           <div class="az-expiry">${esc(d.expiry)} · ${d.dte} DTE</div>
         </div>
@@ -861,7 +864,7 @@ function renderChainTable(chain, side, highlights) {
 
   container.innerHTML = `
     <div class="az-chain-header">
-      <span>Option Chain &mdash; ${esc(chain.ticker)} ${esc(chain.expiry)} &middot; ${chain.dte} DTE</span>
+      <span>Option Chain &mdash; ${esc(chain.ticker)} $${(chain.price || 0).toFixed(2)}${formatPriceChange(chain.price, chain.prev_close, chain.change_pct)} &middot; ${esc(chain.expiry)} &middot; ${chain.dte} DTE</span>
       <button class="az-chain-close" onclick="document.getElementById('az-chain-container').remove()">&times;</button>
     </div>
     ${body}`;

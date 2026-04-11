@@ -180,11 +180,23 @@ def error_exit(msg, **extra):
 
 
 def get_stock_price(ticker_obj, ticker_sym):
-    """Fetch current stock price from yfinance Ticker. Calls error_exit on failure."""
+    """Fetch current stock price + prior close from yfinance Ticker.
+
+    Returns (price, prev_close, change_pct). If only one row of history is
+    available (e.g. brand new listing), prev_close falls back to price and
+    change_pct is 0.0. Calls error_exit on failure.
+    """
     hist = ticker_obj.history(period="2d")
     if hist.empty:
         error_exit(f"No price data for {ticker_sym}")
-    return round(float(hist["Close"].iloc[-1]), 2)
+    price = round(float(hist["Close"].iloc[-1]), 2)
+    if len(hist) >= 2:
+        prev_close = round(float(hist["Close"].iloc[-2]), 2)
+        change_pct = round((price / prev_close - 1) * 100, 2) if prev_close else 0.0
+    else:
+        prev_close = price
+        change_pct = 0.0
+    return price, prev_close, change_pct
 
 
 def parse_expiry_flag(argv):
@@ -249,7 +261,7 @@ def resolve_monitor_expiry(tk, expiry_str, ticker_sym):
         if nearest is None:
             error_exit(
                 f"Expiry {expiry_str} not found in chain. Available: {list(available[:5])}",
-                stock_price=get_stock_price(tk, ticker_sym),
+                stock_price=get_stock_price(tk, ticker_sym)[0],
                 dte=dte,
             )
         use_expiry = nearest
