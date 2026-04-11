@@ -14,7 +14,7 @@ from app import config
 from app.config import MODEL_RE, TICKER_RE, limiter
 from app.storage import (
     read_portfolio, write_portfolio, read_profile, write_profile,
-    read_wishlist, write_wishlist,
+    read_watchlist, write_watchlist,
     _portfolio_lock, _atomic_write_json,
 )
 from app.tools import execute_tool
@@ -608,33 +608,33 @@ async def check_all_positions(request: Request):
 
 # ── Watchlist endpoints ──────────────────────────────────────────────────────
 
-@router.get("/api/wishlist")
+@router.get("/api/watchlist")
 async def list_watchlist():
-    return read_wishlist()
+    return read_watchlist()
 
 
-@router.post("/api/wishlist")
+@router.post("/api/watchlist")
 async def add_watchlist(item: WatchlistTrade):
     ticker = item.ticker.strip().upper()
     if not TICKER_RE.match(ticker):
         raise HTTPException(status_code=400, detail="Invalid ticker format")
-    watchlist = read_wishlist()
+    watchlist = read_watchlist()
     entry = item.model_dump(exclude_none=True)
     entry["ticker"] = ticker
     entry["id"] = uuid.uuid4().hex[:8]
     entry["saved_at"] = date.today().isoformat()
     watchlist.append(entry)
-    write_wishlist(watchlist)
+    write_watchlist(watchlist)
     return {"status": "ok", "id": entry["id"]}
 
 
-@router.delete("/api/wishlist/{item_id}")
+@router.delete("/api/watchlist/{item_id}")
 async def delete_watchlist(item_id: str):
-    watchlist = read_wishlist()
+    watchlist = read_watchlist()
     new_list = [w for w in watchlist if w.get("id") != item_id]
     if len(new_list) == len(watchlist):
         raise HTTPException(status_code=404, detail="Item not found")
-    write_wishlist(new_list)
+    write_watchlist(new_list)
     return {"status": "ok"}
 
 
@@ -664,28 +664,28 @@ def _refresh_watchlist_item(item: dict) -> dict:
         return {"error": "Refresh failed"}
 
 
-@router.post("/api/wishlist/{item_id}/refresh")
+@router.post("/api/watchlist/{item_id}/refresh")
 async def refresh_watchlist_item(item_id: str):
-    watchlist = read_wishlist()
+    watchlist = read_watchlist()
     item = next((w for w in watchlist if w.get("id") == item_id), None)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     current = _refresh_watchlist_item(item)
     item["current"] = current
-    write_wishlist(watchlist)
+    write_watchlist(watchlist)
     return {"id": item_id, **current}
 
 
-@router.post("/api/wishlist/refresh")
+@router.post("/api/watchlist/refresh")
 @limiter.limit("5/minute")
 async def refresh_all_watchlist(request: Request):
-    watchlist = read_wishlist()
+    watchlist = read_watchlist()
     results = []
     for item in watchlist:
         current = _refresh_watchlist_item(item)
         item["current"] = current
         results.append({"id": item["id"], **current})
-    write_wishlist(watchlist)
+    write_watchlist(watchlist)
     return results
 
 

@@ -270,11 +270,11 @@ def test_analyze_invalid_strategy(client):
     assert resp.status_code == 422
 
 
-# ── 7. Wishlist endpoint tests ──────────────────────────────────────────────
+# ── 7. Watchlist endpoint tests ─────────────────────────────────────────────
 
 
-def test_wishlist_empty(client):
-    resp = client.get("/api/wishlist")
+def test_watchlist_empty(client):
+    resp = client.get("/api/watchlist")
     assert resp.status_code == 200
     assert resp.json() == []
 
@@ -294,12 +294,12 @@ def _sample_watchlist_trade():
     }
 
 
-def test_wishlist_add_and_list(client):
-    resp = client.post("/api/wishlist", json=_sample_watchlist_trade())
+def test_watchlist_add_and_list(client):
+    resp = client.post("/api/watchlist", json=_sample_watchlist_trade())
     assert resp.status_code == 200
     assert "id" in resp.json()
 
-    items = client.get("/api/wishlist").json()
+    items = client.get("/api/watchlist").json()
     assert len(items) == 1
     assert items[0]["ticker"] == "AAPL"
     assert items[0]["strategy"] == "bull-put-spread"
@@ -308,21 +308,21 @@ def test_wishlist_add_and_list(client):
     assert "id" in items[0]
 
 
-def test_wishlist_reject_invalid_ticker(client):
+def test_watchlist_reject_invalid_ticker(client):
     trade = _sample_watchlist_trade()
     trade["ticker"] = "AAPL1"
-    resp = client.post("/api/wishlist", json=trade)
+    resp = client.post("/api/watchlist", json=trade)
     assert resp.status_code == 400
 
 
-def test_wishlist_delete(client):
-    resp = client.post("/api/wishlist", json=_sample_watchlist_trade())
+def test_watchlist_delete(client):
+    resp = client.post("/api/watchlist", json=_sample_watchlist_trade())
     item_id = resp.json()["id"]
-    resp = client.delete(f"/api/wishlist/{item_id}")
+    resp = client.delete(f"/api/watchlist/{item_id}")
     assert resp.status_code == 200
-    assert client.get("/api/wishlist").json() == []
+    assert client.get("/api/watchlist").json() == []
 
 
-def test_wishlist_delete_missing(client):
-    resp = client.delete("/api/wishlist/nonexistent")
+def test_watchlist_delete_missing(client):
+    resp = client.delete("/api/watchlist/nonexistent")
     assert resp.status_code == 404

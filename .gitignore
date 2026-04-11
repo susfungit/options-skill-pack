@@ -33,8 +33,9 @@ logs/
 # Portfolio monitor — personal data and credentials (copy from *.example.json)
 portfolio.json
 profile.json
-wishlist.json
+watchlist.json
 monitor_config.json
+portfolio-*.csv
 
 # App — API key (copy from .env.example)
 app/.env

@@ -7,7 +7,7 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.classList.add('active');
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'portfolio') loadPortfolio();
-    if (tab.dataset.tab === 'wishlist') loadWishlist();
+    if (tab.dataset.tab === 'watchlist') loadWatchlist();
     if (tab.dataset.tab === 'profile') { loadProfile(); loadModels(); }
   });
 });

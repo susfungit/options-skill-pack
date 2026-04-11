@@ -3,9 +3,9 @@
 let _watchlist = [];
 let _pendingWatchlistRemoveId = null;
 
-async function loadWishlist() {
+async function loadWatchlist() {
   try {
-    const res = await fetch('/api/wishlist');
+    const res = await fetch('/api/watchlist');
     if (!res.ok) throw new Error('Failed to load watchlist');
     _watchlist = await res.json();
     renderWatchlist();
@@ -15,9 +15,9 @@ async function loadWishlist() {
 }
 
 function renderWatchlist() {
-  const grid = document.getElementById('wishlist-grid');
-  const empty = document.getElementById('wishlist-empty');
-  const summary = document.getElementById('wishlist-summary');
+  const grid = document.getElementById('watchlist-grid');
+  const empty = document.getElementById('watchlist-empty');
+  const summary = document.getElementById('watchlist-summary');
 
   if (!_watchlist.length) {
     grid.innerHTML = '';
@@ -131,7 +131,7 @@ function computeCurrentCredit(item, chainData) {
   return null;
 }
 
-async function addToWishlist(strategy, data) {
+async function addToWatchlist(strategy, data) {
   if (!strategy || !data) return false;
 
   const legs = [];
@@ -184,7 +184,7 @@ async function addToWishlist(strategy, data) {
   };
 
   try {
-    const res = await fetch('/api/wishlist', {
+    const res = await fetch('/api/watchlist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -193,7 +193,7 @@ async function addToWishlist(strategy, data) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || 'Failed to add');
     }
-    await loadWishlist();
+    await loadWatchlist();
     return true;
   } catch (err) {
     alert('Failed to save trade: ' + err.message);
@@ -204,9 +204,9 @@ async function addToWishlist(strategy, data) {
 async function refreshWatchlistItem(id, btn) {
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
   try {
-    const res = await fetch(`/api/wishlist/${id}/refresh`, { method: 'POST' });
+    const res = await fetch(`/api/watchlist/${id}/refresh`, { method: 'POST' });
     if (!res.ok) throw new Error('Refresh failed');
-    await loadWishlist();
+    await loadWatchlist();
   } catch (err) {
     alert('Refresh failed: ' + err.message);
   } finally {
@@ -215,12 +215,12 @@ async function refreshWatchlistItem(id, btn) {
 }
 
 async function refreshAllWatchlist() {
-  const btn = document.getElementById('btn-refresh-wishlist');
+  const btn = document.getElementById('btn-refresh-watchlist');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span>&#8635;</span> Refreshing...'; }
   try {
-    const res = await fetch('/api/wishlist/refresh', { method: 'POST' });
+    const res = await fetch('/api/watchlist/refresh', { method: 'POST' });
     if (!res.ok) throw new Error('Refresh failed');
-    await loadWishlist();
+    await loadWatchlist();
   } catch (err) {
     alert('Refresh failed: ' + err.message);
   } finally {
@@ -291,9 +291,9 @@ function watchlistToPortfolio(index) {
 async function removeWatchlistItem(id) {
   if (!confirm('Remove this trade from watchlist?')) return;
   try {
-    const res = await fetch(`/api/wishlist/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/watchlist/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to remove');
-    await loadWishlist();
+    await loadWatchlist();
   } catch (err) {
     alert('Failed to remove: ' + err.message);
   }

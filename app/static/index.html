@@ -60,7 +60,7 @@
         <button class="nav-tab" data-tab="analyzer">
           <span class="tab-icon">&#9671;</span> Analyzer
         </button>
-        <button class="nav-tab" data-tab="wishlist">
+        <button class="nav-tab" data-tab="watchlist">
           <span class="tab-icon">&#9734;</span> Watchlist
         </button>
         <button class="nav-tab" data-tab="profile">
@@ -73,8 +73,14 @@
         <div class="portfolio-header">
           <div class="portfolio-summary" id="portfolio-summary"></div>
           <div class="portfolio-actions">
+            <label class="show-closed-toggle">
+              <input type="checkbox" id="show-closed" onchange="renderPortfolio()"> Show closed
+            </label>
             <button class="btn-check-all" id="btn-check-all" onclick="checkAllPositions()">
               <span>&#8635;</span> Check All
+            </button>
+            <button class="btn-check-all" onclick="exportPortfolioCsv()">
+              <span>&#8623;</span> Export CSV
             </button>
             <button class="btn-add" onclick="showAddForm()">
               <span>+</span> New Position
@@ -147,21 +153,21 @@
         </div>
       </section>
 
-      <!-- Wishlist Panel -->
-      <section id="panel-wishlist" class="panel">
+      <!-- Watchlist Panel -->
+      <section id="panel-watchlist" class="panel">
         <div class="portfolio-header">
-          <div class="portfolio-summary" id="wishlist-summary"></div>
+          <div class="portfolio-summary" id="watchlist-summary"></div>
           <div class="portfolio-actions">
-            <button class="btn-check-all" id="btn-refresh-wishlist" onclick="refreshAllWatchlist()">
+            <button class="btn-check-all" id="btn-refresh-watchlist" onclick="refreshAllWatchlist()">
               <span>&#8635;</span> Refresh All
             </button>
           </div>
         </div>
-        <div id="wishlist-grid"></div>
-        <div id="wishlist-empty" class="empty-state" style="display:none;">
+        <div id="watchlist-grid"></div>
+        <div id="watchlist-empty" class="empty-state" style="display:none;">
           <div class="empty-icon">&#9734;</div>
           <p>No saved trades yet</p>
-          <p class="empty-sub">Find a trade in the Analyzer, then click &#9734; Wishlist to save it here</p>
+          <p class="empty-sub">Find a trade in the Analyzer, then click &#9734; Watchlist to save it here</p>
         </div>
       </section>
 
@@ -410,7 +416,7 @@
   <script src="/static/chat.js"></script>
   <script src="/static/portfolio.js"></script>
   <script src="/static/analyzer.js"></script>
-  <script src="/static/wishlist.js"></script>
+  <script src="/static/watchlist.js"></script>
   <script src="/static/profile.js"></script>
   <script src="/static/init.js"></script>
 </body>

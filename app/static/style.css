@@ -665,7 +665,25 @@ body {
 
 .portfolio-actions {
   display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.show-closed-toggle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.show-closed-toggle input {
+  cursor: pointer;
 }
 
 .btn-check-all {
@@ -1929,7 +1947,7 @@ body {
   color: var(--red);
 }
 
-/* ── Wishlist ────────────────────────────────────────────────────────────── */
+/* ── Watchlist ───────────────────────────────────────────────────────────── */
 
 .watchlist-card {
   background: var(--bg-elevated);
@@ -1961,7 +1979,7 @@ body {
 .wl-credit-up { color: var(--pnl-positive); }
 .wl-credit-down { color: var(--pnl-negative); }
 
-.btn-add-wishlist {
+.btn-add-watchlist {
   margin-left: auto;
   padding: 6px 16px;
   background: transparent;
@@ -1976,7 +1994,7 @@ body {
   transition: background 0.2s, color 0.2s;
 }
 
-.btn-add-wishlist:hover {
+.btn-add-watchlist:hover {
   background: var(--bg-elevated);
   color: var(--text-primary);
 }

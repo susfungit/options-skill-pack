@@ -11,7 +11,7 @@ from app import config
 
 _portfolio_lock = threading.Lock()
 _profile_lock = threading.Lock()
-_wishlist_lock = threading.Lock()
+_watchlist_lock = threading.Lock()
 
 
 def _atomic_write_json(path: str, data):
@@ -64,14 +64,14 @@ def write_profile(data: dict):
         _atomic_write_json(config.PROFILE_PATH, data)
 
 
-def read_wishlist() -> list[dict]:
-    with _wishlist_lock:
-        if not os.path.exists(config.WISHLIST_PATH):
+def read_watchlist() -> list[dict]:
+    with _watchlist_lock:
+        if not os.path.exists(config.WATCHLIST_PATH):
             return []
-        with open(config.WISHLIST_PATH, "r") as f:
+        with open(config.WATCHLIST_PATH, "r") as f:
             return json.load(f)
 
 
-def write_wishlist(data: list[dict]):
-    with _wishlist_lock:
-        _atomic_write_json(config.WISHLIST_PATH, data)
+def write_watchlist(data: list[dict]):
+    with _watchlist_lock:
+        _atomic_write_json(config.WATCHLIST_PATH, data)

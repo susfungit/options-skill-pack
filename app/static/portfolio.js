@@ -39,6 +39,36 @@ function computePortfolioStats(positions) {
   return { totalPnl, winRate, wins, total: closed.length, avgHold, best, worst, byStrategy };
 }
 
+function exportPortfolioCsv() {
+  if (!portfolio.length) return;
+  const headers = [
+    'ticker', 'strategy', 'status', 'expiry', 'opened', 'closed_date',
+    'contracts', 'net_credit', 'closed_pnl', 'legs', 'label',
+  ];
+  const csvEscape = (v) => {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const legsFor = (p) => (p.legs || [])
+    .map(l => `${l.action} ${l.type} ${l.strike}@${l.price ?? ''}`)
+    .join(' | ');
+  const rows = portfolio.map(p => [
+    p.ticker, p.strategy, p.status, p.expiry, p.opened || '', p.closed_date || '',
+    p.contracts, p.net_credit, p.closed_pnl ?? '', legsFor(p), p.label || '',
+  ].map(csvEscape).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `portfolio-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 async function loadPortfolio() {
   try {
     const res = await fetch('/api/portfolio');
@@ -146,8 +176,13 @@ function renderPortfolio() {
 
   summary.innerHTML = summaryHtml;
 
-  // Position cards
-  grid.innerHTML = portfolio.map((p, i) => {
+  // Position cards — hide closed unless user opts in
+  const showClosed = document.getElementById('show-closed')?.checked;
+  const visible = portfolio
+    .map((p, i) => ({ p, i }))
+    .filter(({ p }) => showClosed || p.status !== 'closed');
+
+  grid.innerHTML = visible.map(({ p, i }) => {
     const legsStr = formatLegs(p);
     const dteStr = formatDTE(p.expiry);
     const isClosed = p.status === 'closed';
@@ -581,8 +616,8 @@ async function savePosition(event) {
     closeModal();
     loadPortfolio();
     if (_pendingWatchlistRemoveId) {
-      fetch(`/api/wishlist/${_pendingWatchlistRemoveId}`, { method: 'DELETE' })
-        .then(() => loadWishlist())
+      fetch(`/api/watchlist/${_pendingWatchlistRemoveId}`, { method: 'DELETE' })
+        .then(() => loadWatchlist())
         .catch(() => {});
       _pendingWatchlistRemoveId = null;
     }
