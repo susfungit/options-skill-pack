@@ -14,14 +14,18 @@ def tmp_data_dir(tmp_path, monkeypatch):
     """Redirect portfolio.json and profile.json to temp files."""
     portfolio_path = str(tmp_path / "portfolio.json")
     profile_path = str(tmp_path / "profile.json")
+    wishlist_path = str(tmp_path / "wishlist.json")
 
     with open(portfolio_path, "w") as f:
         json.dump([], f)
     with open(profile_path, "w") as f:
         json.dump(DEFAULT_PROFILE, f)
+    with open(wishlist_path, "w") as f:
+        json.dump([], f)
 
     monkeypatch.setattr("app.config.PORTFOLIO_PATH", portfolio_path)
     monkeypatch.setattr("app.config.PROFILE_PATH", profile_path)
+    monkeypatch.setattr("app.config.WISHLIST_PATH", wishlist_path)
     # Disable auth in tests so endpoints are accessible
     monkeypatch.setattr("app.auth._APP_API_KEY", None)
     # Reset lazy client so it doesn't leak between tests

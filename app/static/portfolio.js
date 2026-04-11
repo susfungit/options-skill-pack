@@ -580,6 +580,12 @@ async function savePosition(event) {
     }
     closeModal();
     loadPortfolio();
+    if (_pendingWatchlistRemoveId) {
+      fetch(`/api/wishlist/${_pendingWatchlistRemoveId}`, { method: 'DELETE' })
+        .then(() => loadWishlist())
+        .catch(() => {});
+      _pendingWatchlistRemoveId = null;
+    }
   } catch (err) {
     alert('Failed to save: ' + err.message);
   }

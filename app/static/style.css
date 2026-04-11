@@ -1928,3 +1928,55 @@ body {
 .profile-status.error {
   color: var(--red);
 }
+
+/* ── Wishlist ────────────────────────────────────────────────────────────── */
+
+.watchlist-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 10px;
+  animation: card-in 0.3s ease forwards;
+  opacity: 0;
+}
+
+.wl-change-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.wl-change-badge.wl-credit-up {
+  color: var(--pnl-positive);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.wl-change-badge.wl-credit-down {
+  color: var(--pnl-negative);
+  background: rgba(244, 63, 94, 0.1);
+}
+
+.wl-credit-up { color: var(--pnl-positive); }
+.wl-credit-down { color: var(--pnl-negative); }
+
+.btn-add-wishlist {
+  margin-left: auto;
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.btn-add-wishlist:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}

@@ -268,3 +268,61 @@ def test_analyze_calls_correct_tool(mock_exec, client):
 def test_analyze_invalid_strategy(client):
     resp = client.post("/api/analyze", json={"ticker": "AAPL", "strategy": "butterfly"})
     assert resp.status_code == 422
+
+
+# ── 7. Wishlist endpoint tests ──────────────────────────────────────────────
+
+
+def test_wishlist_empty(client):
+    resp = client.get("/api/wishlist")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def _sample_watchlist_trade():
+    return {
+        "ticker": "aapl",
+        "strategy": "bull-put-spread",
+        "expiry": "2026-05-16",
+        "legs": [
+            {"type": "put", "action": "sell", "strike": 220, "original_mid": 3.50},
+            {"type": "put", "action": "buy", "strike": 210, "original_mid": 1.20},
+        ],
+        "original_credit": 2.30,
+        "original_return_pct": 29.9,
+        "stock_price_at_save": 228.50,
+    }
+
+
+def test_wishlist_add_and_list(client):
+    resp = client.post("/api/wishlist", json=_sample_watchlist_trade())
+    assert resp.status_code == 200
+    assert "id" in resp.json()
+
+    items = client.get("/api/wishlist").json()
+    assert len(items) == 1
+    assert items[0]["ticker"] == "AAPL"
+    assert items[0]["strategy"] == "bull-put-spread"
+    assert items[0]["original_credit"] == 2.30
+    assert "saved_at" in items[0]
+    assert "id" in items[0]
+
+
+def test_wishlist_reject_invalid_ticker(client):
+    trade = _sample_watchlist_trade()
+    trade["ticker"] = "AAPL1"
+    resp = client.post("/api/wishlist", json=trade)
+    assert resp.status_code == 400
+
+
+def test_wishlist_delete(client):
+    resp = client.post("/api/wishlist", json=_sample_watchlist_trade())
+    item_id = resp.json()["id"]
+    resp = client.delete(f"/api/wishlist/{item_id}")
+    assert resp.status_code == 200
+    assert client.get("/api/wishlist").json() == []
+
+
+def test_wishlist_delete_missing(client):
+    resp = client.delete("/api/wishlist/nonexistent")
+    assert resp.status_code == 404

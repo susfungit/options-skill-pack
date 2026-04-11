@@ -6,6 +6,7 @@ import re
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORTFOLIO_PATH = os.path.join(PROJECT_ROOT, "portfolio.json")
 PROFILE_PATH = os.path.join(PROJECT_ROOT, "profile.json")
+WISHLIST_PATH = os.path.join(PROJECT_ROOT, "wishlist.json")
 
 DEFAULT_MODEL = "claude-sonnet-4-20250514"
 

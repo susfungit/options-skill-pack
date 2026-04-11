@@ -227,6 +227,7 @@ function renderCompareResult(data) {
       <span class="az-ticker">${esc(ticker)}${getTickerName(ticker) ? `<span class="ticker-name">${esc(getTickerName(ticker))}</span>` : ''}</span>
       <span class="az-price">$${price.toFixed(2)}</span>
       <span class="az-strategy-label" style="margin-left:12px;margin-bottom:0;">STRATEGY COMPARISON</span>
+      <button class="btn-add-wishlist" onclick="addCompareToWishlist()" title="Save best trade to Wishlist">&#9734; Save to Watchlist</button>
     </div>
     ${contextHtml}
     <div class="az-compare-grid">
@@ -248,6 +249,7 @@ function renderCompareResult(data) {
         <div class="az-compare-actions">
           <button class="btn-view-chain" onclick="viewChain('bull-put-spread', lastAnalysis && lastAnalysis.data ? lastAnalysis.data['bull-put-spread'] : null)">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('bull-put-spread')">Add to Portfolio</button>
+          <button class="btn-add-wishlist" onclick="addCompareToWishlist('bull-put-spread')" title="Save to Wishlist">&#9734; Save to Watchlist</button>
         </div>
         `}
       </div>
@@ -269,6 +271,7 @@ function renderCompareResult(data) {
         <div class="az-compare-actions">
           <button class="btn-view-chain" onclick="viewChain('bear-call-spread', lastAnalysis && lastAnalysis.data ? lastAnalysis.data['bear-call-spread'] : null)">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('bear-call-spread')">Add to Portfolio</button>
+          <button class="btn-add-wishlist" onclick="addCompareToWishlist('bear-call-spread')" title="Save to Wishlist">&#9734; Save to Watchlist</button>
         </div>
         `}
       </div>
@@ -290,6 +293,7 @@ function renderCompareResult(data) {
         <div class="az-compare-actions">
           <button class="btn-view-chain" onclick="viewChain('iron-condor', lastAnalysis && lastAnalysis.data ? lastAnalysis.data['iron-condor'] : null)">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('iron-condor')">Add to Portfolio</button>
+          <button class="btn-add-wishlist" onclick="addCompareToWishlist('iron-condor')" title="Save to Wishlist">&#9734; Save to Watchlist</button>
         </div>
         `}
       </div>
@@ -310,6 +314,7 @@ function renderCompareResult(data) {
         <div class="az-compare-actions">
           <button class="btn-view-chain" onclick="viewChain('covered-call', lastAnalysis && lastAnalysis.data ? lastAnalysis.data['covered-call'] : null)">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('covered-call')">Add to Portfolio</button>
+          <button class="btn-add-wishlist" onclick="addCompareToWishlist('covered-call')" title="Save to Wishlist">&#9734; Save to Watchlist</button>
         </div>
         `}
       </div>
@@ -330,6 +335,7 @@ function renderCompareResult(data) {
         <div class="az-compare-actions">
           <button class="btn-view-chain" onclick="viewChain('cash-secured-put', lastAnalysis && lastAnalysis.data ? lastAnalysis.data['cash-secured-put'] : null)">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addCompareToPortfolio('cash-secured-put')">Add to Portfolio</button>
+          <button class="btn-add-wishlist" onclick="addCompareToWishlist('cash-secured-put')" title="Save to Wishlist">&#9734; Save to Watchlist</button>
         </div>
         `}
       </div>
@@ -347,6 +353,24 @@ function addCompareToPortfolio(strategy) {
   const data = lastAnalysis.data[strategy];
   if (!data || data.error) return;
   addAnalysisToPortfolio(strategy, data);
+}
+
+function addCompareToWishlist(strategy) {
+  if (!lastAnalysis || lastAnalysis.strategy !== 'compare') return;
+  if (strategy) {
+    const data = lastAnalysis.data[strategy];
+    if (!data || data.error) return;
+    addToWishlist(strategy, data);
+  } else {
+    const strategies = ['bull-put-spread', 'bear-call-spread', 'iron-condor', 'covered-call', 'cash-secured-put'];
+    const first = strategies.find(s => lastAnalysis.data[s] && !lastAnalysis.data[s].error);
+    if (first) addToWishlist(first, lastAnalysis.data[first]);
+  }
+}
+
+function addSingleToWishlist() {
+  if (!lastAnalysis || !lastAnalysis.strategy || lastAnalysis.strategy === 'compare') return;
+  addToWishlist(lastAnalysis.strategy, lastAnalysis.data);
 }
 
 function buildCompareChatPrompt(data) {
@@ -458,6 +482,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-actions">
           <button class="btn-view-chain" onclick="viewChain()">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
+          <button class="btn-add-wishlist" onclick="addSingleToWishlist()" title="Save to Wishlist">&#9734; Save to Watchlist</button>
         </div>
       </div>`;
   } else if (strategy === 'bear-call-spread') {
@@ -522,6 +547,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-actions">
           <button class="btn-view-chain" onclick="viewChain()">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
+          <button class="btn-add-wishlist" onclick="addSingleToWishlist()" title="Save to Wishlist">&#9734; Save to Watchlist</button>
         </div>
       </div>`;
   } else if (strategy === 'iron-condor') {
@@ -611,6 +637,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-actions">
           <button class="btn-view-chain" onclick="viewChain()">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
+          <button class="btn-add-wishlist" onclick="addSingleToWishlist()" title="Save to Wishlist">&#9734; Save to Watchlist</button>
         </div>
       </div>`;
   } else if (strategy === 'covered-call') {
@@ -665,6 +692,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-actions">
           <button class="btn-view-chain" onclick="viewChain()">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
+          <button class="btn-add-wishlist" onclick="addSingleToWishlist()" title="Save to Wishlist">&#9734; Save to Watchlist</button>
         </div>
       </div>`;
   } else if (strategy === 'cash-secured-put') {
@@ -720,6 +748,7 @@ function renderAnalysisResult(strategy, d) {
         <div class="az-actions">
           <button class="btn-view-chain" onclick="viewChain()">View Chain</button>
           <button class="btn-add-to-portfolio" onclick="addAnalysisToPortfolio()">Add to Portfolio</button>
+          <button class="btn-add-wishlist" onclick="addSingleToWishlist()" title="Save to Wishlist">&#9734; Save to Watchlist</button>
         </div>
       </div>`;
   }
