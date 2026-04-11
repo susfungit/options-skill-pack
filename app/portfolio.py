@@ -305,6 +305,7 @@ def _check_single_position(p: dict) -> dict:
                         "open_interest": data.get("long_put", {}).get("open_interest"),
                     },
                     "cost_to_close": data.get("cost_to_close"),
+                    "cost_to_close_mid": data.get("cost_to_close_mid"),
                 },
             }
             if suggestion:
@@ -359,6 +360,7 @@ def _check_single_position(p: dict) -> dict:
                         "open_interest": data.get("long_call", {}).get("open_interest"),
                     },
                     "cost_to_close": data.get("cost_to_close"),
+                    "cost_to_close_mid": data.get("cost_to_close_mid"),
                 },
             }
             if suggestion:
@@ -436,6 +438,7 @@ def _check_single_position(p: dict) -> dict:
                         },
                     },
                     "cost_to_close": data.get("cost_to_close"),
+                    "cost_to_close_mid": data.get("cost_to_close_mid"),
                     "put_cost_to_close": data.get("put_cost_to_close"),
                     "call_cost_to_close": data.get("call_cost_to_close"),
                 },
@@ -488,6 +491,7 @@ def _check_single_position(p: dict) -> dict:
                         "open_interest": data.get("short_call", {}).get("open_interest"),
                     },
                     "cost_to_close": data.get("cost_to_close"),
+                    "cost_to_close_mid": data.get("cost_to_close_mid"),
                 },
             }
             if suggestion:
@@ -534,6 +538,7 @@ def _check_single_position(p: dict) -> dict:
                         "open_interest": data.get("short_put", {}).get("open_interest"),
                     },
                     "cost_to_close": data.get("cost_to_close"),
+                    "cost_to_close_mid": data.get("cost_to_close_mid"),
                 },
             }
             if suggestion:

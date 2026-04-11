@@ -120,6 +120,7 @@ def main():
         "intrinsic_value": intrinsic,
         "time_value": time_value,
         "cost_to_close": round(call_ask * 100, 2) if call_ask > 0 else None,
+        "cost_to_close_mid": round(call_mid * 100, 2) if call_mid else None,
         "price_source": price_source,
         "data_source": "yfinance",
     }

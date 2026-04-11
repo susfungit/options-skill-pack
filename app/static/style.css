@@ -657,6 +657,12 @@ body {
 .strategy-breakdown td.pnl-pos { color: var(--pnl-positive); }
 .strategy-breakdown td.pnl-neg { color: var(--pnl-negative); }
 
+.mid-price {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
 .portfolio-actions {
   display: flex;
   gap: 10px;

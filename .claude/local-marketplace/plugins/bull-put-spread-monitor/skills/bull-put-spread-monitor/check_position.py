@@ -102,6 +102,7 @@ def main():
 
     # Cost to close the spread (buy back short at ask, sell long at bid)
     cost_to_close = round((short_ask - long_bid) * 100, 2) if short_ask > 0 else None
+    cost_to_close_mid = round((short_mid - long_mid) * 100, 2) if short_mid and long_mid else None
 
     result = {
         "ticker":               ticker_sym,
@@ -137,6 +138,7 @@ def main():
         "be_buffer_pct":         be_buffer_pct,
         "loss_pct_of_max":       pnl["loss_pct_of_max"],
         "cost_to_close":         cost_to_close,
+        "cost_to_close_mid":     cost_to_close_mid,
         "price_source":          price_source,
         "data_source":           "yfinance"
     }

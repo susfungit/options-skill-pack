@@ -134,6 +134,7 @@ def main():
         "effective_buy_price":  effective_buy_price,
         "discount_pct":         discount_pct,
         "cost_to_close":        round(put_ask * 100, 2) if put_ask > 0 else None,
+        "cost_to_close_mid":    round(put_mid * 100, 2) if put_mid else None,
         "price_source":         price_source,
         "data_source":          "yfinance",
     }

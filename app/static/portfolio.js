@@ -168,17 +168,19 @@ function renderPortfolio() {
     const cd = p.chain_data || {};
     const isIC = p.strategy === 'iron-condor';
     const isSingleLeg = (p.strategy === 'covered-call' || p.strategy === 'cash-secured-put');
-    let shortLeg, longLeg, costToClose;
+    let shortLeg, longLeg, costToClose, costToCloseMid;
     if (isIC) {
       const ws = p.worst_side || 'put';
       const side = ws === 'put' ? (cd.put_side || {}) : (cd.call_side || {});
       shortLeg = side.short_leg || {};
       longLeg = side.long_leg || {};
       costToClose = cd.cost_to_close;
+      costToCloseMid = cd.cost_to_close_mid;
     } else {
       shortLeg = cd.short_leg || {};
       longLeg = cd.long_leg || {};
       costToClose = cd.cost_to_close;
+      costToCloseMid = cd.cost_to_close_mid;
     }
     const hasChainData = shortLeg.iv_pct != null || costToClose != null;
 
@@ -237,7 +239,7 @@ function renderPortfolio() {
         ${!isClosed && hasChainData ? `
         <div class="card-metrics chain-metrics">
           <div class="metric">
-            <div class="metric-value">${costToClose != null ? '$' + costToClose.toFixed(0) : '--'}</div>
+            <div class="metric-value">${costToClose != null ? '$' + costToClose.toFixed(0) : '--'}${costToCloseMid != null ? ' <span class="mid-price">(mid $' + costToCloseMid.toFixed(0) + ')</span>' : ''}</div>
             <div class="metric-label">Close Cost</div>
           </div>
           <div class="metric">

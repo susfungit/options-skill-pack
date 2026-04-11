@@ -93,6 +93,11 @@ def main():
     cost_to_close = None
     if put_cost_to_close is not None and call_cost_to_close is not None:
         cost_to_close = round(put_cost_to_close + call_cost_to_close, 2)
+    put_cost_mid = round((sp_mid - lp_mid) * 100, 2) if sp_mid and lp_mid else None
+    call_cost_mid = round((sc_mid - lc_mid) * 100, 2) if sc_mid and lc_mid else None
+    cost_to_close_mid = None
+    if put_cost_mid is not None and call_cost_mid is not None:
+        cost_to_close_mid = round(put_cost_mid + call_cost_mid, 2)
 
     # Current spread values
     put_spread_value  = round(sp_mid - lp_mid, 2) if sp_mid and lp_mid else None
@@ -173,6 +178,7 @@ def main():
         "worst_side":            worst_side,
         "loss_pct_of_max":       pnl["loss_pct_of_max"],
         "cost_to_close":         cost_to_close,
+        "cost_to_close_mid":     cost_to_close_mid,
         "put_cost_to_close":     put_cost_to_close,
         "call_cost_to_close":    call_cost_to_close,
         "price_source":          price_source,
