@@ -695,11 +695,16 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
     if not script_path:
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
-    if not os.path.exists(script_path):
+    resolved = os.path.realpath(script_path)
+    plugins_root = os.path.realpath(PLUGINS_DIR)
+    if os.path.commonpath([resolved, plugins_root]) != plugins_root:
+        return json.dumps({"error": f"Script path outside plugins dir: {tool_name}"})
+
+    if not os.path.exists(resolved):
         return json.dumps({"error": f"Script not found for tool: {tool_name}"})
 
     args = _build_args(tool_name, tool_input)
-    cmd = ["python3", script_path] + args
+    cmd = ["python3", resolved] + args
 
     try:
         result = subprocess.run(

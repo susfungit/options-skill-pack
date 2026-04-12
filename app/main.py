@@ -23,6 +23,19 @@ logging.basicConfig(
 
 app = FastAPI(title="Options Skill Pack")
 
+# ── Unauthenticated exposure warning ──────────────────────────────────────
+# If APP_API_KEY is unset AND the server is not bound to loopback, warn
+# loudly. We don't hard-fail because Docker binds 0.0.0.0 by design.
+if not _APP_API_KEY:
+    _host = os.environ.get("HOST", "").strip()
+    _loopback = _host in ("", "127.0.0.1", "localhost", "::1")
+    if not _loopback and os.environ.get("ALLOW_NO_AUTH", "").lower() not in ("1", "true"):
+        logger.warning(
+            "SECURITY: APP_API_KEY is not set and HOST=%s is not loopback. "
+            "The app is exposed without authentication. Set APP_API_KEY or "
+            "ALLOW_NO_AUTH=1 to silence this warning.", _host or "unset",
+        )
+
 # ── Rate limiting ──────────────────────────────────────────────────────────
 
 app.state.limiter = limiter

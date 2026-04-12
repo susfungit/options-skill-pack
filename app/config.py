@@ -8,7 +8,7 @@ PORTFOLIO_PATH = os.path.join(PROJECT_ROOT, "portfolio.json")
 PROFILE_PATH = os.path.join(PROJECT_ROOT, "profile.json")
 WATCHLIST_PATH = os.path.join(PROJECT_ROOT, "watchlist.json")
 
-DEFAULT_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_MODEL = "claude-sonnet-4-6"
 
 DEFAULT_PROFILE = {
     "name": "",

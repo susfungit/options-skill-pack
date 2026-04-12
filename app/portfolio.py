@@ -194,24 +194,18 @@ async def delete_position(pos_id: str):
 
 def _classify_zone_spread(buffer_pct: float, loss_pct: float, dte: int) -> str:
     """Classify zone for put spreads and iron condors."""
-    if dte <= 5:
-        thresholds = [(9, 20), (5, 40), (3, 65), (1, 85)]
-    elif dte >= 30:
-        thresholds = [(7, 20), (3, 40), (2, 65), (0, 85)]
-    else:
-        thresholds = [(8, 20), (4, 40), (2, 65), (0, 85)]
+    # DTE adjustment: ~1% tighter at short DTE, ~1% looser at long DTE
+    buf_adj = 1 if dte <= 5 else (-1 if dte >= 30 else 0)
 
     if buffer_pct <= 0 or loss_pct > 85:
         return "ACT NOW"
-    if buffer_pct <= thresholds[3][0] or loss_pct > thresholds[3][1]:
+    if buffer_pct <= 2 + buf_adj or loss_pct > 65:
         return "DANGER"
-    if buffer_pct <= thresholds[2][0] or loss_pct > thresholds[2][1]:
+    if buffer_pct <= 4 + buf_adj or loss_pct > 40:
         return "WARNING"
-    if buffer_pct <= thresholds[1][0] or loss_pct > thresholds[1][1]:
+    if buffer_pct <= 8 + buf_adj or loss_pct > 20:
         return "WATCH"
-    if buffer_pct > thresholds[0][0] and loss_pct < thresholds[0][1]:
-        return "SAFE"
-    return "WATCH"
+    return "SAFE"
 
 
 def _classify_zone_covered_call(buffer_pct: float, call_value: float, credit: float, dte: int) -> str:

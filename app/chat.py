@@ -69,7 +69,7 @@ async def list_models():
         result.sort(key=lambda m: m["id"])
         return {"models": result}
     except HTTPException:
-        return {"models": [{"id": DEFAULT_MODEL, "display_name": "Claude Sonnet 4"}]}
+        return {"models": [{"id": DEFAULT_MODEL, "display_name": "Claude Sonnet 4.6"}]}
 
 
 # ── Chat models & endpoint ───────────────────────────────────────────────────

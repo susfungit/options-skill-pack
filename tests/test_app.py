@@ -326,3 +326,210 @@ def test_watchlist_delete(client):
 def test_watchlist_delete_missing(client):
     resp = client.delete("/api/watchlist/nonexistent")
     assert resp.status_code == 404
+
+
+# ── Zone classification boundary tests ──────────────────────────────────────
+#
+# Safety net for _classify_zone_spread and _classify_zone_covered_call.
+# Tests match the guidance table at tools.py:180 exactly.
+
+from app.portfolio import _classify_zone_spread, _classify_zone_covered_call
+
+
+class TestZoneSpreadStandardDTE:
+    """Standard DTE (6–29), buf_adj=0.
+
+    Buffer bands: SAFE >8, WATCH 4–8, WARNING 2–4, DANGER 0–2, ACT NOW ≤0
+    Loss bands:   SAFE <20, WATCH 20–40, WARNING 40–65, DANGER 65–85, ACT NOW >85
+    """
+
+    def test_safe(self):
+        assert _classify_zone_spread(15, 5, 20) == "SAFE"
+
+    def test_safe_boundary(self):
+        assert _classify_zone_spread(8.5, 19, 20) == "SAFE"
+
+    def test_watch_at_buffer_8(self):
+        assert _classify_zone_spread(8, 5, 20) == "WATCH"
+
+    def test_watch_mid_band(self):
+        assert _classify_zone_spread(6, 10, 20) == "WATCH"
+
+    def test_watch_at_buffer_5(self):
+        assert _classify_zone_spread(5, 10, 20) == "WATCH"
+
+    def test_warning_at_buffer_4(self):
+        assert _classify_zone_spread(4, 10, 20) == "WARNING"
+
+    def test_warning_at_buffer_3(self):
+        assert _classify_zone_spread(3, 10, 20) == "WARNING"
+
+    def test_danger_at_buffer_2(self):
+        assert _classify_zone_spread(2, 10, 20) == "DANGER"
+
+    def test_danger_at_buffer_1(self):
+        assert _classify_zone_spread(1, 10, 20) == "DANGER"
+
+    def test_danger_fractional(self):
+        assert _classify_zone_spread(0.5, 10, 20) == "DANGER"
+
+    def test_act_now_at_buffer_0(self):
+        assert _classify_zone_spread(0, 10, 20) == "ACT NOW"
+
+    def test_act_now_negative_buffer(self):
+        assert _classify_zone_spread(-5, 10, 20) == "ACT NOW"
+
+    def test_act_now_loss_86(self):
+        assert _classify_zone_spread(15, 86, 20) == "ACT NOW"
+
+
+class TestZoneSpreadShortDTE:
+    """Short DTE (≤5), buf_adj=+1. All buffer thresholds shift up by 1."""
+
+    def test_safe(self):
+        assert _classify_zone_spread(15, 5, 3) == "SAFE"
+
+    def test_safe_needs_deeper_buffer(self):
+        # At standard DTE buffer=9 is SAFE; at short DTE 9 <= 9 → WATCH.
+        assert _classify_zone_spread(9, 5, 3) == "WATCH"
+
+    def test_safe_at_buffer_10(self):
+        assert _classify_zone_spread(10, 5, 3) == "SAFE"
+
+    def test_watch_at_buffer_6(self):
+        assert _classify_zone_spread(6, 10, 3) == "WATCH"
+
+    def test_warning_at_buffer_5(self):
+        assert _classify_zone_spread(5, 10, 3) == "WARNING"
+
+    def test_warning_at_buffer_4(self):
+        assert _classify_zone_spread(4, 10, 3) == "WARNING"
+
+    def test_danger_at_buffer_3(self):
+        assert _classify_zone_spread(3, 10, 3) == "DANGER"
+
+    def test_danger_at_buffer_1(self):
+        assert _classify_zone_spread(1, 10, 3) == "DANGER"
+
+    def test_dte_5_boundary(self):
+        assert _classify_zone_spread(3, 10, 5) == "DANGER"
+
+    def test_dte_6_uses_standard(self):
+        # buffer=3 at DTE=6 is WARNING (standard), not DANGER (short).
+        assert _classify_zone_spread(3, 10, 6) == "WARNING"
+
+
+class TestZoneSpreadLongDTE:
+    """Long DTE (≥30), buf_adj=-1. All buffer thresholds shift down by 1."""
+
+    def test_safe_at_buffer_8(self):
+        assert _classify_zone_spread(8, 5, 45) == "SAFE"
+
+    def test_watch_at_buffer_7(self):
+        assert _classify_zone_spread(7, 5, 45) == "WATCH"
+
+    def test_warning_at_buffer_3(self):
+        assert _classify_zone_spread(3, 10, 45) == "WARNING"
+
+    def test_danger_at_buffer_1(self):
+        assert _classify_zone_spread(1, 10, 45) == "DANGER"
+
+    def test_watch_at_buffer_4(self):
+        # At standard DTE this is WARNING; at long DTE, WARNING requires ≤3.
+        assert _classify_zone_spread(4, 10, 45) == "WATCH"
+
+    def test_dte_30_uses_long_table(self):
+        assert _classify_zone_spread(1, 10, 30) == "DANGER"
+
+    def test_dte_29_uses_standard(self):
+        assert _classify_zone_spread(1, 10, 29) == "DANGER"
+
+
+class TestZoneSpreadLossDimension:
+    """Loss-dimension cascades at standard DTE (buffer=15, deep enough to not matter).
+
+    Loss bands: SAFE <20, WATCH 20–40, WARNING 40–65, DANGER 65–85, ACT NOW >85
+    """
+
+    def test_safe_low_loss(self):
+        assert _classify_zone_spread(15, 10, 20) == "SAFE"
+
+    def test_safe_at_loss_20(self):
+        # loss > 20 triggers WATCH; loss == 20 exactly is still SAFE.
+        assert _classify_zone_spread(15, 20, 20) == "SAFE"
+
+    def test_watch_at_loss_21(self):
+        assert _classify_zone_spread(15, 21, 20) == "WATCH"
+
+    def test_watch_at_loss_30(self):
+        assert _classify_zone_spread(15, 30, 20) == "WATCH"
+
+    def test_watch_at_loss_40(self):
+        assert _classify_zone_spread(15, 40, 20) == "WATCH"
+
+    def test_warning_at_loss_41(self):
+        assert _classify_zone_spread(15, 41, 20) == "WARNING"
+
+    def test_warning_at_loss_65(self):
+        assert _classify_zone_spread(15, 65, 20) == "WARNING"
+
+    def test_danger_at_loss_66(self):
+        assert _classify_zone_spread(15, 66, 20) == "DANGER"
+
+    def test_danger_at_loss_85(self):
+        assert _classify_zone_spread(15, 85, 20) == "DANGER"
+
+    def test_act_now_at_loss_86(self):
+        assert _classify_zone_spread(15, 86, 20) == "ACT NOW"
+
+
+class TestZoneSpreadCombined:
+    """When buffer and loss disagree, the worse zone wins."""
+
+    def test_safe_buffer_bad_loss_wins(self):
+        # buffer=15 → SAFE, but loss=50 → WARNING. WARNING wins.
+        assert _classify_zone_spread(15, 50, 20) == "WARNING"
+
+    def test_danger_buffer_safe_loss(self):
+        # buffer=1 → DANGER, loss=5 → SAFE. DANGER wins.
+        assert _classify_zone_spread(1, 5, 20) == "DANGER"
+
+    def test_both_danger(self):
+        assert _classify_zone_spread(1.5, 70, 20) == "DANGER"
+
+
+class TestZoneCoveredCall:
+    """_classify_zone_covered_call uses buffer_pct and call_value/credit ratio."""
+
+    def test_safe(self):
+        assert _classify_zone_covered_call(15, 0.5, 1.0, 30) == "SAFE"
+
+    def test_watch_buffer_8(self):
+        # buffer <= 8 → WATCH
+        assert _classify_zone_covered_call(8, 0.5, 1.0, 30) == "WATCH"
+
+    def test_watch_via_ratio(self):
+        # ratio > 1.5 but <= 2
+        assert _classify_zone_covered_call(15, 1.6, 1.0, 30) == "WATCH"
+
+    def test_warning_buffer_4(self):
+        assert _classify_zone_covered_call(4, 0.5, 1.0, 30) == "WARNING"
+
+    def test_warning_via_ratio(self):
+        assert _classify_zone_covered_call(15, 2.5, 1.0, 30) == "WARNING"
+
+    def test_danger_buffer_2(self):
+        assert _classify_zone_covered_call(2, 0.5, 1.0, 30) == "DANGER"
+
+    def test_danger_via_ratio(self):
+        assert _classify_zone_covered_call(15, 4.0, 1.0, 30) == "DANGER"
+
+    def test_act_now_buffer_0(self):
+        assert _classify_zone_covered_call(0, 0.5, 1.0, 30) == "ACT NOW"
+
+    def test_act_now_via_ratio(self):
+        assert _classify_zone_covered_call(15, 6.0, 1.0, 30) == "ACT NOW"
+
+    def test_zero_credit_ratio_falls_to_zero(self):
+        # ratio = 0 when credit is 0 → only buffer matters
+        assert _classify_zone_covered_call(15, 5.0, 0, 30) == "SAFE"
