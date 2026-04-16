@@ -9,6 +9,7 @@ services:
     volumes:
       - ./portfolio.json:/app/portfolio.json
       - ./profile.json:/app/profile.json
+      - ./watchlist.json:/app/watchlist.json
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s

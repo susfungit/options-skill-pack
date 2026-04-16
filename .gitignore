@@ -6,6 +6,9 @@
 # Skill eval workspaces (generated during development, not part of the skill)
 **/*-workspace/
 
+# Typo directory (legacy, safe to ignore)
+.claire/
+
 # Python
 __pycache__/
 *.pyc
