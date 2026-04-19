@@ -6,9 +6,11 @@ Options trading toolkit — 11 skills for Claude Code + a self-hosted web chat a
 
 | | Setup | Best for |
 |---|---|---|
-| **Option 1: Claude Code** | Clone + `setup.sh` | CLI power users, skill triggers in terminal |
+| **Option 1: Claude Code** | Clone + `setup.sh` / `setup.bat` | CLI power users, skill triggers in terminal |
 | **Option 2: Local web app** | `pip install` + `uvicorn` | Interactive UI, portfolio dashboard |
 | **Option 3: Docker** | `docker compose up` | Zero Python setup, containerised |
+
+**For full step-by-step install instructions (macOS, Linux, Windows) see [INSTALL.md](INSTALL.md).**
 
 ---
 
@@ -22,7 +24,8 @@ Skills activate automatically in Claude Code when you're in this project directo
 git clone https://github.com/sushanthemern/options-skill-pack.git
 cd options-skill-pack
 pip install yfinance pytz
-bash setup.sh   # generates .claude/settings.json for this machine
+bash setup.sh     # macOS / Linux — generates .claude/settings.json for this machine
+# setup.bat       # Windows — same, run from cmd or double-click
 ```
 
 Then just talk to Claude:
@@ -543,7 +546,8 @@ options-skill-pack/
 ├── Dockerfile                                    # Docker build
 ├── docker-compose.yml                            # Docker compose
 ├── .dockerignore                                 # Docker build exclusions
-├── setup.sh                                      # One-time Claude Code setup
+├── setup.sh                                      # One-time Claude Code setup (macOS/Linux)
+├── setup.bat                                     # One-time Claude Code setup (Windows)
 ├── setup_monitor.sh                              # Monitor setup (macOS/Linux)
 ├── setup_monitor.bat                             # Monitor setup (Windows)
 ├── notify.py                                     # Notification sender (creds stay in-process)
