@@ -51,3 +51,6 @@ app/.env
 
 # Architecture plans (local dev artifacts)
 PLUGGABLE_ARCHITECTURE_PLAN.md
+
+# Generated options trade plans (personal analysis output)
+trade-plans/

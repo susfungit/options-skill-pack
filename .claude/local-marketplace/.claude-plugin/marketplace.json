@@ -115,6 +115,16 @@
       },
       "source": "./plugins/cash-secured-put-monitor",
       "category": "finance"
+    },
+    {
+      "name": "options-trade-plan",
+      "description": "Generates a professional, data-driven options spread trade plan for any ticker and any timeframe as a self-contained editorial-style HTML page. Covers bull put, bear call, iron condor, diagonal, and calendar structures with live-data volatility analysis, pivot levels, earnings check, decision flowchart, and position sizing.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/options-trade-plan",
+      "category": "finance"
     }
   ]
 }

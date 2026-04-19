@@ -1,0 +1,309 @@
+{
+  "skill_name": "options-trade-plan",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Give me a weekly options trade plan for AAPL.",
+      "expected_output": "A self-contained HTML file named trade_plan_AAPL_<expiry>.html. Expiry resolves to the nearest Friday (0–7 DTE). Short strikes target ~0.15 delta and $5-wide spreads. Defined-risk only (no naked strangle). Management cutoff is Thursday if short strike is threatened. Output contains: masthead, data band with IV/HV/ratio, executive summary, three color-coded trade cards (bull put, iron condor, bear call), decision flowchart with real S1/R1 levels, Chart.js P&L overlay of all three strategies, sizing table at $250k/$500k/$1M, data sources with timestamps.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "fetch_script_executed",
+          "description": "The skill ran fetch_trade_plan_data.py via Bash before generating output (visible in tool calls/transcript)."
+        },
+        {
+          "name": "weekly_expiry_resolved",
+          "description": "Expiry date in the output is a Friday within the next 7 days and DTE is <= 7."
+        },
+        {
+          "name": "fifteen_delta_shorts",
+          "description": "Both the bull put short and bear call short strike deltas are in the 0.12–0.18 range."
+        },
+        {
+          "name": "five_wide_spreads",
+          "description": "Spread widths are $5 for both the bull put and bear call legs."
+        },
+        {
+          "name": "thursday_management_rule",
+          "description": "Management timeline includes a Thursday cutoff rule for the weekly DTE bucket."
+        },
+        {
+          "name": "html_output_produced",
+          "description": "A complete .html file is written to disk — includes <!doctype html>, Chart.js, and all required sections."
+        },
+        {
+          "name": "three_color_coded_cards",
+          "description": "Output contains three trade cards using the bull (green), neutral (blue), and bear (red) colour scheme."
+        },
+        {
+          "name": "pnl_chart_present",
+          "description": "HTML contains a Chart.js canvas with three datasets (bullPut, condor, bearCall)."
+        },
+        {
+          "name": "sizing_table_three_sizes",
+          "description": "Sizing table shows at least $250k, $500k, and $1M columns."
+        },
+        {
+          "name": "premiums_labelled_model_estimate",
+          "description": "Option premiums are labelled as model estimates (Black-Scholes from mid), not live quotes."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "TSLA 45 DTE iron condor.",
+      "expected_output": "HTML plan resolving to the nearest listed expiry at or beyond 45 DTE. Short strikes target 0.20–0.25 delta, $10-wide spreads. 21-DTE exit rule in management timeline. Iron condor gets the primary recommendation given the explicit user ask; bull put and bear call still presented as Scenario A/C. Must detect if TSLA earnings fall in window and flag them.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "dte_near_45",
+          "description": "Resolved DTE is between 35 and 75 days (nearest standard expiry at or beyond 45 DTE)."
+        },
+        {
+          "name": "twenty_to_25_delta",
+          "description": "Short strikes for both sides target 0.18–0.28 delta."
+        },
+        {
+          "name": "ten_wide_spreads",
+          "description": "Spread widths are ~$10 on both sides of the condor."
+        },
+        {
+          "name": "twenty_one_dte_exit",
+          "description": "Management timeline explicitly calls for 21-DTE exit rule (or 50% profit target, whichever first)."
+        },
+        {
+          "name": "iron_condor_primary",
+          "description": "The iron condor is presented as the primary recommendation (matches the user's explicit request)."
+        },
+        {
+          "name": "earnings_handled",
+          "description": "If TSLA earnings fall within the expiry window, they are flagged in the executive summary and handled (widen shorts OR alternative strategy). If not in window, the earnings timing is still noted."
+        },
+        {
+          "name": "html_output_produced",
+          "description": "Complete HTML file written to disk with required sections."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "SPY monthly spread strategy for May expiry.",
+      "expected_output": "HTML plan resolving to the 3rd Friday of May. DTE calculated. Since SPY is an index ETF, no single-company earnings — but component-level macro catalysts (CPI, FOMC, jobs reports) should be checked and mentioned. Wider strikes given DTE 22–45 bucket. Output is the full editorial HTML document.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "may_third_friday",
+          "description": "Expiry is the 3rd Friday of May (or the nearest listed standard expiry)."
+        },
+        {
+          "name": "monthly_delta_bucket",
+          "description": "Short strikes target ~0.20–0.25 delta (monthly DTE bucket)."
+        },
+        {
+          "name": "macro_catalysts_mentioned",
+          "description": "Market context section notes macro catalysts (CPI, FOMC, jobs, or similar) relevant to SPY rather than ticker-specific earnings."
+        },
+        {
+          "name": "html_output_produced",
+          "description": "Complete HTML file written to disk with required sections."
+        },
+        {
+          "name": "expected_move_calculated",
+          "description": "Expected move stated as ±$ and ±%, derived from price × IV × sqrt(DTE/365)."
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "NVDA options trade plan, 30 days out, I have $500k.",
+      "expected_output": "HTML plan resolving to ~30 DTE. Sizing table anchored to $500k (plus $250k and $1M for comparison). Checks if NVDA earnings fall within the window — NVDA reports quarterly, so this is a live possibility. Monthly bucket defaults (0.20–0.25 delta, $10 wide).",
+      "files": [],
+      "assertions": [
+        {
+          "name": "dte_near_30",
+          "description": "Resolved DTE is 21–45 (nearest listed expiry at or beyond 30 DTE)."
+        },
+        {
+          "name": "sizing_anchored_500k",
+          "description": "$500k is prominent in the sizing table (either highlighted or placed first)."
+        },
+        {
+          "name": "nvda_earnings_checked",
+          "description": "Earnings section explicitly addresses NVDA earnings timing relative to expiry (in-window, near-window, or clearly outside)."
+        },
+        {
+          "name": "html_output_produced",
+          "description": "Complete HTML file written to disk with required sections."
+        },
+        {
+          "name": "contracts_calculated",
+          "description": "Sizing table shows a contract count for each strategy at each portfolio size, computed as floor((portfolio × budget%) / max_loss_per_lot)."
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "What spread should I sell on MSFT this week?",
+      "expected_output": "Weekly expiry (nearest Friday). Searches for MSFT earnings and near-term catalysts. Full HTML plan produced. No directional bias given — neutral default → iron condor primary; bull put and bear call as the bullish/bearish alternates.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "weekly_expiry_resolved",
+          "description": "Expiry is the nearest Friday, DTE <= 7."
+        },
+        {
+          "name": "neutral_default",
+          "description": "Because no bias was given, the iron condor is presented as the primary recommendation under the neutral assumption (explicitly stated)."
+        },
+        {
+          "name": "msft_earnings_checked",
+          "description": "Earnings section addresses MSFT earnings timing."
+        },
+        {
+          "name": "catalyst_search_performed",
+          "description": "Market context includes recent MSFT news/catalyst (visible in transcript as web search)."
+        },
+        {
+          "name": "html_output_produced",
+          "description": "Complete HTML file written to disk with required sections."
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "AMZN, I'm slightly bearish, 3 weeks out.",
+      "expected_output": "Expiry ~21 DTE. Bear call spread is the primary recommendation given the slight bearish bias. Bull put and iron condor presented as alternates. Entry trigger for the bear call is tied to a resistance level rejection (pivot R1, call-OI wall, or SMA). Bi-weekly bucket: ~0.18 delta, $5–$10 width.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "dte_near_21",
+          "description": "Resolved DTE is 14–28 days."
+        },
+        {
+          "name": "bear_call_primary",
+          "description": "Bear call spread is highlighted as the primary recommendation for the stated slight-bearish bias."
+        },
+        {
+          "name": "resistance_rejection_entry",
+          "description": "Entry trigger for the bear call references a specific resistance level (pivot R1, call-OI wall, or SMA) and a rejection/failed-breakout pattern — not a generic 'enter if bearish'."
+        },
+        {
+          "name": "eighteen_delta_shorts",
+          "description": "Short strikes target ~0.15–0.22 delta (bi-weekly bucket)."
+        },
+        {
+          "name": "html_output_produced",
+          "description": "Complete HTML file written to disk with required sections."
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "QQQ 60 DTE trade plan.",
+      "expected_output": "~60 DTE expiry. Strikes at 0.25–0.30 delta, wider widths (~$10–$15). Extended DTE bucket — the plan mentions diagonals/calendars as alternatives. Checks for macro events (FOMC, CPI, jobs, elections) in the 60-day window. Management timeline: 50% profit target or close at 30 DTE remaining.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "dte_near_60",
+          "description": "Resolved DTE is 46–90 days."
+        },
+        {
+          "name": "extended_delta_bucket",
+          "description": "Short strikes target ~0.23–0.32 delta (extended bucket)."
+        },
+        {
+          "name": "wider_spreads",
+          "description": "Spread widths are $10 or wider."
+        },
+        {
+          "name": "diagonal_calendar_mentioned",
+          "description": "Plan explicitly mentions diagonals or calendars as alternatives for the extended DTE."
+        },
+        {
+          "name": "thirty_dte_exit_rule",
+          "description": "Management timeline references closing at 30 DTE remaining (or 50% profit target)."
+        },
+        {
+          "name": "macro_window_checked",
+          "description": "Market context or earnings section notes macro events in the 60-day window."
+        },
+        {
+          "name": "html_output_produced",
+          "description": "Complete HTML file written to disk with required sections."
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Give me a 90 day options strategy for GOOGL.",
+      "expected_output": "DTE ~90 or slightly above. Plan flags that standard premium-selling weeklies/monthlies are suboptimal at this DTE and recommends a diagonal or calendar, explaining theta decay rationale. Still produces the full editorial HTML with useful spread analysis for context.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "leaps_flag_explicit",
+          "description": "Plan explicitly warns that standard short-premium strategies are suboptimal at >90 DTE and recommends a diagonal or calendar."
+        },
+        {
+          "name": "theta_rationale_given",
+          "description": "Plan explains why: slow theta decay / unfavorable risk-reward at extended DTE."
+        },
+        {
+          "name": "full_html_still_produced",
+          "description": "Complete HTML file is still produced — the skill does not refuse, but clearly labels spreads as suboptimal for this DTE."
+        },
+        {
+          "name": "googl_earnings_checked",
+          "description": "Earnings section addresses GOOGL earnings timing relative to expiry."
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "TSLA weeklies, earnings next week.",
+      "expected_output": "Weekly expiry. Earnings flagged prominently in the Executive Summary because they fall within the expiry window. Either widens short strikes by 1.5× earnings expected move OR recommends against outright premium selling and suggests alternatives (long strangle, calendar, iron fly). Cannot silently ignore earnings.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "earnings_flagged_exec_summary",
+          "description": "Executive summary prominently flags earnings within the expiry window."
+        },
+        {
+          "name": "earnings_handling_explicit",
+          "description": "Plan makes an explicit choice: widen short strikes by 1.5× earnings EM, OR recommend avoiding premium selling and suggest an alternative (long strangle, calendar, iron fly). States which and why."
+        },
+        {
+          "name": "not_silently_ignored",
+          "description": "Earnings are not mentioned only as a passing note — they drive a structural decision in the plan."
+        },
+        {
+          "name": "html_output_produced",
+          "description": "Complete HTML file written to disk with required sections."
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Options trade plan for NVDA.",
+      "expected_output": "No timeframe specified — defaults to the nearest weekly Friday and explicitly states this assumption at the top. Full HTML plan, weekly bucket defaults, NVDA earnings checked.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "default_weekly_stated",
+          "description": "Plan explicitly states that no timeframe was given and the default (nearest weekly Friday) is being used."
+        },
+        {
+          "name": "weekly_expiry_resolved",
+          "description": "Expiry is the nearest Friday, DTE <= 7."
+        },
+        {
+          "name": "nvda_earnings_checked",
+          "description": "Earnings section addresses NVDA earnings timing."
+        },
+        {
+          "name": "html_output_produced",
+          "description": "Complete HTML file written to disk with required sections."
+        }
+      ]
+    }
+  ]
+}

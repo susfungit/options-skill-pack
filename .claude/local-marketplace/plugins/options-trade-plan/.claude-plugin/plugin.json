@@ -1,0 +1,5 @@
+{
+  "name": "options-trade-plan",
+  "version": "1.0.0",
+  "description": "Generates a professional, data-driven options spread trade plan for any ticker and timeframe as a self-contained HTML page."
+}

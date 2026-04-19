@@ -20,7 +20,8 @@ cat > "$SETTINGS_FILE" <<EOF
     "covered-call-selector@options-skill-pack": true,
     "covered-call-monitor@options-skill-pack": true,
     "cash-secured-put-selector@options-skill-pack": true,
-    "cash-secured-put-monitor@options-skill-pack": true
+    "cash-secured-put-monitor@options-skill-pack": true,
+    "options-trade-plan@options-skill-pack": true
   },
   "extraKnownMarketplaces": {
     "options-skill-pack": {

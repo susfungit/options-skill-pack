@@ -1,0 +1,693 @@
+<!--
+  options-trade-plan — editorial/newspaper research-note template.
+
+  Placeholder convention: {{TOKEN}}. Replace with real content before writing.
+
+  Token map (see SKILL.md for full descriptions):
+    {{TICKER}}              — e.g. "AAPL"
+    {{STRATEGY_LABEL}}      — short phrase, e.g. "Weekly Credit Spread Framework"
+    {{EXPIRY}}              — e.g. "April 24, 2026"
+    {{DTE}}                 — integer
+    {{PUB_DATE}}            — today's date, long form
+    {{EXPIRY_RESOLUTION}}   — one-sentence note on how the expiry was chosen
+    {{SPOT}}                — e.g. "270.23"
+    {{CHG_PCT}}             — signed, e.g. "+2.59%"
+    {{IV}}                  — ATM IV pct, e.g. "27.3%"
+    {{HV}}                  — realized HV pct, e.g. "22.2%"
+    {{IV_HV_RATIO}}         — e.g. "1.23"
+    {{IV_RANK}}             — "81" (proxy)
+    {{MAX_PAIN}}            — e.g. "$275"
+    {{EARNINGS_LINE}}       — one-line status, e.g. "Apr 30, AMC (6d after expiry)"
+    {{EXPECTED_MOVE}}       — e.g. "±$8.65 (±3.2%)"
+
+  HTML sub-blocks (insert raw HTML strings — no extra escaping):
+    {{EXEC_SUMMARY_HTML}}         — 2–4 <p> paragraphs
+    {{CONTEXT_HTML}}              — market/catalyst paragraphs and bullets
+    {{LEVELS_ROWS_HTML}}          — <tr>…</tr> rows for the levels table
+    {{EARNINGS_HTML}}             — paragraphs + optional callout block
+    {{TRADE_SUMMARY_ROWS_HTML}}   — 3 <tr> rows (one per scenario) for summary table
+    {{BULL_PUT_CARD_HTML}}        — contents of green trade card
+    {{CONDOR_CARD_HTML}}          — contents of blue trade card
+    {{BEAR_CALL_CARD_HTML}}       — contents of red trade card
+    {{FLOWCHART_HTML}}            — nested <div class="flow-node"> tree
+    {{IV_VERDICT}}                — one-line verdict sentence
+    {{VOL_BARS_HTML}}             — IV vs HV visual block (pair of bars + labels)
+    {{POSITIONING_HTML}}          — OI walls, max pain, put/call ratio
+    {{SIZING_ROWS_HTML}}          — <tr> rows for sizing table
+    {{SOURCES_HTML}}              — <li> items for data sources
+    {{CHART_CONFIG_JSON}}         — a JSON object with {labels, bullPut, condor, bearCall}
+                                    arrays used to populate Chart.js datasets
+-->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{TICKER}} · Options Trade Plan · {{EXPIRY}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --paper: #faf9f6;
+    --ink: #17120c;
+    --muted: #635a4c;
+    --rule: #c7bba3;
+    --rule-soft: #e5dcc7;
+    --accent: #7a2a1f;
+    --bull: #2d8a4b;
+    --neutral: #1e5fa8;
+    --bear: #b2342c;
+    --bull-bg: #e9f5ec;
+    --neutral-bg: #e7eff8;
+    --bear-bg: #fbeceb;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); }
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 48px 56px 72px;
+  }
+  .mono, .num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Playfair Display', serif;
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0 0 0.4em;
+    letter-spacing: -0.01em;
+  }
+  h1 { font-size: 56px; line-height: 1.05; font-weight: 900; }
+  h2 { font-size: 28px; margin-top: 2em; border-bottom: 1px solid var(--rule); padding-bottom: 6px; }
+  h3 { font-size: 20px; margin-top: 1.3em; }
+  p { margin: 0 0 0.9em; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* Masthead */
+  .masthead {
+    border-top: 6px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 16px 0 18px;
+    margin-bottom: 6px;
+  }
+  .masthead .kicker {
+    font-family: 'IBM Plex Sans', sans-serif;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.28em;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+  .masthead h1 { margin-bottom: 4px; }
+  .masthead .subline {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 20px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .masthead .meta {
+    display: flex;
+    gap: 36px;
+    font-size: 12.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding-top: 10px;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .masthead .meta span b { color: var(--ink); font-weight: 600; }
+
+  /* Data band */
+  .databand {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    border-top: 1px solid var(--rule);
+    border-bottom: 3px double var(--ink);
+    margin: 18px 0 36px;
+  }
+  .databand .cell {
+    padding: 14px 12px;
+    border-left: 1px solid var(--rule-soft);
+    text-align: left;
+  }
+  .databand .cell:first-child { border-left: 0; }
+  .databand .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .databand .val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 20px;
+    font-weight: 500;
+  }
+  .databand .val.up { color: var(--bull); }
+  .databand .val.down { color: var(--bear); }
+
+  /* Two-column layout */
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    gap: 48px;
+  }
+  .main { min-width: 0; }
+  .sidebar {
+    border-left: 1px solid var(--rule-soft);
+    padding-left: 36px;
+    font-size: 13.5px;
+  }
+  .sidebar h3 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    font-weight: 600;
+    margin-top: 32px;
+  }
+  .sidebar h3:first-of-type { margin-top: 0; }
+
+  /* Lead paragraph + drop-cap */
+  .lead { font-size: 16.5px; }
+  .lead::first-letter {
+    font-family: 'Playfair Display', serif;
+    font-weight: 900;
+    font-size: 58px;
+    line-height: 0.95;
+    float: left;
+    padding: 6px 10px 0 0;
+    color: var(--accent);
+  }
+
+  /* Levels table */
+  table.tbl {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10px 0 20px;
+    font-size: 14px;
+  }
+  table.tbl th, table.tbl td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--rule-soft);
+    text-align: left;
+  }
+  table.tbl th {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--rule);
+    font-weight: 600;
+  }
+  table.tbl td.num, table.tbl th.num { text-align: right; font-family: 'IBM Plex Mono', monospace; }
+  table.tbl tr.highlight td { background: #f3eedf; }
+
+  /* Trade summary table */
+  table.summary { margin-bottom: 28px; }
+  table.summary td.tag { font-weight: 600; }
+  .tag-bull { color: var(--bull); }
+  .tag-neutral { color: var(--neutral); }
+  .tag-bear { color: var(--bear); }
+
+  /* Trade cards */
+  .card {
+    border: 1px solid var(--rule);
+    border-top-width: 6px;
+    border-radius: 2px;
+    padding: 22px 24px 20px;
+    margin: 18px 0 22px;
+    background: #fff;
+  }
+  .card.bull { border-top-color: var(--bull); background: linear-gradient(180deg, var(--bull-bg), #fff 60%); }
+  .card.neutral { border-top-color: var(--neutral); background: linear-gradient(180deg, var(--neutral-bg), #fff 60%); }
+  .card.bear { border-top-color: var(--bear); background: linear-gradient(180deg, var(--bear-bg), #fff 60%); }
+  .card .card-kicker {
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .card.bull .card-kicker { color: var(--bull); }
+  .card.neutral .card-kicker { color: var(--neutral); }
+  .card.bear .card-kicker { color: var(--bear); }
+  .card h3 {
+    font-size: 24px;
+    margin: 0 0 8px;
+  }
+  .card .credit-big {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 30px;
+    font-weight: 500;
+    margin: 4px 0 14px;
+  }
+  .card .credit-big small {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: 'IBM Plex Sans', sans-serif;
+    margin-left: 8px;
+    font-weight: 500;
+  }
+  .card .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 12px 0;
+    border-top: 1px solid var(--rule-soft);
+    border-bottom: 1px solid var(--rule-soft);
+    margin: 4px 0 12px;
+  }
+  .card .metrics .lab {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .card .metrics .v {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 16px;
+  }
+  .card .legs {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .card .legs th, .card .legs td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--rule-soft);
+    text-align: left;
+  }
+  .card .legs th {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .card .legs td.num { text-align: right; font-family: 'IBM Plex Mono', monospace; }
+  .card .legs td.act { font-weight: 600; letter-spacing: 0.08em; }
+  .card .legs td.sell { color: var(--bear); }
+  .card .legs td.buy { color: var(--neutral); }
+  .card .sect {
+    margin-top: 10px;
+  }
+  .card .sect h4 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+    margin: 10px 0 4px;
+  }
+  .card .sect p { margin: 0 0 6px; }
+  .card .disclaimer {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 10px;
+    font-style: italic;
+  }
+
+  /* P&L chart */
+  .chart-wrap {
+    border: 1px solid var(--rule);
+    padding: 18px 16px 24px;
+    background: #fff;
+    margin: 22px 0;
+  }
+  .chart-wrap h3 { margin-top: 0; }
+  .chart-legend {
+    display: flex;
+    gap: 18px;
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .chart-legend .dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    margin-right: 6px;
+    vertical-align: middle;
+    border-radius: 50%;
+  }
+  .chart-legend .bull-d { background: var(--bull); }
+  .chart-legend .neu-d { background: var(--neutral); }
+  .chart-legend .bear-d { background: var(--bear); }
+
+  /* Sidebar blocks */
+  .flow {
+    border: 1px solid var(--rule-soft);
+    padding: 14px 14px 12px;
+    background: #fff;
+    font-size: 12.5px;
+  }
+  .flow .flow-node {
+    border-left: 2px solid var(--rule);
+    padding: 4px 0 4px 10px;
+    margin: 6px 0 6px 4px;
+  }
+  .flow .q { font-weight: 600; }
+  .flow .yes { color: var(--bull); font-weight: 600; font-size: 11px; letter-spacing: 0.12em; }
+  .flow .no  { color: var(--bear);  font-weight: 600; font-size: 11px; letter-spacing: 0.12em; }
+  .flow .outcome { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; }
+
+  .vol-block { margin: 8px 0 14px; }
+  .vol-bar-row { display: flex; align-items: center; margin-bottom: 6px; }
+  .vol-bar-row .lab {
+    width: 58px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .vol-bar-row .bar {
+    flex: 1;
+    height: 10px;
+    background: #ece3cc;
+    position: relative;
+    border-radius: 1px;
+  }
+  .vol-bar-row .fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: var(--ink);
+    border-radius: 1px;
+  }
+  .vol-bar-row .num { width: 50px; text-align: right; font-size: 12px; margin-left: 8px; }
+  .vol-verdict {
+    padding: 8px 10px;
+    border-left: 3px solid var(--accent);
+    background: #fbf6ea;
+    font-size: 12.5px;
+    margin: 8px 0 0;
+  }
+
+  .positioning ul { padding-left: 16px; margin: 6px 0 0; }
+  .positioning li { margin-bottom: 4px; }
+
+  .sizing-note {
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+    margin-top: 8px;
+  }
+
+  .sources { font-size: 12px; color: var(--muted); }
+  .sources ul { padding-left: 16px; margin: 4px 0; }
+  .sources li { margin-bottom: 3px; }
+
+  /* Earnings callout */
+  .earnings-callout {
+    padding: 12px 16px;
+    border-left: 4px solid var(--accent);
+    background: #fbf1e6;
+    margin: 10px 0 20px;
+    font-size: 14.5px;
+  }
+  .earnings-callout.clean {
+    border-left-color: var(--bull);
+    background: #f1f8f2;
+  }
+
+  /* Footer */
+  footer {
+    margin-top: 56px;
+    padding-top: 16px;
+    border-top: 1px solid var(--ink);
+    font-size: 11.5px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule-soft); padding-top: 24px; margin-top: 24px; }
+    .databand { grid-template-columns: repeat(3, 1fr); }
+    .card .metrics { grid-template-columns: repeat(2, 1fr); }
+    h1 { font-size: 40px; }
+  }
+
+  @media print {
+    .page { padding: 24px; }
+    a { color: var(--ink); }
+    .chart-wrap { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ══════════════  MASTHEAD  ══════════════ -->
+  <header class="masthead">
+    <div class="kicker">Options Desk · Research Note · {{PUB_DATE}}</div>
+    <h1>{{TICKER}} <span style="color:var(--accent);font-weight:700;">·</span> {{STRATEGY_LABEL}}</h1>
+    <div class="subline">Expiry {{EXPIRY}} · {{DTE}} days to expiry · {{EXPIRY_RESOLUTION}}</div>
+    <div class="meta">
+      <span><b>Ticker</b> {{TICKER}}</span>
+      <span><b>Expiry</b> {{EXPIRY}}</span>
+      <span><b>DTE</b> {{DTE}}</span>
+      <span><b>Published</b> {{PUB_DATE}}</span>
+    </div>
+  </header>
+
+  <!-- ══════════════  DATA BAND  ══════════════ -->
+  <section class="databand">
+    <div class="cell"><div class="label">Spot</div><div class="val">${{SPOT}}</div></div>
+    <div class="cell"><div class="label">Change</div><div class="val">{{CHG_PCT}}</div></div>
+    <div class="cell"><div class="label">ATM IV</div><div class="val">{{IV}}</div></div>
+    <div class="cell"><div class="label">HV 30d</div><div class="val">{{HV}}</div></div>
+    <div class="cell"><div class="label">IV ÷ HV</div><div class="val">{{IV_HV_RATIO}}</div></div>
+    <div class="cell"><div class="label">Max Pain</div><div class="val">{{MAX_PAIN}}</div></div>
+    <div class="cell"><div class="label">Earnings</div><div class="val" style="font-size:14px;line-height:1.3;">{{EARNINGS_LINE}}</div></div>
+  </section>
+
+  <!-- ══════════════  TWO-COLUMN LAYOUT  ══════════════ -->
+  <div class="layout">
+
+    <!-- ─────── MAIN COLUMN ─────── -->
+    <main class="main">
+
+      <!-- 1. Executive Summary -->
+      <section>
+        <h2>Executive summary</h2>
+        {{EXEC_SUMMARY_HTML}}
+      </section>
+
+      <!-- 2. Market Context & Catalysts -->
+      <section>
+        <h2>Market context &amp; catalysts</h2>
+        {{CONTEXT_HTML}}
+      </section>
+
+      <!-- 3. Technical Structure & Positioning -->
+      <section>
+        <h2>Technical structure &amp; positioning</h2>
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Level</th>
+              <th class="num">Price</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{LEVELS_ROWS_HTML}}
+          </tbody>
+        </table>
+        <p style="font-size:12.5px;color:var(--muted);">Expected move (1-SD): <b class="mono">{{EXPECTED_MOVE}}</b> over {{DTE}} days.</p>
+      </section>
+
+      <!-- 4. Earnings & Catalyst Check -->
+      <section>
+        <h2>Earnings &amp; catalyst check</h2>
+        {{EARNINGS_HTML}}
+      </section>
+
+      <!-- 5. Trade Setups -->
+      <section>
+        <h2>Trade setups</h2>
+        <table class="tbl summary">
+          <thead>
+            <tr>
+              <th>Scenario</th>
+              <th>Structure</th>
+              <th class="num">Credit</th>
+              <th class="num">Max profit</th>
+              <th class="num">Max loss</th>
+              <th class="num">POP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{TRADE_SUMMARY_ROWS_HTML}}
+          </tbody>
+        </table>
+
+        {{BULL_PUT_CARD_HTML}}
+        {{CONDOR_CARD_HTML}}
+        {{BEAR_CALL_CARD_HTML}}
+      </section>
+
+      <!-- 6. P&L Chart -->
+      <section>
+        <div class="chart-wrap">
+          <h3>P&amp;L comparison at expiry</h3>
+          <canvas id="pnlChart" height="240"></canvas>
+          <div class="chart-legend">
+            <span><span class="dot bull-d"></span>Bull put spread</span>
+            <span><span class="dot neu-d"></span>Iron condor</span>
+            <span><span class="dot bear-d"></span>Bear call spread</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ─────── SIDEBAR ─────── -->
+    <aside class="sidebar">
+
+      <h3>Decision flow</h3>
+      <div class="flow">
+        {{FLOWCHART_HTML}}
+      </div>
+
+      <h3>Volatility analysis</h3>
+      <div class="vol-block">
+        {{VOL_BARS_HTML}}
+        <div class="vol-verdict">{{IV_VERDICT}}</div>
+      </div>
+
+      <h3>Options positioning</h3>
+      <div class="positioning">
+        {{POSITIONING_HTML}}
+      </div>
+
+      <h3>Position sizing</h3>
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Trade</th>
+            <th class="num">Max loss / lot</th>
+            <th class="num">$250k</th>
+            <th class="num">$500k</th>
+            <th class="num">$1M</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{SIZING_ROWS_HTML}}
+        </tbody>
+      </table>
+      <p class="sizing-note">Run ONE core trade at a time at full size. Do not layer all three simultaneously.</p>
+
+      <h3>Data sources &amp; timestamps</h3>
+      <div class="sources">
+        <ul>
+          {{SOURCES_HTML}}
+        </ul>
+      </div>
+
+    </aside>
+  </div>
+
+  <footer>
+    <p><b>Disclaimer.</b> This research note is produced by an automated analysis tool for educational
+    purposes only. It is not investment advice. All option premiums labelled "model estimate" are derived
+    from a Black-Scholes calculation against bid/ask mid-quotes and should not be mistaken for live,
+    executable prices. Verify all numbers against your broker's real-time option chain before trading.
+    Options trading involves substantial risk of loss and is not suitable for all investors.</p>
+  </footer>
+
+</div>
+
+<script>
+  // Chart.js P&L overlay. CHART_CONFIG_JSON is injected as a JS object literal with:
+  //   { labels: [prices...], bullPut: [...], condor: [...], bearCall: [...] }
+  const chartData = {{CHART_CONFIG_JSON}};
+
+  const ctx = document.getElementById('pnlChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: chartData.labels,
+      datasets: [
+        {
+          label: 'Bull put spread',
+          data: chartData.bullPut,
+          borderColor: '#2d8a4b',
+          backgroundColor: 'rgba(45,138,75,0.08)',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0,
+          fill: false,
+        },
+        {
+          label: 'Iron condor',
+          data: chartData.condor,
+          borderColor: '#1e5fa8',
+          backgroundColor: 'rgba(30,95,168,0.08)',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          tension: 0,
+          fill: false,
+        },
+        {
+          label: 'Bear call spread',
+          data: chartData.bearCall,
+          borderColor: '#b2342c',
+          backgroundColor: 'rgba(178,52,44,0.08)',
+          borderWidth: 2,
+          borderDash: [2, 3],
+          pointRadius: 0,
+          tension: 0,
+          fill: false,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => `Price at expiry: $${items[0].label}`,
+            label: (ctx) => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(0)} per contract`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Price at expiry ($)' },
+          grid: { color: '#efe7d3' },
+        },
+        y: {
+          title: { display: true, text: 'P&L per contract ($)' },
+          grid: {
+            color: (c) => (c.tick.value === 0 ? '#17120c' : '#efe7d3'),
+            lineWidth: (c) => (c.tick.value === 0 ? 1.5 : 1),
+          },
+        },
+      },
+    },
+  });
+</script>
+
+</body>
+</html>
