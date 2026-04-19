@@ -93,7 +93,17 @@ def fetch_chain(ticker_str, expiry_str, side="both"):
     if side in ("calls", "both"):
         result["calls"] = process_side(chain.calls, "call")
 
-    return result
+    return _scrub_nan(result)
+
+
+def _scrub_nan(obj):
+    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+        return None
+    if isinstance(obj, dict):
+        return {k: _scrub_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_scrub_nan(v) for v in obj]
+    return obj
 
 
 if __name__ == "__main__":

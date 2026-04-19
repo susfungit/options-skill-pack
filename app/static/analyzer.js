@@ -844,14 +844,15 @@ function renderChainTable(chain, side, highlights) {
           <th>Strike</th><th>Bid</th><th>Ask</th><th>Mid</th>
           <th>Vol</th><th>OI</th><th>IV%</th><th>Delta</th>
         </tr></thead><tbody>`;
+    const fx = (v, d) => v == null ? '--' : v.toFixed(d);
     for (const r of rows) {
       const hl = highlights.has(r.strike) ? ' class="az-chain-highlight"' : '';
       html += `<tr${hl}>
-        <td class="chain-strike">${r.strike.toFixed(1)}</td>
-        <td>${r.bid.toFixed(2)}</td><td>${r.ask.toFixed(2)}</td>
-        <td>${r.mid.toFixed(2)}</td>
-        <td>${r.volume}</td><td>${r.open_interest.toLocaleString()}</td>
-        <td>${r.iv_pct.toFixed(1)}</td><td>${r.delta.toFixed(3)}</td>
+        <td class="chain-strike">${fx(r.strike, 1)}</td>
+        <td>${fx(r.bid, 2)}</td><td>${fx(r.ask, 2)}</td>
+        <td>${fx(r.mid, 2)}</td>
+        <td>${r.volume ?? '--'}</td><td>${r.open_interest != null ? r.open_interest.toLocaleString() : '--'}</td>
+        <td>${fx(r.iv_pct, 1)}</td><td>${fx(r.delta, 3)}</td>
       </tr>`;
     }
     html += '</tbody></table></div></div>';
