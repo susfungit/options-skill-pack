@@ -429,7 +429,6 @@ Edit `monitor_config.json`:
 |---|---|
 | `macos` | Nothing — works out of the box |
 | `email` | Gmail app password (Google Account → Security → App Passwords) |
-| `pushover` | $5 one-time Pushover app + free API account at pushover.net |
 
 For SMS via email: set `to` to your carrier's gateway (e.g. `5551234567@vtext.com`).
 
