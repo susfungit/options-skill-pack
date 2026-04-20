@@ -42,6 +42,7 @@ FastAPI app split into routers:
 - **`chat.py`** — Claude API client, `/api/chat` streaming endpoint with tool-use loop
 - **`analyze.py`** — `/api/analyze` (runs selector scripts without AI tokens), `/api/analyze/compare` (parallel all-strategy comparison), `/api/expirations`, `/api/chain-view`
 - **`portfolio.py`** — CRUD for positions, profile endpoints, zone classification (`_classify_zone_spread`, `_classify_zone_covered_call`), `/api/portfolio/{id}/check`
+- **`trade_plans.py` / `trade_plan_runner.py`** — Trade Plans tab endpoints; runs the `options-trade-plan` skill by shelling out to the `claude` CLI as an async background job. Requires `claude` on the server PATH (authenticated against the host's Claude subscription). Output written to `trade-plans/`.
 - **`tools.py`** — `TOOL_REGISTRY` dict is the single source of truth for all tools. `TOOLS[]`, `SCRIPT_MAP`, `SKILL_GUIDANCE`, and `_build_args()` are derived from it automatically
 - **`prompts.py`** — system prompt and per-skill guidance
 - **`config.py`** — constants, paths, default profile, rate limiter

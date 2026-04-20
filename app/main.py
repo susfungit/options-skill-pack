@@ -14,6 +14,7 @@ from app.config import limiter
 from app.chat import router as chat_router
 from app.analyze import router as analyze_router
 from app.portfolio import router as portfolio_router
+from app.trade_plans import router as trade_plans_router
 
 logger = logging.getLogger("options_skill_pack")
 logging.basicConfig(
@@ -66,6 +67,7 @@ app.middleware("http")(auth_middleware)
 app.include_router(chat_router)
 app.include_router(analyze_router)
 app.include_router(portfolio_router)
+app.include_router(trade_plans_router)
 
 
 # ── Health check (unauthenticated) ────────────────────────────────────────

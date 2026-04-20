@@ -63,6 +63,9 @@
         <button class="nav-tab" data-tab="watchlist">
           <span class="tab-icon">&#9734;</span> Watchlist
         </button>
+        <button class="nav-tab" data-tab="trade-plans">
+          <span class="tab-icon">&#9998;</span> Trading Plans
+        </button>
         <button class="nav-tab" data-tab="profile">
           <span class="tab-icon">&#9881;</span> Profile
         </button>
@@ -168,6 +171,63 @@
           <div class="empty-icon">&#9734;</div>
           <p>No saved trades yet</p>
           <p class="empty-sub">Find a trade in the Analyzer, then click &#9734; Watchlist to save it here</p>
+        </div>
+      </section>
+
+      <!-- Trade Plans Panel -->
+      <section id="panel-trade-plans" class="panel">
+        <div class="analyzer-controls">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Ticker</label>
+              <input type="text" id="tp-ticker" placeholder="AAPL" style="text-transform:uppercase" maxlength="5">
+            </div>
+            <div class="form-group">
+              <label>Timeframe</label>
+              <select id="tp-timeframe">
+                <option value="">Default (weekly)</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="45 DTE">45 DTE</option>
+                <option value="eom">End of month</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Portfolio Size</label>
+              <input type="text" id="tp-portfolio-size" placeholder="$500k" maxlength="16">
+            </div>
+            <div class="form-group">
+              <label>Bias</label>
+              <select id="tp-bias">
+                <option value="">Neutral</option>
+                <option value="neutral">Neutral</option>
+                <option value="bullish">Bullish</option>
+                <option value="bearish">Bearish</option>
+              </select>
+            </div>
+            <div class="form-group" style="align-self:flex-end;">
+              <button class="btn-analyze" id="tp-generate" onclick="submitTradePlan()">Generate</button>
+            </div>
+          </div>
+          <div id="tp-form-error" class="tp-form-error" style="display:none;"></div>
+        </div>
+
+        <div class="tp-section">
+          <div class="tp-section-header">
+            <h3>In Progress</h3>
+            <span class="tp-count" id="tp-inflight-count">0</span>
+          </div>
+          <div id="tp-inflight-list" class="tp-list"></div>
+          <div id="tp-inflight-empty" class="tp-empty">No plans in progress.</div>
+        </div>
+
+        <div class="tp-section">
+          <div class="tp-section-header">
+            <h3>Generated Plans</h3>
+            <span class="tp-count" id="tp-files-count">0</span>
+          </div>
+          <div id="tp-files-list" class="tp-list"></div>
+          <div id="tp-files-empty" class="tp-empty">No plans generated yet.</div>
         </div>
       </section>
 
@@ -417,6 +477,7 @@
   <script src="/static/portfolio.js"></script>
   <script src="/static/analyzer.js"></script>
   <script src="/static/watchlist.js"></script>
+  <script src="/static/trade-plans.js"></script>
   <script src="/static/profile.js"></script>
   <script src="/static/init.js"></script>
 </body>

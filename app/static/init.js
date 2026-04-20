@@ -8,7 +8,8 @@ document.querySelectorAll('.nav-tab').forEach(tab => {
     document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'portfolio') loadPortfolio();
     if (tab.dataset.tab === 'watchlist') loadWatchlist();
-    if (tab.dataset.tab === 'profile') { loadProfile(); loadModels(); }
+    if (tab.dataset.tab === 'profile') loadModels().then(loadProfile);
+    if (tab.dataset.tab === 'trade-plans') startTradePlansPolling(); else stopTradePlansPolling();
   });
 });
 
@@ -25,6 +26,10 @@ document.getElementById('az-ticker').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') runAnalysis();
 });
 
+document.getElementById('tp-ticker').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitTradePlan();
+});
+
 // ── Delta clamp ──────────────────────────────────────────────────────────────
 
 document.getElementById('az-delta').addEventListener('blur', function() {
@@ -35,8 +40,9 @@ document.getElementById('az-delta').addEventListener('blur', function() {
 
 // ── Startup ──────────────────────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   renderMarketStatus();
   loadPortfolio();
+  await loadModels();
   loadProfile();
 });
