@@ -74,6 +74,7 @@ async function refreshTradePlans() {
     const jobsData = jobsRes.ok ? await jobsRes.json() : { jobs: [] };
     const filesData = filesRes.ok ? await filesRes.json() : { files: [] };
     const jobs = jobsData.jobs || [];
+    applyClaudeAvailability(jobsData.claude_available !== false);
     renderInflight(jobs);
     renderGeneratedPlans(filesData.files || []);
 
@@ -94,6 +95,16 @@ async function _getRunningCount() {
     return (data.jobs || []).filter(j => j.status === 'running').length;
   } catch {
     return null;
+  }
+}
+
+function applyClaudeAvailability(available) {
+  const banner = document.getElementById('tp-unavailable-banner');
+  const btn = document.getElementById('tp-generate');
+  if (banner) banner.style.display = available ? 'none' : 'block';
+  if (btn) {
+    btn.disabled = !available;
+    btn.title = available ? '' : 'claude CLI not installed on server';
   }
 }
 

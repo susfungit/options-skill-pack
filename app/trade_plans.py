@@ -75,7 +75,10 @@ async def create_trade_plan(request: Request, req: TradePlanRequest):
 
 @router.get("/api/trade-plans/jobs")
 async def list_jobs(request: Request):
-    return {"jobs": await trade_plan_runner.list_jobs()}
+    return {
+        "jobs": await trade_plan_runner.list_jobs(),
+        "claude_available": bool(trade_plan_runner.claude_bin()),
+    }
 
 
 @router.get("/api/trade-plans/files")

@@ -1,8 +1,9 @@
 """Tests for options-skill-pack. All external calls mocked — no API keys needed."""
 
 import json
+import os
 import subprocess
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -533,3 +534,132 @@ class TestZoneCoveredCall:
     def test_zero_credit_ratio_falls_to_zero(self):
         # ratio = 0 when credit is 0 → only buffer matters
         assert _classify_zone_covered_call(15, 5.0, 0, 30) == "SAFE"
+
+
+# ── Trade Plans endpoint tests ──────────────────────────────────────────────
+
+
+def _valid_trade_plan_req():
+    return {"ticker": "AAPL", "timeframe": "weekly", "bias": "neutral", "portfolio_size": "$500k"}
+
+
+def test_trade_plans_jobs_includes_claude_available_true(client):
+    with patch("app.trade_plans.trade_plan_runner.claude_bin", return_value="/usr/bin/claude"):
+        resp = client.get("/api/trade-plans/jobs")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["claude_available"] is True
+    assert body["jobs"] == []
+
+
+def test_trade_plans_jobs_includes_claude_available_false(client):
+    with patch("app.trade_plans.trade_plan_runner.claude_bin", return_value=None):
+        resp = client.get("/api/trade-plans/jobs")
+    assert resp.status_code == 200
+    assert resp.json()["claude_available"] is False
+
+
+def test_trade_plans_submit_503_when_claude_missing(client):
+    with patch("app.trade_plans.trade_plan_runner.claude_bin", return_value=None):
+        resp = client.post("/api/trade-plans", json=_valid_trade_plan_req())
+    assert resp.status_code == 503
+    assert "claude CLI not installed" in resp.json()["detail"]
+
+
+def test_trade_plans_submit_success(client):
+    with patch("app.trade_plans.trade_plan_runner.claude_bin", return_value="/usr/bin/claude"), \
+         patch("app.trade_plans.trade_plan_runner.submit_job", new=AsyncMock(return_value="abc123")), \
+         patch("app.trade_plans.trade_plan_runner.list_jobs", new=AsyncMock(return_value=[])):
+        resp = client.post("/api/trade-plans", json=_valid_trade_plan_req())
+    assert resp.status_code == 200
+    assert resp.json() == {"job_id": "abc123"}
+
+
+def test_trade_plans_submit_invalid_ticker(client):
+    req = _valid_trade_plan_req()
+    req["ticker"] = "TOOLONG"
+    resp = client.post("/api/trade-plans", json=req)
+    assert resp.status_code == 400
+    assert "ticker" in resp.json()["detail"].lower()
+
+
+def test_trade_plans_submit_invalid_timeframe(client):
+    req = _valid_trade_plan_req()
+    req["timeframe"] = "yearly"
+    resp = client.post("/api/trade-plans", json=req)
+    assert resp.status_code == 400
+    assert "timeframe" in resp.json()["detail"].lower()
+
+
+def test_trade_plans_submit_invalid_bias(client):
+    req = _valid_trade_plan_req()
+    req["bias"] = "spicy"
+    resp = client.post("/api/trade-plans", json=req)
+    assert resp.status_code == 400
+    assert "bias" in resp.json()["detail"].lower()
+
+
+def test_trade_plans_submit_invalid_portfolio_size(client):
+    req = _valid_trade_plan_req()
+    req["portfolio_size"] = "drop table users;--"
+    resp = client.post("/api/trade-plans", json=req)
+    assert resp.status_code == 400
+    assert "portfolio_size" in resp.json()["detail"].lower()
+
+
+def test_trade_plans_submit_invalid_expiry_format(client):
+    req = _valid_trade_plan_req()
+    req["expiry"] = "05/16/2026"
+    resp = client.post("/api/trade-plans", json=req)
+    # Pydantic pattern validation → 422
+    assert resp.status_code == 422
+
+
+def test_trade_plans_get_file_rejects_bad_filename(client):
+    # `_FILENAME_RE` is the path-traversal guard — any name that doesn't match
+    # (wrong prefix, dots, slashes, etc.) is rejected before filesystem access.
+    resp = client.get("/api/trade-plans/files/malicious.html")
+    assert resp.status_code == 400
+
+
+def test_trade_plans_get_file_rejects_traversal_attempt(client):
+    resp = client.get("/api/trade-plans/files/..trade_plan_AAPL_2026-05-16.html")
+    assert resp.status_code == 400
+
+
+def test_trade_plans_get_file_404_missing(client, tmp_path):
+    os.makedirs(str(tmp_path / "trade-plans"), exist_ok=True)
+    resp = client.get("/api/trade-plans/files/trade_plan_AAPL_2026-05-16.html")
+    assert resp.status_code == 404
+
+
+def test_trade_plans_list_files_filters_regex(client):
+    from app import config
+    os.makedirs(config.TRADE_PLANS_DIR, exist_ok=True)
+    valid = os.path.join(config.TRADE_PLANS_DIR, "trade_plan_AAPL_2026-05-16.html")
+    bogus = os.path.join(config.TRADE_PLANS_DIR, "random.html")
+    open(valid, "w").write("<html></html>")
+    open(bogus, "w").write("<html></html>")
+
+    resp = client.get("/api/trade-plans/files")
+    assert resp.status_code == 200
+    filenames = [f["filename"] for f in resp.json()["files"]]
+    assert "trade_plan_AAPL_2026-05-16.html" in filenames
+    assert "random.html" not in filenames
+
+
+def test_trade_plans_delete_file(client):
+    from app import config
+    os.makedirs(config.TRADE_PLANS_DIR, exist_ok=True)
+    name = "trade_plan_AAPL_2026-05-16.html"
+    path = os.path.join(config.TRADE_PLANS_DIR, name)
+    open(path, "w").write("<html></html>")
+
+    resp = client.delete(f"/api/trade-plans/files/{name}")
+    assert resp.status_code == 200
+    assert not os.path.exists(path)
+
+
+def test_trade_plans_delete_rejects_bad_filename(client):
+    resp = client.delete("/api/trade-plans/files/random.html")
+    assert resp.status_code == 400

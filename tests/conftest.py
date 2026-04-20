@@ -23,13 +23,19 @@ def tmp_data_dir(tmp_path, monkeypatch):
     with open(watchlist_path, "w") as f:
         json.dump([], f)
 
+    trade_plans_dir = str(tmp_path / "trade-plans")
+
     monkeypatch.setattr("app.config.PORTFOLIO_PATH", portfolio_path)
     monkeypatch.setattr("app.config.PROFILE_PATH", profile_path)
     monkeypatch.setattr("app.config.WATCHLIST_PATH", watchlist_path)
+    monkeypatch.setattr("app.config.TRADE_PLANS_DIR", trade_plans_dir)
     # Disable auth in tests so endpoints are accessible
     monkeypatch.setattr("app.auth._APP_API_KEY", None)
     # Reset lazy client so it doesn't leak between tests
     monkeypatch.setattr("app.chat._client", None)
+    # Clear in-memory trade-plan jobs between tests
+    from app import trade_plan_runner
+    trade_plan_runner._JOBS.clear()
 
 
 @pytest.fixture
