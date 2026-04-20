@@ -15,7 +15,7 @@ import anthropic
 from app.config import DEFAULT_MODEL, limiter
 from app.storage import read_profile
 from app.tools import TOOLS, SKILL_GUIDANCE, execute_tool
-from app.prompts import SYSTEM_PROMPT
+from app.prompts import build_system_prompt
 
 logger = logging.getLogger("options_skill_pack")
 router = APIRouter()
@@ -104,13 +104,15 @@ async def chat(request: Request, req: ChatRequest):
     messages = [{"role": m.role, "content": m.content} for m in req.history]
     messages.append({"role": "user", "content": req.message})
 
-    model = read_profile().get("model", DEFAULT_MODEL)
+    profile = read_profile()
+    model = profile.get("model", DEFAULT_MODEL)
+    system_prompt = build_system_prompt(profile)
 
     try:
         response = client.messages.create(
             model=model,
             max_tokens=16384,
-            system=SYSTEM_PROMPT,
+            system=system_prompt,
             tools=TOOLS,
             messages=messages,
         )
@@ -145,7 +147,7 @@ async def chat(request: Request, req: ChatRequest):
             response = client.messages.create(
                 model=model,
                 max_tokens=16384,
-                system=SYSTEM_PROMPT,
+                system=system_prompt,
                 tools=TOOLS,
                 messages=messages,
             )
@@ -172,7 +174,7 @@ async def chat(request: Request, req: ChatRequest):
 
 # ── Streaming chat endpoint ─────────────────────────────────────────────────
 
-async def _stream_chat(messages: list, model: str):
+async def _stream_chat(messages: list, model: str, system_prompt: str):
     """Async generator that yields SSE events for streaming chat."""
     aclient = get_async_client()
     tool_round = 0
@@ -186,7 +188,7 @@ async def _stream_chat(messages: list, model: str):
             async with aclient.messages.stream(
                 model=model,
                 max_tokens=16384,
-                system=SYSTEM_PROMPT,
+                system=system_prompt,
                 tools=TOOLS,
                 messages=messages,
             ) as stream:
@@ -245,6 +247,8 @@ async def chat_stream(request: Request, req: ChatRequest):
 
     messages = [{"role": m.role, "content": m.content} for m in req.history]
     messages.append({"role": "user", "content": req.message})
-    model = read_profile().get("model", DEFAULT_MODEL)
+    profile = read_profile()
+    model = profile.get("model", DEFAULT_MODEL)
+    system_prompt = build_system_prompt(profile)
 
-    return EventSourceResponse(_stream_chat(messages, model))
+    return EventSourceResponse(_stream_chat(messages, model, system_prompt))

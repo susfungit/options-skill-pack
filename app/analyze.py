@@ -13,7 +13,6 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import TICKER_RE, limiter
-from app.storage import read_profile
 from app.tools import execute_tool
 
 logger = logging.getLogger("options_skill_pack")
@@ -61,27 +60,18 @@ async def analyze(request: Request, req: AnalyzeRequest):
 
     tool_input = {"ticker": ticker}
 
-    profile = read_profile()
-    defaults = profile["strategy_defaults"].get(req.strategy.value, {})
+    # Explicit request values override profile defaults (applied in execute_tool)
     if req.target_delta is not None:
         tool_input["target_delta"] = req.target_delta
-    elif "delta" in defaults:
-        tool_input["target_delta"] = defaults["delta"]
     if req.expiry is not None:
         tool_input["expiry"] = req.expiry
     else:
         if req.dte_min is not None:
             tool_input["dte_min"] = req.dte_min
-        elif "dte_min" in defaults:
-            tool_input["dte_min"] = defaults["dte_min"]
         if req.dte_max is not None:
             tool_input["dte_max"] = req.dte_max
-        elif "dte_max" in defaults:
-            tool_input["dte_max"] = defaults["dte_max"]
     if req.spread_width is not None:
         tool_input["spread_width"] = req.spread_width
-    elif "spread_width" in defaults:
-        tool_input["spread_width"] = defaults["spread_width"]
 
     result_json = execute_tool(tool_name, tool_input)
     return json.loads(result_json)
@@ -267,27 +257,17 @@ async def analyze_compare(request: Request, req: CompareRequest):
     ticker = req.ticker.upper()
     if not TICKER_RE.match(ticker):
         raise HTTPException(status_code=400, detail="Invalid ticker format")
-    profile = read_profile()
-    strategy_defaults = profile["strategy_defaults"]
 
     def _build_input(strategy_key: str) -> dict:
-        defaults = strategy_defaults.get(strategy_key, {})
+        # Profile defaults (delta, dte_min, dte_max, spread_width) applied in execute_tool
         inp = {"ticker": ticker}
         if req.expiry is not None:
             inp["expiry"] = req.expiry
         else:
             if req.dte_min is not None:
                 inp["dte_min"] = req.dte_min
-            elif "dte_min" in defaults:
-                inp["dte_min"] = defaults["dte_min"]
             if req.dte_max is not None:
                 inp["dte_max"] = req.dte_max
-            elif "dte_max" in defaults:
-                inp["dte_max"] = defaults["dte_max"]
-        if "delta" in defaults:
-            inp["target_delta"] = defaults["delta"]
-        if "spread_width" in defaults:
-            inp["spread_width"] = defaults["spread_width"]
         return inp
 
     async def run_tool(tool_name, strategy_key):

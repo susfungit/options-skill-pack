@@ -7,6 +7,7 @@ import re
 import subprocess
 
 from app.config import PROJECT_ROOT
+from app.storage import read_profile
 
 PLUGINS_DIR = os.path.join(PROJECT_ROOT, ".claude", "local-marketplace", "plugins")
 
@@ -587,6 +588,36 @@ SKILL_GUIDANCE = {
 
 # ── Arg builder (declarative, driven by registry) ─────────────────────────────
 
+# Profile strategy_defaults key → tool_input key
+_PROFILE_KEY_MAP = {
+    "delta": "target_delta",
+    "dte_min": "dte_min",
+    "dte_max": "dte_max",
+    "spread_width": "spread_width",
+}
+
+
+def _apply_profile_defaults(tool_name: str, tool_input: dict) -> None:
+    """Inject profile strategy_defaults into tool_input for selector tools.
+
+    Only fills keys not already present — explicit user values always win.
+    No-op for non-selector tools (monitors, roll_spread).
+    """
+    entry = TOOL_REGISTRY.get(tool_name)
+    if not entry:
+        return
+    plugin = entry.get("plugin", "")
+    if not plugin.endswith("-selector"):
+        return
+    strategy = plugin[:-len("-selector")]
+
+    profile = read_profile()
+    defaults = profile.get("strategy_defaults", {}).get(strategy, {})
+    for profile_key, tool_key in _PROFILE_KEY_MAP.items():
+        if profile_key in defaults and tool_key not in tool_input:
+            tool_input[tool_key] = defaults[profile_key]
+
+
 def _build_args(tool_name: str, tool_input: dict) -> list[str]:
     """Convert tool input dict to CLI args for the corresponding script."""
     spec = TOOL_REGISTRY[tool_name]["args"]
@@ -685,6 +716,8 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
     ticker = tool_input.get("ticker", "")
     if ticker and not _TICKER_RE.match(ticker.upper()):
         return json.dumps({"error": f"Invalid ticker: {ticker}"})
+
+    _apply_profile_defaults(tool_name, tool_input)
 
     # Validate all numeric/string fields before passing to subprocess
     validation_error = _validate_tool_input(tool_input)

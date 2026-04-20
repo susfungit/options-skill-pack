@@ -131,6 +131,65 @@ def test_execute_tool_timeout(mock_run, mock_exists):
     assert "timed out" in result["error"]
 
 
+@patch("app.tools.os.path.exists", return_value=True)
+@patch("app.tools.subprocess.run")
+def test_execute_tool_applies_profile_defaults(mock_run, mock_exists):
+    """Profile strategy_defaults must flow into the CLI args for selector tools."""
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout='{"result": "ok"}', stderr=""
+    )
+    profile = {
+        "strategy_defaults": {
+            "bull-put-spread": {"delta": 0.2, "dte_min": 35, "dte_max": 45, "spread_width": 5},
+        }
+    }
+    with patch("app.tools.read_profile", return_value=profile):
+        execute_tool("find_bull_put_spread", {"ticker": "MU"})
+    call_args = mock_run.call_args[0][0]
+    # python3, script_path, ticker, target_delta, dte_min, dte_max, spread_width
+    assert call_args[2:] == ["MU", "0.2", "35", "45", "5"]
+
+
+@patch("app.tools.os.path.exists", return_value=True)
+@patch("app.tools.subprocess.run")
+def test_execute_tool_explicit_overrides_profile(mock_run, mock_exists):
+    """Explicit tool_input values beat profile defaults."""
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout='{"result": "ok"}', stderr=""
+    )
+    profile = {
+        "strategy_defaults": {
+            "bull-put-spread": {"delta": 0.2, "dte_min": 35, "dte_max": 45, "spread_width": 5},
+        }
+    }
+    with patch("app.tools.read_profile", return_value=profile):
+        execute_tool("find_bull_put_spread", {"ticker": "MU", "spread_width": 15})
+    call_args = mock_run.call_args[0][0]
+    assert call_args[-1] == "15"
+
+
+@patch("app.tools.os.path.exists", return_value=True)
+@patch("app.tools.subprocess.run")
+def test_execute_tool_skips_defaults_for_monitors(mock_run, mock_exists):
+    """Profile defaults must NOT apply to monitor tools (no selector-style params)."""
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout='{"result": "ok"}', stderr=""
+    )
+    profile = {
+        "strategy_defaults": {
+            "bull-put-spread": {"delta": 0.2, "spread_width": 5},
+        }
+    }
+    with patch("app.tools.read_profile", return_value=profile):
+        execute_tool("check_bull_put_spread", {
+            "ticker": "SPY", "short_strike": 420, "long_strike": 410,
+            "net_credit": 2.5, "expiry": "2026-05-16",
+        })
+    call_args = mock_run.call_args[0][0]
+    # Monitor args are: ticker, short, long, credit, expiry — no delta/width injection
+    assert call_args[2:] == ["SPY", "420", "410", "2.5", "2026-05-16"]
+
+
 # ── 3. _build_args tests ───────────────────────────────────────────────────
 
 
