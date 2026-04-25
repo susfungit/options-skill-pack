@@ -14,20 +14,16 @@ def tmp_data_dir(tmp_path, monkeypatch):
     """Redirect portfolio.json and profile.json to temp files."""
     portfolio_path = str(tmp_path / "portfolio.json")
     profile_path = str(tmp_path / "profile.json")
-    watchlist_path = str(tmp_path / "watchlist.json")
 
     with open(portfolio_path, "w") as f:
         json.dump([], f)
     with open(profile_path, "w") as f:
         json.dump(DEFAULT_PROFILE, f)
-    with open(watchlist_path, "w") as f:
-        json.dump([], f)
 
     trade_plans_dir = str(tmp_path / "trade-plans")
 
     monkeypatch.setattr("app.config.PORTFOLIO_PATH", portfolio_path)
     monkeypatch.setattr("app.config.PROFILE_PATH", profile_path)
-    monkeypatch.setattr("app.config.WATCHLIST_PATH", watchlist_path)
     monkeypatch.setattr("app.config.TRADE_PLANS_DIR", trade_plans_dir)
     # Disable auth in tests so endpoints are accessible
     monkeypatch.setattr("app.auth._APP_API_KEY", None)

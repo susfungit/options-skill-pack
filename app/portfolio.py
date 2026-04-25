@@ -14,7 +14,6 @@ from app import config
 from app.config import MODEL_RE, TICKER_RE, limiter
 from app.storage import (
     read_portfolio, write_portfolio, read_profile, write_profile,
-    read_watchlist, write_watchlist,
     _portfolio_lock, _atomic_write_json,
 )
 from app.tools import execute_tool
@@ -52,24 +51,6 @@ class Position(BaseModel):
 class CloseRequest(BaseModel):
     notes: Optional[str] = None
     close_price: Optional[float] = None
-
-
-class WatchlistLeg(BaseModel):
-    type: str
-    action: str
-    strike: float
-    original_mid: Optional[float] = None
-
-
-class WatchlistTrade(BaseModel):
-    ticker: str
-    strategy: str
-    expiry: str
-    legs: list[WatchlistLeg]
-    original_credit: float
-    original_return_pct: Optional[float] = None
-    stock_price_at_save: Optional[float] = None
-    note: Optional[str] = None
 
 
 class ProfileUpdate(BaseModel):
@@ -607,91 +588,6 @@ async def check_all_positions(request: Request):
             if zd:
                 fp.update(zd)
         _atomic_write_json(config.PORTFOLIO_PATH, fresh)
-    return results
-
-
-# ── Watchlist endpoints ──────────────────────────────────────────────────────
-
-@router.get("/api/watchlist")
-async def list_watchlist():
-    return read_watchlist()
-
-
-@router.post("/api/watchlist")
-async def add_watchlist(item: WatchlistTrade):
-    ticker = item.ticker.strip().upper()
-    if not TICKER_RE.match(ticker):
-        raise HTTPException(status_code=400, detail="Invalid ticker format")
-    watchlist = read_watchlist()
-    entry = item.model_dump(exclude_none=True)
-    entry["ticker"] = ticker
-    entry["id"] = uuid.uuid4().hex[:8]
-    entry["saved_at"] = date.today().isoformat()
-    watchlist.append(entry)
-    write_watchlist(watchlist)
-    return {"status": "ok", "id": entry["id"]}
-
-
-@router.delete("/api/watchlist/{item_id}")
-async def delete_watchlist(item_id: str):
-    watchlist = read_watchlist()
-    new_list = [w for w in watchlist if w.get("id") != item_id]
-    if len(new_list) == len(watchlist):
-        raise HTTPException(status_code=404, detail="Item not found")
-    write_watchlist(new_list)
-    return {"status": "ok"}
-
-
-def _refresh_watchlist_item(item: dict) -> dict:
-    """Fetch current prices for a watchlist trade's strikes."""
-    fake_position = {
-        "id": item["id"],
-        "strategy": item["strategy"],
-        "ticker": item["ticker"],
-        "expiry": item["expiry"],
-        "legs": item["legs"],
-        "net_credit": item["original_credit"],
-        "contracts": 1,
-        "status": "open",
-    }
-    try:
-        result = _check_single_position(fake_position)
-        return {
-            "stock_price": result.get("stock_price"),
-            "prev_close": result.get("prev_close"),
-            "change_pct": result.get("change_pct"),
-            "pnl_per_contract": result.get("pnl_per_contract"),
-            "buffer_pct": result.get("buffer_pct"),
-            "chain_data": result.get("chain_data"),
-            "refreshed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        }
-    except Exception as e:
-        logger.error("Watchlist refresh failed for %s: %s", item.get("id"), e)
-        return {"error": "Refresh failed"}
-
-
-@router.post("/api/watchlist/{item_id}/refresh")
-async def refresh_watchlist_item(item_id: str):
-    watchlist = read_watchlist()
-    item = next((w for w in watchlist if w.get("id") == item_id), None)
-    if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
-    current = _refresh_watchlist_item(item)
-    item["current"] = current
-    write_watchlist(watchlist)
-    return {"id": item_id, **current}
-
-
-@router.post("/api/watchlist/refresh")
-@limiter.limit("5/minute")
-async def refresh_all_watchlist(request: Request):
-    watchlist = read_watchlist()
-    results = []
-    for item in watchlist:
-        current = _refresh_watchlist_item(item)
-        item["current"] = current
-        results.append({"id": item["id"], **current})
-    write_watchlist(watchlist)
     return results
 
 

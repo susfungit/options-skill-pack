@@ -187,7 +187,6 @@ Docker needs these as real files before mounting them as volumes:
 ```bash
 echo '[]' > portfolio.json
 echo '{}' > profile.json
-echo '[]' > watchlist.json
 ```
 
 **Windows (PowerShell):**
@@ -195,7 +194,6 @@ echo '[]' > watchlist.json
 ```powershell
 '[]' | Out-File -Encoding ascii portfolio.json
 '{}' | Out-File -Encoding ascii profile.json
-'[]' | Out-File -Encoding ascii watchlist.json
 ```
 
 ### Step 3 — Start
@@ -204,7 +202,7 @@ echo '[]' > watchlist.json
 docker compose up
 ```
 
-Open **http://localhost:8000**. Data persists in `portfolio.json`, `profile.json`, `watchlist.json` in your project root.
+Open **http://localhost:8000**. Data persists in `portfolio.json` and `profile.json` in your project root.
 
 ### Rebuild after updates
 
@@ -267,7 +265,7 @@ If new skills were added, re-run `setup.sh` / `setup.bat` so the settings file g
 → You set it in a different terminal session. Env vars don't cross terminals. Re-export, or use a `.env` file (Path C does this).
 
 **Docker: `failed to populate volume: not a directory`**
-→ You didn't run Step 2. `portfolio.json` / `profile.json` / `watchlist.json` must exist as files before `docker compose up`.
+→ You didn't run Step 2. `portfolio.json` / `profile.json` must exist as files before `docker compose up`.
 
 **`yfinance` throws `possibly delisted`**
 → Yahoo Finance rate-limited you. Wait a few minutes and retry, or switch network.
@@ -278,7 +276,7 @@ If new skills were added, re-run `setup.sh` / `setup.bat` so the settings file g
 
 ```bash
 # remove generated settings and data (keep the repo)
-rm -rf .claude/settings.json .claude/settings.local.json portfolio.json profile.json watchlist.json monitor_config.json
+rm -rf .claude/settings.json .claude/settings.local.json portfolio.json profile.json monitor_config.json
 
 # or remove everything
 cd ..

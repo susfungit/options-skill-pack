@@ -60,9 +60,6 @@
         <button class="nav-tab" data-tab="analyzer">
           <span class="tab-icon">&#9671;</span> Analyzer
         </button>
-        <button class="nav-tab" data-tab="watchlist">
-          <span class="tab-icon">&#9734;</span> Watchlist
-        </button>
         <button class="nav-tab" data-tab="trade-plans">
           <span class="tab-icon">&#9998;</span> Trading Plans
         </button>
@@ -153,24 +150,6 @@
           <div class="empty-icon">&#9671;</div>
           <p>Pick a ticker and strategy to analyze</p>
           <p class="empty-sub">Runs selector scripts directly — no AI tokens used</p>
-        </div>
-      </section>
-
-      <!-- Watchlist Panel -->
-      <section id="panel-watchlist" class="panel">
-        <div class="portfolio-header">
-          <div class="portfolio-summary" id="watchlist-summary"></div>
-          <div class="portfolio-actions">
-            <button class="btn-check-all" id="btn-refresh-watchlist" onclick="refreshAllWatchlist()">
-              <span>&#8635;</span> Refresh All
-            </button>
-          </div>
-        </div>
-        <div id="watchlist-grid"></div>
-        <div id="watchlist-empty" class="empty-state" style="display:none;">
-          <div class="empty-icon">&#9734;</div>
-          <p>No saved trades yet</p>
-          <p class="empty-sub">Find a trade in the Analyzer, then click &#9734; Watchlist to save it here</p>
         </div>
       </section>
 
@@ -479,7 +458,6 @@
   <script src="/static/chat.js"></script>
   <script src="/static/portfolio.js"></script>
   <script src="/static/analyzer.js"></script>
-  <script src="/static/watchlist.js"></script>
   <script src="/static/trade-plans.js"></script>
   <script src="/static/profile.js"></script>
   <script src="/static/init.js"></script>

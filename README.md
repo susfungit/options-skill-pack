@@ -97,7 +97,6 @@ Create the data files (Docker needs these to exist as files before mounting):
 ```bash
 echo '[]' > portfolio.json
 echo '{}' > profile.json
-echo '[]' > watchlist.json
 ```
 
 Then:
@@ -108,7 +107,7 @@ docker compose up
 
 Open **http://localhost:8000**. Same UI as Option 2.
 
-Portfolio, profile, and watchlist data persist via volume mounts to `portfolio.json`, `profile.json`, and `watchlist.json` in the project root. The container runs as a non-root user and includes a healthcheck on `/health`.
+Portfolio and profile data persist via volume mounts to `portfolio.json` and `profile.json` in the project root. The container runs as a non-root user and includes a healthcheck on `/health`.
 
 To rebuild after pulling updates:
 
@@ -538,8 +537,7 @@ options-skill-pack/
 │       ├── chat.js                               # Chat tab
 │       ├── portfolio.js                          # Portfolio tab
 │       ├── analyzer.js                           # Analyzer tab
-│       ├── profile.js                            # Profile tab
-│       └── watchlist.js                          # Watchlist tab
+│       └── profile.js                            # Profile tab
 ├── CONTRIBUTING.md                               # Contribution guidelines
 ├── LICENSE                                       # Project license
 ├── Dockerfile                                    # Docker build

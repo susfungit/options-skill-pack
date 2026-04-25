@@ -330,64 +330,6 @@ def test_analyze_invalid_strategy(client):
     assert resp.status_code == 422
 
 
-# ── 7. Watchlist endpoint tests ─────────────────────────────────────────────
-
-
-def test_watchlist_empty(client):
-    resp = client.get("/api/watchlist")
-    assert resp.status_code == 200
-    assert resp.json() == []
-
-
-def _sample_watchlist_trade():
-    return {
-        "ticker": "aapl",
-        "strategy": "bull-put-spread",
-        "expiry": "2026-05-16",
-        "legs": [
-            {"type": "put", "action": "sell", "strike": 220, "original_mid": 3.50},
-            {"type": "put", "action": "buy", "strike": 210, "original_mid": 1.20},
-        ],
-        "original_credit": 2.30,
-        "original_return_pct": 29.9,
-        "stock_price_at_save": 228.50,
-    }
-
-
-def test_watchlist_add_and_list(client):
-    resp = client.post("/api/watchlist", json=_sample_watchlist_trade())
-    assert resp.status_code == 200
-    assert "id" in resp.json()
-
-    items = client.get("/api/watchlist").json()
-    assert len(items) == 1
-    assert items[0]["ticker"] == "AAPL"
-    assert items[0]["strategy"] == "bull-put-spread"
-    assert items[0]["original_credit"] == 2.30
-    assert "saved_at" in items[0]
-    assert "id" in items[0]
-
-
-def test_watchlist_reject_invalid_ticker(client):
-    trade = _sample_watchlist_trade()
-    trade["ticker"] = "AAPL1"
-    resp = client.post("/api/watchlist", json=trade)
-    assert resp.status_code == 400
-
-
-def test_watchlist_delete(client):
-    resp = client.post("/api/watchlist", json=_sample_watchlist_trade())
-    item_id = resp.json()["id"]
-    resp = client.delete(f"/api/watchlist/{item_id}")
-    assert resp.status_code == 200
-    assert client.get("/api/watchlist").json() == []
-
-
-def test_watchlist_delete_missing(client):
-    resp = client.delete("/api/watchlist/nonexistent")
-    assert resp.status_code == 404
-
-
 # ── Zone classification boundary tests ──────────────────────────────────────
 #
 # Safety net for _classify_zone_spread and _classify_zone_covered_call.
