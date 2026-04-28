@@ -1,0 +1,113 @@
+{
+  "skill_name": "evening-brief-reviewer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run the evening review.",
+      "expected_output": "Bootstrap loaded today's morning brief; EOD prices searched and timestamped; every open position in recommendations.json got an evening_reviews entry; outcome + diagnosis classified per the four-outcome taxonomy; write_evening.py returned ok:true; HTML evening report written; meta_review and tomorrow_focus populated.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "load_morning_called_first",
+          "description": "load_morning.py was invoked before any web search or scoring (visible in tool calls)."
+        },
+        {
+          "name": "abort_when_no_morning_brief",
+          "description": "If no morning brief exists for the date, the skill aborts with a clear message and does NOT proceed to score anything."
+        },
+        {
+          "name": "eod_quote_table_nonempty",
+          "description": "eod_quote_table contains an entry for every ticker scored — anti-fabrication gate enforced."
+        },
+        {
+          "name": "full_book_scored",
+          "description": "Every position in open_positions_full_book (today's new + prior carry-forwards) appears in scored_recommendations, not just today's new recommendations."
+        },
+        {
+          "name": "outcome_taxonomy_applied",
+          "description": "Each scored recommendation has outcome in {working, neutral, not_working, thesis_broken} and partial_review boolean."
+        },
+        {
+          "name": "diagnosis_required_on_failures",
+          "description": "Every recommendation with outcome in {not_working, thesis_broken} has diagnosis_category in {data_error, process_error, judgment_error, bad_luck}."
+        },
+        {
+          "name": "evening_files_written",
+          "description": "morning-briefs/YYYY-MM-DD-evening.json AND morning-briefs/YYYY-MM-DD-evening.html written. recommendations.json updated with evening_reviews[] entries."
+        },
+        {
+          "name": "html_uses_outcome_colors",
+          "description": "HTML evening report uses outcome-driven top borders (green/grey/amber/red) for each card; visible EOD quote table at top; meta_review and tomorrow_focus sections rendered."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Run the evening review for 2026-04-27.",
+      "expected_output": "Backfill mode: --date 2026-04-27 passed. Loads the morning brief for that specific date. Scores positions against EOD prices for that date. Files written to morning-briefs/2026-04-27-evening.{json,html}.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "date_override_used",
+          "description": "load_morning.py called with --date 2026-04-27; evening JSON review_date is 2026-04-27."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Run the evening review.",
+      "expected_output": "Tests prompt-change discipline. The skill must NOT propose a prompt change for judgment_error or bad_luck outcomes — only data_error and process_error trigger proposals. write_evening.py rejects any proposal with category outside {data_error, process_error}.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "no_proposals_from_judgment_error",
+          "description": "Recommendations with diagnosis_category=judgment_error or bad_luck do NOT generate prompt_change_proposals entries."
+        },
+        {
+          "name": "proposal_category_validated",
+          "description": "If the brief constructs a proposal with category=judgment_error, write_evening.py exits non-zero with a category validation error."
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Run the evening review.",
+      "expected_output": "Tests recurrence counting. If a proposal with the same summary has appeared twice in the prior 14 days, today's matching proposal must show recurrence_count_14d=3 and action_threshold_met=true in the persist script's output. The HTML must surface this prominently.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "recurrence_counted",
+          "description": "When the same proposal summary recurs, write_evening.py's output shows recurrence_count_14d incremented and action_threshold_met=true at count 3+."
+        },
+        {
+          "name": "action_threshold_surfaced",
+          "description": "HTML evening report shows the proposal with a distinct ACT NOW or red header when action_threshold_met=true."
+        },
+        {
+          "name": "summary_normalization",
+          "description": "Recurrence matching is case-insensitive and whitespace-tolerant — variations like 'Step 2 #12 missed' and 'step 2 #12 missed' count as the same proposal."
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Run the evening review.",
+      "expected_output": "Tests anti-recency-bias guardrail. A position whose catalyst hasn't fully resolved (e.g. AMC earnings on the same day) must be flagged partial_review=true and outcome must NOT be thesis_broken — reserve thesis_broken for positions with no path to recovery.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "partial_review_set_on_amc_days",
+          "description": "When the morning brief recommended a trade tied to an AMC earnings catalyst occurring today, the evening review marks that position partial_review=true and explicitly notes that tomorrow morning's carry-forward review will close the loop."
+        },
+        {
+          "name": "no_premature_thesis_broken",
+          "description": "Positions still inside their short strikes (or otherwise alive) on day 1 are NOT classified as thesis_broken even if the day moved against them."
+        },
+        {
+          "name": "weekend_partial_review",
+          "description": "On a closed_weekend run, every scored position has partial_review=true and the eod_quote_table reuses the prior session close that the morning brief used."
+        }
+      ]
+    }
+  ]
+}

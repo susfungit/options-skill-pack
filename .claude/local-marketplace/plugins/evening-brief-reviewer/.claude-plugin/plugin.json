@@ -1,0 +1,5 @@
+{
+  "name": "evening-brief-reviewer",
+  "version": "1.0.0",
+  "description": "Reviews the morning brief at end of day. Scores each recommendation against EOD prices, classifies outcome, diagnoses failures, and proposes prompt changes (never auto-applied). Updates recommendations.json and accumulates prompt_change_proposals.json for cross-day pattern detection."
+}

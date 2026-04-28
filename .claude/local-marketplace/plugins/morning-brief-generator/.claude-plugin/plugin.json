@@ -1,0 +1,5 @@
+{
+  "name": "morning-brief-generator",
+  "version": "1.0.0",
+  "description": "Produces THE MORNING BRIEF — a daily pre-market options intelligence report with sourced live-quote table, mandatory carry-forward, JSON recommendations index, and editorial HTML output."
+}

@@ -125,6 +125,26 @@
       },
       "source": "./plugins/options-trade-plan",
       "category": "finance"
+    },
+    {
+      "name": "morning-brief-generator",
+      "description": "Produces THE MORNING BRIEF — a daily pre-market options intelligence report (v3.4) with sourced live-quote table, mandatory carry-forward, JSON recommendations index, and editorial HTML output. Enforces anti-fabrication gates (Step 0 Part E table, Step 6 #12 source citation).",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/morning-brief-generator",
+      "category": "finance"
+    },
+    {
+      "name": "evening-brief-reviewer",
+      "description": "Reviews today's morning brief at end of day. Scores each open position against EOD prices, classifies outcome (working/neutral/not_working/thesis_broken), diagnoses failures (data/process/judgment/luck), and proposes prompt changes (never auto-applied; surfaces 3+ recurrence threshold). Updates recommendations.json and prompt_change_proposals.json.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/evening-brief-reviewer",
+      "category": "finance"
     }
   ]
 }

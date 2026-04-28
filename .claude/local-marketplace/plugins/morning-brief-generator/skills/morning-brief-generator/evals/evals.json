@@ -1,0 +1,141 @@
+{
+  "skill_name": "morning-brief-generator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run the morning brief.",
+      "expected_output": "Bootstrap helper called first; live macro + ticker prices searched with timestamps; quote_table populated and rendered visibly at top of HTML; 11 mandatory sections present; JSON persisted via write_brief.py with no validation errors; recommendations.json updated; HTML file written.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "init_brief_called_first",
+          "description": "init_brief.py was invoked before any web search or analysis (visible in tool calls)."
+        },
+        {
+          "name": "live_macro_searched",
+          "description": "Web searches performed for SPX/NDX futures, VIX, oil, gold, 10Y, DXY, BTC, ETH with current timestamps (not prior close)."
+        },
+        {
+          "name": "quote_table_nonempty",
+          "description": "Step 1 Part E quote table contains every ticker that will be recommended, each with live_price, timestamp, and source."
+        },
+        {
+          "name": "every_rec_in_quote_table",
+          "description": "Every recommendation's ticker appears in the quote_table — Step 4 gate enforced."
+        },
+        {
+          "name": "step6_citation_per_trade",
+          "description": "Each recommendation has a step6_citation field naming the search query or URL and timestamp."
+        },
+        {
+          "name": "min_seven_dte",
+          "description": "Every recommendation has dte_at_entry >= 7, OR short_dte_exception=true with all five exception conditions documented."
+        },
+        {
+          "name": "all_eleven_sections_rendered",
+          "description": "HTML output contains all 11 mandatory sections in order, plus the visible Part E quote table at the top."
+        },
+        {
+          "name": "carry_forward_section_present",
+          "description": "Section 3 (Open Positions Carry-Forward) is rendered. If no open positions, it shows the explicit empty-state line, not a blank section."
+        },
+        {
+          "name": "json_persisted",
+          "description": "write_brief.py was invoked with the brief JSON, returned ok:true, and morning-briefs/YYYY-MM-DD.json + recommendations.json exist on disk."
+        },
+        {
+          "name": "html_written",
+          "description": "morning-briefs/YYYY-MM-DD.html written; standalone HTML; includes all three cdn.jsdelivr.net font imports and @media print styles."
+        },
+        {
+          "name": "no_memory_priced_tickers",
+          "description": "No recommendation has a price_source containing 'memory', 'estimate', 'approximate', or 'last I knew'."
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Run the morning brief for 2026-04-23.",
+      "expected_output": "Backfill mode: --date 2026-04-23 passed to init_brief.py. The skill must still verify live prices for that date (or refuse with explicit message that historical pricing is unavailable for the brief). Carry-forward set is computed from recommendations.json as of 2026-04-23. Brief written to morning-briefs/2026-04-23.json and .html. The NOW $730 / MSTR $330 fabrication failures from the v3.3 era must NOT recur — the skill either sources live April-23 prices or refuses to recommend strikes for tickers it cannot price.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "date_override_used",
+          "description": "init_brief.py was called with --date 2026-04-23 and the JSON brief_date field is 2026-04-23."
+        },
+        {
+          "name": "no_fabricated_strikes",
+          "description": "No recommendation uses strikes that are structurally impossible relative to the live price (e.g. NOW $680/$780 strikes for a $90 stock). If live price for the historical date cannot be sourced, the skill refuses to recommend that ticker."
+        },
+        {
+          "name": "validation_passed",
+          "description": "write_brief.py returned ok:true with no validation_warnings."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Run the morning brief — focus on tech earnings this week.",
+      "expected_output": "Sector focus is honored: implied_move_watch and high_conviction sections are weighted toward tech earnings names. The carry_forward section, quote_table discipline, and 11 mandatory sections are NOT skipped just because of the focus filter. JSON + HTML produced as normal.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "tech_focus_honored",
+          "description": "Section 4 and Section 5 are weighted toward tech-sector earnings names without dropping any mandatory section."
+        },
+        {
+          "name": "all_eleven_sections_still_rendered",
+          "description": "Sector focus does not cause any of the 11 mandatory sections to be skipped."
+        },
+        {
+          "name": "quote_table_complete",
+          "description": "Every ticker recommended (including the tech earnings names) appears in quote_table with sourced live price."
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Run the morning brief.",
+      "expected_output": "Verifies the carry-forward path. If recommendations.json contains an open position from a prior date with expiry >= today, that position MUST appear in carry_forward_reviewed with action_today set. The persist script merges that review into the existing recommendation's reviews[] array.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "carry_forward_loaded_from_init",
+          "description": "init_brief.py output's carry_forward array was used to populate Section 3 — the skill did not re-read recommendations.json itself."
+        },
+        {
+          "name": "every_open_position_reviewed",
+          "description": "Every entry in init_brief.py's carry_forward output appears in the brief's carry_forward_reviewed array with action_today set."
+        },
+        {
+          "name": "current_price_sourced",
+          "description": "Each carry-forward entry has a current_stock_price that came from the quote_table (the ticker also appears in quote_table)."
+        },
+        {
+          "name": "review_merged_into_index",
+          "description": "After write_brief.py runs, recommendations.json shows the prior recommendation with a new entry appended to its reviews[] array containing review_date, action_today, current_stock_price, current_pnl_pct."
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Run the morning brief.",
+      "expected_output": "Tests v3.4 failure modes. If any candidate ticker cannot be sourced, the skill MUST drop it from recommendations rather than fabricate. write_brief.py must reject any brief where a recommendation's ticker is not in quote_table, where price_source is missing, or where dte_at_entry < 7 without short_dte_exception.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "missing_ticker_rejected",
+          "description": "If a test brief is constructed with a recommendation whose ticker is not in quote_table, write_brief.py exits non-zero with a 'Step 4 gate failed' error message."
+        },
+        {
+          "name": "missing_source_rejected",
+          "description": "If a recommendation has empty price_source, write_brief.py exits non-zero with a 'Step 6 #12 gate failed' error message."
+        },
+        {
+          "name": "short_dte_without_exception_rejected",
+          "description": "If a recommendation has dte_at_entry=3 without short_dte_exception=true, write_brief.py exits non-zero."
+        }
+      ]
+    }
+  ]
+}

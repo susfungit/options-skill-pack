@@ -1,0 +1,45 @@
+{
+  "recommendations": [
+    {
+      "id": "2026-04-23-IBM-01",
+      "date_recommended": "2026-04-23",
+      "ticker": "IBM",
+      "section": "high_conviction",
+      "catalyst": "Post-earnings IV crush after Q1 beat",
+      "thesis": "IBM gapped down 6% on guidance; expect IV crush and mean-reversion bounce.",
+      "iv_environment": "Elevated (confirmed)",
+      "directional_bias": "bullish",
+      "strategy": "bull_put_spread",
+      "conviction": "MEDIUM",
+      "live_price_at_recommendation": 240.10,
+      "price_source": "URL: finance.yahoo.com/quote/IBM/",
+      "price_timestamp": "07:30 ET",
+      "legs": [
+        {"action": "sell", "type": "put", "strike": 230, "expiry": "2026-05-16"},
+        {"action": "buy",  "type": "put", "strike": 220, "expiry": "2026-05-16"}
+      ],
+      "expiry_date": "2026-05-16",
+      "dte_at_entry": 23,
+      "short_dte_exception": false,
+      "spread_width": 10,
+      "estimated_credit": 1.65,
+      "estimated_debit": null,
+      "max_profit": 165,
+      "max_loss": 835,
+      "break_even": 228.35,
+      "stock_vs_strikes": "Stock $240.10 sits $10.10 above $230 short put — both put legs OTM",
+      "key_risk": "IBM closes below $230 by 2026-05-16 (gap-down extends)",
+      "step6_citation": "Live price $240.10 from finance.yahoo.com/quote/IBM/ at 07:30 ET, confirmed in Step 0 Part E quote table",
+      "status": "open",
+      "reviews": [
+        {
+          "review_date": "2026-04-24",
+          "action_today": "HOLD",
+          "current_stock_price": 242.15,
+          "current_pnl_pct": 22,
+          "notes": "Bouncing off $240; IV crushed as expected"
+        }
+      ]
+    }
+  ]
+}

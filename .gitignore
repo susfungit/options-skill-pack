@@ -50,6 +50,12 @@ app/.env
 
 # Architecture plans (local dev artifacts)
 PLUGGABLE_ARCHITECTURE_PLAN.md
+AUTOMATION_PLAN.md
 
 # Generated options trade plans (personal analysis output)
 trade-plans/
+
+# Generated morning briefs (personal analysis output + recommendations index)
+morning-briefs/*.json
+morning-briefs/*.html
+!morning-briefs/recommendations.example.json
