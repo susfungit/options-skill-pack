@@ -197,35 +197,7 @@ You do NOT edit the morning SKILL.md. The user reviews proposals and decides.
 
 ## Step 4 — Build the evening JSON
 
-```jsonc
-{
-  "review_date": "YYYY-MM-DD",
-  "morning_brief_volume": 42,
-  "morning_brief_meta_signal_summary": "Markets entered week at record SPX; iron condor + bull puts on relative strength + post-earnings name.",
-  "market_status": "open",
-  "eod_quote_table": [
-    {"ticker": "SPY",  "eod_price": 716.20, "timestamp": "2026-04-27 16:00 ET", "source": "URL: finance.yahoo.com/quote/SPY/"},
-    {"ticker": "INTC", "eod_price": 84.10,  "timestamp": "2026-04-27 16:00 ET", "source": "search: INTC close April 27 2026"}
-  ],
-  "scored_recommendations": [
-    {
-      "id": "2026-04-25-SPY-01",
-      "eod_price": 716.20,
-      "estimated_pnl_pct": 8,
-      "estimated_pnl_dollars": 24,
-      "outcome": "neutral",
-      "partial_review": false,
-      "thesis_check": "Predicted range-bound; SPY +0.32% intraday — within the iron condor range. No directional signal yet.",
-      "lesson": null,
-      "diagnosis_category": null,
-      "status_update": null
-    }
-  ],
-  "prompt_change_proposals": [],
-  "meta_review": "Day 1 of the event-week iron condor + bull-put pair. Tape was quiet ahead of MAG7 earnings. INTC consolidated +1.8% — bull put spread up modestly. SPY drifted; iron condor on track. No diagnosis-worthy failures.",
-  "tomorrow_focus": "Tuesday: pre-FOMC positioning. Watch for IV ramp on SPY/QQQ ahead of Wednesday 2:00 PM. Carry-forward review will assess INTC if Tuesday's tape rotates away from semis."
-}
-```
+Read `references/evening_schema.md` (alongside this SKILL.md) and construct a single JSON object that matches that schema exactly. This is what `write_evening.py` validates and persists at `morning-briefs/YYYY-MM-DD-evening.json`.
 
 ---
 
@@ -257,34 +229,14 @@ Surface those in the HTML — especially any with `action_threshold_met: true`.
 
 ## Step 6 — Render the HTML evening report
 
-`morning-briefs/YYYY-MM-DD-evening.html` — same magazine design language as the morning brief but
-with **outcome cards** instead of trade-recommendation cards.
+Write `morning-briefs/YYYY-MM-DD-evening.html` — same magazine design language as the morning brief but with **outcome cards** instead of trade-recommendation cards. Read `references/evening_html_spec.md` (alongside this SKILL.md) for the full design spec — masthead, ticker-bar color, card content, proposals section, EOD quote table, meta review, tomorrow focus.
 
-### Differences from the morning HTML
+The outcome → card-border-color mapping is reproduced inline because it is a classification rule the LLM applies during scoring, not styling:
 
-- **Masthead subtitle** reads `EVENING REVIEW · [DAY] EDITION · [DATE] · Vol. [#]`
-- **Ticker bar** color: deeper indigo (`#1a3a6e`) instead of red — visually distinct from the
-  morning so a printed stack is easy to sort
-- **Outcome cards** (replace trade cards):
-    - Top border colored by outcome:
-        - `working` → green (`#1a7a3a`)
-        - `neutral` → grey (`#888`)
-        - `not_working` → amber (`#b8860b`)
-        - `thesis_broken` → red (`#c41e3a`)
-    - Each card shows: ticker tag, EOD price + day %, outcome badge, P/L estimate, thesis check,
-      lesson (if any), diagnosis category (if any), status update (if any), partial-review flag (if
-      true)
-- **Proposals section** (replaces "implied move watch"):
-    - Each proposal renders with `recurrence_count_14d` prominently
-    - Proposals where `action_threshold_met: true` get a distinct red "ACT NOW" header
-    - Proposals at recurrence 1–2 show as "watch — accumulating"
-- **Visible EOD quote table** at top (just like morning's Step 1 Part E table)
-- **Meta Review block** (dark bg, indigo accent — analog to morning's Meta Signal)
-- **Tomorrow Focus block** (light surface card, summarizing what tomorrow's brief should pay
-  attention to)
-
-Otherwise: same fonts (Bebas Neue / Playfair Display / Source Serif 4), same triple-rule dividers,
-same `@media print` discipline, same standalone HTML.
+- `working` → green (`#1a7a3a`)
+- `neutral` → grey (`#888`)
+- `not_working` → amber (`#b8860b`)
+- `thesis_broken` → red (`#c41e3a`)
 
 ---
 

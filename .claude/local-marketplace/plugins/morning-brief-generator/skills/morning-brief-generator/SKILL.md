@@ -317,122 +317,7 @@ If any answer #1–12 is missing, vague, or illogical → **DO NOT PUBLISH.**
 
 ## Step 8 — Build the brief JSON
 
-Construct a single JSON object matching the schema below. This is what gets persisted and what the
-evening reviewer reads tomorrow.
-
-```jsonc
-{
-  "brief_date": "YYYY-MM-DD",            // from Step 0
-  "brief_version": "v3.4",
-  "brief_volume": 42,                     // from Step 0
-  "generated_at_et": "HH:MM ET",
-  "minutes_until_market_open": 45,        // null on closed days
-  "market_status": "open",                // open | closed_weekend | closed_holiday | early_close
-  "market_status_detail": null,           // e.g. "Saturday" or "Memorial Day"
-  "last_trading_day": "2026-04-24",       // date string
-
-  "market_snapshot": {                    // Section 1
-    "timestamp_et": "HH:MM ET",
-    "spx_futures":  {"level": 5234.5, "pct": -0.41},
-    "ndx_futures":  {"level": 18234.0, "pct": -0.55},
-    "dow_futures":  {"level": 39812.0, "pct": -0.30},
-    "vix":          {"level": 16.4, "direction": "rising"},
-    "wti_crude":    {"price": 78.20, "pct": 1.1},
-    "brent_crude":  {"price": 82.10, "pct": 0.9},
-    "gold_futures": {"price": 2345.0, "pct": 0.2},
-    "ten_year_yield": 4.36,
-    "dxy":          104.21,
-    "btc":          {"price": 67200, "pct_24h": -1.2},
-    "eth":          {"price": 3415, "pct_24h": -0.8}
-  },
-
-  "reversal_alert": null,                 // Section 2 — null OR { "summary": str, "details": str }
-  "binary_resolutions": [],               // resolved binaries from Step 3 — { "event": str, "status": "resolved"|"extended"|"canceled", "detail": str }
-
-  "quote_table": [                        // Section "Sourced Live Quotes" + Step 1 Part E
-    {
-      "ticker": "TSLA",
-      "live_price": 376.38,
-      "timestamp": "07:30 ET",
-      "source": "search: TSLA pre-market 2026-04-25"
-    }
-  ],
-
-  "carry_forward_reviewed": [             // Section 3 — one entry per open prior recommendation
-    {
-      "id": "2026-04-23-IBM-01",          // matches id from prior brief in recommendations.json
-      "current_stock_price": 240.10,
-      "current_pnl_pct": 32,
-      "strikes_status": "Stock $240 above $235 short put — both put legs OTM",
-      "days_since_entry": 2,
-      "dte_remaining": 21,
-      "action_today": "HOLD",             // HOLD | CLOSE_HALF | CLOSE_FULL | ROLL | ADJUST_STRIKE
-      "trigger_for_close": "Close half at 50% of max profit",
-      "notes": ""
-    }
-  ],
-
-  "recommendations": [                    // Section 4 + 5 + 6 + 8 (any new trade)
-    {
-      "id": "YYYY-MM-DD-TICKER-NN",       // unique; date + ticker + sequence
-      "date_recommended": "YYYY-MM-DD",
-      "ticker": "TSLA",
-      "section": "high_conviction",       // high_conviction | implied_move | index | crypto_equity | squeeze
-      "catalyst": "Q1 deliveries beat",
-      "thesis": "...",
-      "iv_environment": "Elevated (estimated)",
-      "directional_bias": "bullish",
-      "strategy": "bull_put_spread",      // snake_case
-      "conviction": "HIGH",                // HIGH | MEDIUM | LOW
-      "live_price_at_recommendation": 376.38,
-      "price_source": "search: TSLA pre-market 2026-04-25",
-      "price_timestamp": "07:30 ET",
-      "legs": [
-        {"action": "sell", "type": "put", "strike": 360, "expiry": "2026-05-16"},
-        {"action": "buy",  "type": "put", "strike": 350, "expiry": "2026-05-16"}
-      ],
-      "expiry_date": "2026-05-16",
-      "dte_at_entry": 21,
-      "short_dte_exception": false,
-      "spread_width": 10,
-      "estimated_credit": 1.85,
-      "estimated_debit": null,
-      "max_profit": 185,                   // per contract, in dollars
-      "max_loss": 815,
-      "break_even": 358.15,                // number OR [low, high] for condor / straddle
-      "stock_vs_strikes": "Stock $376.38 sits $16.38 above $360 short put — full credit at expiry if held above $360",
-      "key_risk": "TSLA closes below $360 by 2026-05-16",
-      "step6_citation": "Live price $376.38 from search 'TSLA pre-market 2026-04-25' at 07:30 ET, confirmed in quote_table",
-      "status": "open"
-    }
-  ],
-
-  "implied_move_watch": [                 // Section 5 — table rows
-    {"ticker": "MSFT", "report_date": "2026-04-29", "report_timing": "AMC", "implied_move_pct": 4.2,
-     "thesis": "...", "strategy_idea": "post-earnings put credit spread", "dte": 14, "conviction": "MEDIUM"}
-  ],
-
-  "index_read": {                         // Section 6
-    "spy": {"price": 711.0, "support": 705, "resistance": 720, "tag": "complacent", "trade_idea": "..."},
-    "qqq": {"price": 656.0, "support": 648, "resistance": 670, "tag": "neutral",    "trade_idea": "..."},
-    "iwm": {"price": 276.0, "support": 270, "resistance": 285, "tag": "fearful",    "trade_idea": "..."}
-  },
-
-  "valuation_screen": [],                 // Section 7 — earnings-week names with P/E > 100, OR empty array
-  "valuation_screen_note": "No qualifying names this week.",
-
-  "crypto_equities": {                    // Section 8
-    "trigger_state": "no_trigger",        // full_fire | pre_staged | no_trigger
-    "btc_pct_24h": -1.2,
-    "eth_pct_24h": -0.8,
-    "note": "BTC -1.2% / ETH -0.8% — within normal range. No correlated-equity setup triggered."
-  },
-
-  "unusual_activity": [],                 // Section 9
-  "meta_signal": "Mild risk-off into the open ...",  // Section 10
-  "missed_catalyst_watch": []              // Section 11
-}
-```
+Read `references/brief_schema.md` (alongside this SKILL.md) and construct a single JSON object that matches that schema exactly. Every field, every type, every comment-as-rule in that file is mandatory. This is what gets persisted by `write_brief.py` and what the evening reviewer reads tomorrow.
 
 ---
 
@@ -464,62 +349,9 @@ include the paths in the final user-facing response.
 
 ## Step 10 — Render the HTML magazine
 
-Write `morning-briefs/YYYY-MM-DD.html` as a complete standalone document.
+Write `morning-briefs/YYYY-MM-DD.html` as a complete standalone document. Read `references/html_spec.md` (alongside this SKILL.md) for the full design spec — typography, color palette, dividers, masthead, banner styling, card layout, conviction dots, footer, and HTML file requirements. Reproduce that spec verbatim.
 
-### Design spec (unchanged from v3.4 prompt)
-
-**Masthead**
-
-- Black background (`#0f0f0f`)
-- "THE MORNING BRIEF" in Bebas Neue
-- Subtitle: `Options & Pre-Market Intelligence | [DAY] Edition | [DATE] · Vol. [#]`
-- Red ticker bar (`#c41e3a`) below
-
-**Typography (cdn.jsdelivr.net imports)**
-
-- Headlines: Playfair Display
-- Body: Source Serif 4
-- Labels: Bebas Neue
-
-**Color palette**
-
-- Page: `#faf7f0` · Ink: `#0f0f0f` · Red accent: `#c41e3a`
-- Bull green: `#1a7a3a` · Bear red: `#c41e3a` · Amber: `#b8860b`
-- Body: `#2a2a2a` · Muted: `#888` · Surface: `#f0ede4`
-
-**Section dividers** — triple rule between sections:
-
-```
-3px solid #0f0f0f / 1px solid #c41e3a / 0.5px solid #0f0f0f
-```
-
-**v3.4 visible element** — the Step 1 Part E quote table renders as its own visible block at the
-top of the brief, just below the market snapshot. Reader must be able to verify every sourced
-price before trusting any recommendation.
-
-**Market-closed banner** — when `market_status` is `closed_weekend` or `closed_holiday`, render a
-prominent banner immediately under the masthead:
-
-> **MARKETS CLOSED — [Saturday | Memorial Day | …]. Quotes from [last_trading_day] close. Brief is for planning only.**
-
-The banner uses the amber accent color (`#b8860b`) — same family as the carry-forward card so it
-reads as "informational, not a tradable signal." When `market_status` is `early_close`, render a
-smaller note: **"EARLY CLOSE — 1:00 PM ET. Same-day trades scaled accordingly."**
-
-**Open Positions Carry-Forward block** — amber-accent card (`#b8860b` border) distinguishing it
-from new-trade cards. Show ENTRY date, DTE remaining, current status vs strikes, MANAGEMENT ACTION
-prominently.
-
-**Stock / strategy card** — section label + ticker tag + move badge + headline + strategy box +
-validation line + **v3.4 "Source:" citation line below live price** + conviction line.
-
-**Conviction display**
-
-- HIGH → green dot
-- MEDIUM → amber dot
-- LOW → red dot
-
-**Footer** — black (`#0f0f0f`) with disclaimer.
+The following requirements are reproduced inline because they are enforcement gates, not styling:
 
 ### Section order in HTML (11 mandatory + quote table)
 
@@ -537,13 +369,11 @@ validation line + **v3.4 "Source:" citation line below live price** + conviction
 10. Meta Signal
 11. Missed Catalyst Watch (no stale binaries)
 
-**HTML file requirements**
+### Market-status banner trigger conditions
 
-- Full DOCTYPE, standalone HTML
-- All CSS inline
-- Three cdn.jsdelivr.net font imports
-- `@media print` styles
-- Saved to `morning-briefs/YYYY-MM-DD.html`
+- `market_status == closed_weekend` or `closed_holiday` → render the "MARKETS CLOSED — …" banner under the masthead
+- `market_status == early_close` → render the smaller "EARLY CLOSE — 1:00 PM ET" note
+- The visible Step 1 Part E quote table must appear at the top of the brief regardless of market status
 
 ---
 
