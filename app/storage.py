@@ -44,15 +44,23 @@ def write_portfolio(data: list[dict]):
 
 
 def read_profile() -> dict:
-    """Return saved profile merged over defaults (so new fields always exist)."""
+    """Return saved profile merged over defaults (so new fields always exist).
+
+    Merge is 2 levels deep so saved profiles missing newly-added keys
+    (e.g. `min_ror` inside a strategy_defaults entry) fall back to defaults.
+    """
     with _profile_lock:
         profile = copy.deepcopy(config.DEFAULT_PROFILE)
         if os.path.exists(config.PROFILE_PATH):
             with open(config.PROFILE_PATH, "r") as f:
                 saved = json.load(f)
             for key in profile:
-                if key in saved and isinstance(profile[key], dict):
-                    profile[key].update(saved[key])
+                if key in saved and isinstance(profile[key], dict) and isinstance(saved[key], dict):
+                    for sub_key, sub_val in saved[key].items():
+                        if isinstance(sub_val, dict) and isinstance(profile[key].get(sub_key), dict):
+                            profile[key][sub_key] = {**profile[key][sub_key], **sub_val}
+                        else:
+                            profile[key][sub_key] = sub_val
                 elif key in saved:
                     profile[key] = saved[key]
         return profile

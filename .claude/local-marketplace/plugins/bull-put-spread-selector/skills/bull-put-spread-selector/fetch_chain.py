@@ -3,12 +3,16 @@
 Fetch options chain data for a bull put spread via yfinance.
 
 Usage:
-  python3 fetch_chain.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX] [SPREAD_WIDTH]
+  python3 fetch_chain.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX] [SPREAD_WIDTH] [MIN_ROR]
 
   TARGET_DELTA  : absolute delta value, e.g. 0.20  (default: 0.20)
   DTE_MIN       : minimum DTE, e.g. 35             (default: 35)
   DTE_MAX       : maximum DTE, e.g. 45             (default: 45)
   SPREAD_WIDTH  : % below short strike for long put (default: 10)
+  MIN_ROR       : minimum return-on-risk %, 0 disables (default: 20)
+
+If the requested width can't clear MIN_ROR, the script tries progressively
+wider variants (15%, 20%, 25%) before giving up. Delta is held fixed.
 
 Outputs JSON to stdout. Errors output JSON with an "error" key.
 """
@@ -45,6 +49,7 @@ def main():
     dte_min = int(argv[3]) if len(argv) > 3 else 35
     dte_max = int(argv[4]) if len(argv) > 4 else 45
     spread_width_pct = float(argv[5]) if len(argv) > 5 else 10.0
+    min_ror = float(argv[6]) if len(argv) > 6 else 20.0
 
     tk = yf.Ticker(ticker_sym)
     price, prev_close, change_pct = get_stock_price(tk, ticker_sym)
@@ -103,23 +108,54 @@ def main():
     short_ask = round(float(short_row.get("ask", 0) or 0), 2)
     price_source = classify_price_source(short_bid, short_ask)
 
-    # Long put: nearest listed strike at spread_width_pct below short
-    long_target = short_strike * (1 - spread_width_pct / 100)
-    long_candidates = puts_otm[puts_otm["strike"] < short_strike].copy()
-    if long_candidates.empty:
+    # Long put candidates pool — strikes below short strike
+    long_pool = puts_otm[puts_otm["strike"] < short_strike].copy()
+    if long_pool.empty:
         error_exit(f"No strikes available below short strike {short_strike}")
-    long_candidates["long_diff"] = (long_candidates["strike"] - long_target).abs()
-    long_row = long_candidates.loc[long_candidates["long_diff"].idxmin()].to_dict()
+
+    # Iterate width candidates: requested first, then wider fallbacks.
+    # Widening generally raises ROR (long put gets cheaper) — stop at first pass.
+    width_candidates = []
+    for w in [spread_width_pct, 15.0, 20.0, 25.0]:
+        if w not in width_candidates:
+            width_candidates.append(w)
+
+    widths_tried = []
+    chosen = None
+    for w in width_candidates:
+        long_target = short_strike * (1 - w / 100)
+        pool = long_pool.copy()
+        pool["long_diff"] = (pool["strike"] - long_target).abs()
+        candidate_row = pool.loc[pool["long_diff"].idxmin()].to_dict()
+        c_long_strike = float(candidate_row["strike"])
+        c_long_mid = float(candidate_row["mid_price"])
+        cm = build_spread_metrics(short_mid, c_long_mid, short_strike, c_long_strike, short_delta, "put")
+        widths_tried.append({
+            "width_pct": w,
+            "long_strike": c_long_strike,
+            "net_credit": cm["net_credit"],
+            "return_on_risk_pct": cm["return_on_risk_pct"],
+        })
+        if cm["spread_width"] <= 0 or cm["net_credit"] <= 0:
+            continue
+        if cm["return_on_risk_pct"] >= min_ror:
+            chosen = (w, candidate_row, cm)
+            break
+
+    if chosen is None:
+        error_exit(
+            f"No width clears min_ror={min_ror}% at delta={short_delta} — try a higher delta or lower threshold",
+            min_ror=min_ror,
+            short_delta=short_delta,
+            widths_tried=widths_tried,
+        )
+
+    width_used, long_row, m = chosen
     long_strike = float(long_row["strike"])
     long_mid = float(long_row["mid_price"])
     long_bid = round(float(long_row.get("bid", 0) or 0), 2)
     long_ask = round(float(long_row.get("ask", 0) or 0), 2)
-
-    # Metrics
     natural_credit = round(short_bid - long_ask, 2) if short_bid > 0 and long_ask > 0 else None
-    m = build_spread_metrics(short_mid, long_mid, short_strike, long_strike, short_delta, "put")
-    if m["spread_width"] <= 0 or m["net_credit"] <= 0:
-        error_exit(f"Degenerate spread: short={short_strike}, long={long_strike}, credit={m['net_credit']}")
 
     result = {
         "ticker": ticker_sym,
@@ -154,6 +190,10 @@ def main():
         "breakeven": m["breakeven"],
         "return_on_risk_pct": m["return_on_risk_pct"],
         "prob_profit_pct": m["prob_profit_pct"],
+        "min_ror_used": min_ror,
+        "width_pct_requested": spread_width_pct,
+        "width_pct_used": width_used,
+        "widths_tried": widths_tried,
         "price_source": price_source,
         "delta_source": "bs_from_option_price",
         "data_source": "yfinance"

@@ -3,11 +3,15 @@
 Fetch options chain data for an iron condor via yfinance.
 
 Usage:
-  python3 fetch_iron_condor.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX]
+  python3 fetch_iron_condor.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX] [MIN_ROR]
 
   TARGET_DELTA  : absolute delta for both short strikes, e.g. 0.16  (default: 0.16)
   DTE_MIN       : minimum DTE, e.g. 35                              (default: 35)
   DTE_MAX       : maximum DTE, e.g. 45                              (default: 45)
+  MIN_ROR       : minimum return-on-risk %, 0 disables               (default: 20)
+
+If $5 wings can't clear MIN_ROR, the script tries progressively wider wings
+($7, $10, $15) before giving up. Short-strike deltas are held fixed.
 
 Outputs JSON to stdout. Errors output JSON with an "error" key.
 """
@@ -31,14 +35,14 @@ except ImportError:
     error_exit("yfinance not installed — run: pip3 install yfinance")
 
 
-def select_wing(valid_df, otm_df, short_strike, short_mid, side="put"):
-    """Select long (wing) strike further OTM than short strike, ~$5 wide."""
+def select_wing(valid_df, otm_df, short_strike, short_mid, side="put", wing_distance=5):
+    """Select long (wing) strike further OTM than short strike, *wing_distance* dollars wide."""
     if side == "put":
         candidates = valid_df[valid_df["strike"] < short_strike].copy()
-        wing_target = short_strike - 5
+        wing_target = short_strike - wing_distance
     else:
         candidates = valid_df[valid_df["strike"] > short_strike].copy()
-        wing_target = short_strike + 5
+        wing_target = short_strike + wing_distance
 
     if candidates.empty:
         # Fallback: use full OTM chain (includes strikes without computable delta)
@@ -71,6 +75,7 @@ def main():
     target_delta = float(argv[2]) if len(argv) > 2 else 0.16
     dte_min = int(argv[3]) if len(argv) > 3 else 35
     dte_max = int(argv[4]) if len(argv) > 4 else 45
+    min_ror = float(argv[5]) if len(argv) > 5 else 20.0
 
     tk = yf.Ticker(ticker_sym)
     price, prev_close, change_pct = get_stock_price(tk, ticker_sym)
@@ -112,20 +117,7 @@ def main():
     short_put_bid = round(float(short_put_row.get("bid", 0) or 0), 2)
     short_put_ask = round(float(short_put_row.get("ask", 0) or 0), 2)
 
-    long_put_row = select_wing(put_valid, put_otm, short_put_strike, short_put_mid, "put")
-    if long_put_row is None:
-        error_exit("No valid put wing strike found")
-    long_put_strike = float(long_put_row["strike"])
-    long_put_mid = float(long_put_row["mid_price"])
-    long_put_bid = round(float(long_put_row.get("bid", 0) or 0), 2)
-    long_put_ask = round(float(long_put_row.get("ask", 0) or 0), 2)
-
-    pm = build_spread_metrics(short_put_mid, long_put_mid, short_put_strike, long_put_strike, short_put_delta, "put")
-    put_credit = pm["net_credit"]
-    put_natural = round(short_put_bid - long_put_ask, 2) if short_put_bid > 0 and long_put_ask > 0 else None
-    put_width = pm["spread_width"]
-
-    # ── Call side ─────────────────────────────────────────────────────────────
+    # ── Call side (short only) ────────────────────────────────────────────────
     short_call_row, call_valid, call_otm = select_strike_by_delta(chain.calls, price, T, target_delta, "call")
     if short_call_row is None:
         error_exit("No usable OTM call strikes — try during market hours")
@@ -137,32 +129,74 @@ def main():
     short_call_bid = round(float(short_call_row.get("bid", 0) or 0), 2)
     short_call_ask = round(float(short_call_row.get("ask", 0) or 0), 2)
 
-    long_call_row = select_wing(call_valid, call_otm, short_call_strike, short_call_mid, "call")
-    if long_call_row is None:
-        error_exit("No valid call wing strike found")
+    # ── Wing-distance iteration ───────────────────────────────────────────────
+    # Try $5 wings first, then progressively wider until combined ROR clears min_ror.
+    wing_distances = [5, 7, 10, 15]
+    wings_tried = []
+    chosen = None
+
+    for wd in wing_distances:
+        long_put_row = select_wing(put_valid, put_otm, short_put_strike, short_put_mid, "put", wing_distance=wd)
+        long_call_row = select_wing(call_valid, call_otm, short_call_strike, short_call_mid, "call", wing_distance=wd)
+        if long_put_row is None or long_call_row is None:
+            wings_tried.append({"wing_distance": wd, "error": "no_wing_strike"})
+            continue
+
+        c_long_put_strike = float(long_put_row["strike"])
+        c_long_put_mid = float(long_put_row["mid_price"])
+        c_long_call_strike = float(long_call_row["strike"])
+        c_long_call_mid = float(long_call_row["mid_price"])
+
+        cpm = build_spread_metrics(short_put_mid, c_long_put_mid, short_put_strike, c_long_put_strike, short_put_delta, "put")
+        ccm = build_spread_metrics(short_call_mid, c_long_call_mid, short_call_strike, c_long_call_strike, short_call_delta, "call")
+        c_total_credit = round(cpm["net_credit"] + ccm["net_credit"], 2)
+        c_wider_width = max(cpm["spread_width"], ccm["spread_width"])
+        if c_wider_width <= 0 or c_total_credit <= 0 or c_wider_width <= c_total_credit:
+            wings_tried.append({"wing_distance": wd, "total_credit": c_total_credit, "wider_width": c_wider_width, "return_on_risk_pct": 0.0})
+            continue
+        c_ror = round(c_total_credit / (c_wider_width - c_total_credit) * 100, 1)
+        wings_tried.append({
+            "wing_distance": wd,
+            "total_credit": c_total_credit,
+            "wider_width": c_wider_width,
+            "return_on_risk_pct": c_ror,
+        })
+        if c_ror >= min_ror:
+            chosen = (wd, long_put_row, long_call_row, cpm, ccm, c_total_credit, c_wider_width, c_ror)
+            break
+
+    if chosen is None:
+        error_exit(
+            f"No wing distance clears min_ror={min_ror}% at delta={target_delta} — try a higher delta or lower threshold",
+            min_ror=min_ror,
+            target_delta=target_delta,
+            wings_tried=wings_tried,
+        )
+
+    wing_distance_used, long_put_row, long_call_row, pm, cm, total_credit, wider_width, ror = chosen
+
+    long_put_strike = float(long_put_row["strike"])
+    long_put_mid = float(long_put_row["mid_price"])
+    long_put_bid = round(float(long_put_row.get("bid", 0) or 0), 2)
+    long_put_ask = round(float(long_put_row.get("ask", 0) or 0), 2)
+    put_credit = pm["net_credit"]
+    put_natural = round(short_put_bid - long_put_ask, 2) if short_put_bid > 0 and long_put_ask > 0 else None
+    put_width = pm["spread_width"]
+
     long_call_strike = float(long_call_row["strike"])
     long_call_mid = float(long_call_row["mid_price"])
     long_call_bid = round(float(long_call_row.get("bid", 0) or 0), 2)
     long_call_ask = round(float(long_call_row.get("ask", 0) or 0), 2)
-
-    cm = build_spread_metrics(short_call_mid, long_call_mid, short_call_strike, long_call_strike, short_call_delta, "call")
     call_credit = cm["net_credit"]
     call_natural = round(short_call_bid - long_call_ask, 2) if short_call_bid > 0 and long_call_ask > 0 else None
     call_width = cm["spread_width"]
 
-    # ── Combined metrics ──────────────────────────────────────────────────────
-    total_credit = round(put_credit + call_credit, 2)
     total_natural_credit = round(put_natural + call_natural, 2) if put_natural is not None and call_natural is not None else None
-    wider_width = max(put_width, call_width)
-
-    if wider_width <= 0 or total_credit <= 0:
-        error_exit(f"Degenerate iron condor: credit={total_credit}, widths=({put_width}, {call_width})")
 
     max_profit = round(total_credit * 100, 2)
     max_loss = round((wider_width - total_credit) * 100, 2)
     breakeven_low = round(short_put_strike - total_credit, 2)
     breakeven_high = round(short_call_strike + total_credit, 2)
-    ror = round(total_credit / (wider_width - total_credit) * 100, 1)
     pop = round((1 - short_put_delta - short_call_delta) * 100, 1)
 
     price_source = classify_price_source(short_put_bid, short_put_ask)
@@ -229,6 +263,9 @@ def main():
         "profit_zone": f"${breakeven_low} – ${breakeven_high}",
         "return_on_risk_pct": ror,
         "prob_profit_pct": pop,
+        "min_ror_used": min_ror,
+        "wing_distance_used": wing_distance_used,
+        "wings_tried": wings_tried,
         "price_source": price_source,
         "delta_source": "bs_from_option_price",
         "data_source": "yfinance",

@@ -27,6 +27,7 @@ Collect the following. Ask for anything missing:
 | Expiry preference | ~6 weeks out (look for 35–45 DTE) |
 | Short call delta target | 0.20 (20Δ) |
 | Spread width % | 10 (long call placed 10% above short strike) |
+| Min return-on-risk % | 20 (script tries wider variants 15/20/25% if needed; pass 0 to disable) |
 | Number of contracts | 1 (for display; scales linearly) |
 
 ---
@@ -39,7 +40,7 @@ The skill ships with `fetch_bear_call.py` in the same directory as this SKILL.md
 Run it via Bash before doing any web searches:
 
 ```bash
-python3 /path/to/fetch_bear_call.py [TICKER] [TARGET_DELTA] [DTE_MIN] [DTE_MAX] [SPREAD_WIDTH]
+python3 /path/to/fetch_bear_call.py [TICKER] [TARGET_DELTA] [DTE_MIN] [DTE_MAX] [SPREAD_WIDTH] [MIN_ROR]
 ```
 
 Substitute the actual absolute path to `fetch_bear_call.py` — it lives alongside this SKILL.md file.
@@ -49,6 +50,7 @@ The script returns JSON with all fields pre-calculated:
 - `short_call`: `strike`, `mid`, `bid`, `ask`, `delta`, `iv`
 - `long_call`: `strike`, `mid`, `bid`, `ask`
 - `net_credit`, `spread_width`, `max_profit`, `max_loss`, `breakeven`, `return_on_risk_pct`, `prob_profit_pct`
+- `min_ror_used`, `width_pct_requested`, `width_pct_used`, `widths_tried` — iteration metadata. If `width_pct_used != width_pct_requested`, the script widened the spread to clear the ROR floor; surface this in your response.
 
 **If the script errors**: fall back to web search + Black-Scholes (Step 3).
 
@@ -147,3 +149,4 @@ After the prose summary, offer to render an interactive P&L chart.
 - **Very low-priced stock (<$20)**: Flag thin spread and commissions risk.
 - **Very high IV (IVR > 80)**: Premium is rich but often event-driven. Call it out.
 - **User asks for a different delta**: Respect their preference.
+- **Script returns `error: No width clears min_ror=N% …`**: The 20% (or user-specified) return-on-risk floor wasn't met at any width tried. Tell the user: at delta=X the chain doesn't pay enough premium for that ROR — they can (a) raise the delta target, (b) lower `min_ror`, or (c) try a different ticker / expiry. Show them the `widths_tried` array so they can see how close it came.

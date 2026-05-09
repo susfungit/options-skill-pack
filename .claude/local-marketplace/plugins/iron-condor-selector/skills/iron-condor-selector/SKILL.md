@@ -26,7 +26,8 @@ Collect the following. Ask for anything missing:
 | Ticker symbol | Required — ask |
 | Expiry preference | ~6 weeks out (look for 35–45 DTE) |
 | Short strike delta target | 0.16 (16Δ) each side |
-| Wing width method | Long strikes = 10% beyond short strikes |
+| Wing width method | Long strikes start $5 below/above the shorts; widen to $7/$10/$15 if needed to clear MIN_ROR |
+| Min return-on-risk % | 20 on the *combined* ROR (script tries wider wings if needed; pass 0 to disable) |
 | Number of contracts | 1 (for display; scales linearly) |
 
 ---
@@ -39,7 +40,7 @@ The skill ships with `fetch_iron_condor.py` in the same directory as this SKILL.
 Run it via Bash before doing any web searches:
 
 ```bash
-python3 /path/to/fetch_iron_condor.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX]
+python3 /path/to/fetch_iron_condor.py TICKER [TARGET_DELTA] [DTE_MIN] [DTE_MAX] [MIN_ROR]
 ```
 
 Substitute the actual absolute path to `fetch_iron_condor.py` — it lives alongside this SKILL.md.
@@ -50,6 +51,7 @@ The script returns JSON with all fields pre-calculated:
 - `call_side`: `short_call` (strike, mid, delta, iv), `long_call` (strike, mid), `credit`, `width`
 - `total_credit`, `max_profit`, `max_loss`, `breakeven_low`, `breakeven_high`, `profit_zone`
 - `return_on_risk_pct`, `prob_profit_pct`
+- `min_ror_used`, `wing_distance_used`, `wings_tried` — iteration metadata. If `wing_distance_used > 5`, the script widened the wings to clear the combined-ROR floor; mention it ("Widened wings to $10 to clear 20% return-on-risk").
 - `delta_source`: indicates data quality
 
 **If `delta_source` is not `"live"`**: label prices as `(est.)` in the trade card.
@@ -166,3 +168,4 @@ After the trade card, write 3–5 sentences covering:
 - **User asks for different deltas per side**: Respect their preference. Adjust each side independently.
 - **Very high IV stock**: Premium is rich but the stock may be pricing in an event. Explicitly call out any known catalyst.
 - **Asymmetric spread widths**: Note which side determines the max loss and why.
+- **Script returns `error: No wing distance clears min_ror=N% …`**: At the requested delta, even $15-wide wings don't generate enough combined credit to clear the ROR floor. Tell the user: (a) raise the delta target (closer to ATM = more credit on both sides, but a tighter profit zone), (b) lower `min_ror`, or (c) try a different ticker / expiry. Show them the `wings_tried` array so they can see how close it came.

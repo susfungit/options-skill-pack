@@ -250,6 +250,17 @@
                   <div class="form-group"><label>DTE Min</label><input type="number" id="pf-bps-dte-min" min="1" max="365"></div>
                   <div class="form-group"><label>DTE Max</label><input type="number" id="pf-bps-dte-max" min="1" max="365"></div>
                   <div class="form-group"><label>Width %</label><input type="number" id="pf-bps-width" step="1" min="1" max="50" title="Long put placed this % below short strike"></div>
+                  <div class="form-group"><label>Min ROR %</label><input type="number" id="pf-bps-min-ror" step="1" min="0" max="200" title="Minimum return-on-risk; widens spread to clear it. 0 disables."></div>
+                </div>
+              </div>
+              <div class="profile-strategy">
+                <div class="profile-strategy-label">Bear Call Spread</div>
+                <div class="form-row">
+                  <div class="form-group"><label>Delta</label><input type="number" id="pf-bcs-delta" step="0.01" min="0.01" max="0.99"></div>
+                  <div class="form-group"><label>DTE Min</label><input type="number" id="pf-bcs-dte-min" min="1" max="365"></div>
+                  <div class="form-group"><label>DTE Max</label><input type="number" id="pf-bcs-dte-max" min="1" max="365"></div>
+                  <div class="form-group"><label>Width %</label><input type="number" id="pf-bcs-width" step="1" min="1" max="50" title="Long call placed this % above short strike"></div>
+                  <div class="form-group"><label>Min ROR %</label><input type="number" id="pf-bcs-min-ror" step="1" min="0" max="200" title="Minimum return-on-risk; widens spread to clear it. 0 disables."></div>
                 </div>
               </div>
               <div class="profile-strategy">
@@ -258,6 +269,7 @@
                   <div class="form-group"><label>Delta</label><input type="number" id="pf-ic-delta" step="0.01" min="0.01" max="0.99"></div>
                   <div class="form-group"><label>DTE Min</label><input type="number" id="pf-ic-dte-min" min="1" max="365"></div>
                   <div class="form-group"><label>DTE Max</label><input type="number" id="pf-ic-dte-max" min="1" max="365"></div>
+                  <div class="form-group"><label>Min ROR %</label><input type="number" id="pf-ic-min-ror" step="1" min="0" max="200" title="Minimum combined return-on-risk; widens wings to clear it. 0 disables."></div>
                 </div>
               </div>
               <div class="profile-strategy">

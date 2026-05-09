@@ -52,7 +52,7 @@ def _roll_spread_args(tool_input: dict) -> list[str]:
 
 TOOL_REGISTRY = {
     "find_bull_put_spread": {
-        "description": "Fetch live option chain data and find optimal bull put spread strikes (sell put + buy put) for a given stock. Returns strikes, credit, max profit/loss, breakeven, probability of profit.",
+        "description": "Fetch live option chain data and find optimal bull put spread strikes (sell put + buy put) for a given stock. Returns strikes, credit, max profit/loss, breakeven, probability of profit. By default rejects trades whose return-on-risk is below 20% \u2014 adjust via `min_ror`.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -61,6 +61,7 @@ TOOL_REGISTRY = {
                 "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 35)"},
                 "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
                 "spread_width": {"type": "number", "description": "Spread width as % below short strike for long put (default 10)"},
+                "min_ror": {"type": "number", "description": "Minimum acceptable return-on-risk %, 0 to disable (default 20). Script tries wider variants (15/20/25%) before giving up."},
             },
             "required": ["ticker"],
         },
@@ -69,10 +70,11 @@ TOOL_REGISTRY = {
         "script": "fetch_chain.py",
         "args": [
             {"field": "ticker", "kind": "positional", "required": True},
-            {"field": "target_delta", "kind": "positional"},
-            {"field": "dte_min", "kind": "positional"},
-            {"field": "dte_max", "kind": "positional"},
-            {"field": "spread_width", "kind": "positional"},
+            {"field": "target_delta", "kind": "positional", "default_if": {"when_present": ["dte_min", "dte_max", "spread_width", "min_ror"], "value": 0.20}},
+            {"field": "dte_min", "kind": "positional", "default_if": {"when_present": ["dte_max", "spread_width", "min_ror"], "value": 35}},
+            {"field": "dte_max", "kind": "positional", "default_if": {"when_present": ["spread_width", "min_ror"], "value": 45}},
+            {"field": "spread_width", "kind": "positional", "default_if": {"when_present": ["min_ror"], "value": 10.0}},
+            {"field": "min_ror", "kind": "positional"},
             {"field": "expiry", "kind": "named", "flag": "--expiry"},
         ],
         "guidance": """Interpretation guidance for the bull put spread data:
@@ -81,6 +83,11 @@ TOOL_REGISTRY = {
 - The short put was selected near the target delta (default 20\u0394 = ~80% probability of profit)
 - The long put is placed below the short strike at the configured spread width % (default 10%) for defined risk
 - If delta_source is "estimated", label prices as estimates
+
+**Return-on-risk gate:**
+- The script enforces `min_ror` (default 20%). If the requested width can't clear it, the script automatically tries wider variants (15%, 20%, 25%).
+- `width_pct_used` may differ from `width_pct_requested` \u2014 surface this if iteration was triggered ("Widened to X% to clear the 20% return-on-risk floor").
+- If the JSON contains `error` with `widths_tried`, no width passed: tell the user to raise delta or lower the threshold.
 
 **Risk checklist \u2014 flag these in your response:**
 - Earnings within expiry window? \u2192 IV spike/crush risk
@@ -100,7 +107,7 @@ Present a clear trade summary with the strikes, all metrics, risk flags, and a b
     },
 
     "find_bear_call_spread": {
-        "description": "Fetch live option chain data and find optimal bear call spread strikes (sell call + buy call) for a given stock. Returns strikes, credit, max profit/loss, breakeven, probability of profit.",
+        "description": "Fetch live option chain data and find optimal bear call spread strikes (sell call + buy call) for a given stock. Returns strikes, credit, max profit/loss, breakeven, probability of profit. By default rejects trades whose return-on-risk is below 20% \u2014 adjust via `min_ror`.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -109,6 +116,7 @@ Present a clear trade summary with the strikes, all metrics, risk flags, and a b
                 "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 35)"},
                 "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
                 "spread_width": {"type": "number", "description": "Spread width as % above short strike for long call (default 10)"},
+                "min_ror": {"type": "number", "description": "Minimum acceptable return-on-risk %, 0 to disable (default 20). Script tries wider variants (15/20/25%) before giving up."},
             },
             "required": ["ticker"],
         },
@@ -117,10 +125,11 @@ Present a clear trade summary with the strikes, all metrics, risk flags, and a b
         "script": "fetch_bear_call.py",
         "args": [
             {"field": "ticker", "kind": "positional", "required": True},
-            {"field": "target_delta", "kind": "positional"},
-            {"field": "dte_min", "kind": "positional"},
-            {"field": "dte_max", "kind": "positional"},
-            {"field": "spread_width", "kind": "positional"},
+            {"field": "target_delta", "kind": "positional", "default_if": {"when_present": ["dte_min", "dte_max", "spread_width", "min_ror"], "value": 0.20}},
+            {"field": "dte_min", "kind": "positional", "default_if": {"when_present": ["dte_max", "spread_width", "min_ror"], "value": 35}},
+            {"field": "dte_max", "kind": "positional", "default_if": {"when_present": ["spread_width", "min_ror"], "value": 45}},
+            {"field": "spread_width", "kind": "positional", "default_if": {"when_present": ["min_ror"], "value": 10.0}},
+            {"field": "min_ror", "kind": "positional"},
             {"field": "expiry", "kind": "named", "flag": "--expiry"},
         ],
         "guidance": """Interpretation guidance for the bear call spread data:
@@ -129,6 +138,11 @@ Present a clear trade summary with the strikes, all metrics, risk flags, and a b
 - The short call was selected near the target delta (default 20\u0394 = ~80% probability of profit)
 - The long call is placed above the short strike at the configured spread width % (default 10%) for defined risk
 - If delta_source is "estimated", label prices as estimates
+
+**Return-on-risk gate:**
+- The script enforces `min_ror` (default 20%). If the requested width can't clear it, the script automatically tries wider variants (15%, 20%, 25%).
+- `width_pct_used` may differ from `width_pct_requested` \u2014 surface this if iteration was triggered.
+- If the JSON contains `error` with `widths_tried`, no width passed: tell the user to raise delta or lower the threshold.
 
 **Risk checklist \u2014 flag these in your response:**
 - Earnings within expiry window? \u2192 IV spike/crush risk
@@ -195,7 +209,7 @@ Present a clear trade summary with the strikes, all metrics, risk flags, and a b
     },
 
     "find_iron_condor": {
-        "description": "Fetch live option chain data and find optimal iron condor strikes (sell put + buy put + sell call + buy call) for a given stock. Returns all 4 legs, total credit, profit zone, and probability of profit.",
+        "description": "Fetch live option chain data and find optimal iron condor strikes (sell put + buy put + sell call + buy call) for a given stock. Returns all 4 legs, total credit, profit zone, and probability of profit. By default rejects trades whose combined return-on-risk is below 20% \u2014 adjust via `min_ror`.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -203,6 +217,7 @@ Present a clear trade summary with the strikes, all metrics, risk flags, and a b
                 "target_delta": {"type": "number", "description": "Target delta for both short strikes (default 0.16)"},
                 "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 35)"},
                 "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
+                "min_ror": {"type": "number", "description": "Minimum acceptable combined return-on-risk %, 0 to disable (default 20). Script tries wider wings ($5/$7/$10/$15) before giving up."},
             },
             "required": ["ticker"],
         },
@@ -211,17 +226,23 @@ Present a clear trade summary with the strikes, all metrics, risk flags, and a b
         "script": "fetch_iron_condor.py",
         "args": [
             {"field": "ticker", "kind": "positional", "required": True},
-            {"field": "target_delta", "kind": "positional"},
-            {"field": "dte_min", "kind": "positional"},
-            {"field": "dte_max", "kind": "positional"},
+            {"field": "target_delta", "kind": "positional", "default_if": {"when_present": ["dte_min", "dte_max", "min_ror"], "value": 0.16}},
+            {"field": "dte_min", "kind": "positional", "default_if": {"when_present": ["dte_max", "min_ror"], "value": 35}},
+            {"field": "dte_max", "kind": "positional", "default_if": {"when_present": ["min_ror"], "value": 45}},
+            {"field": "min_ror", "kind": "positional"},
             {"field": "expiry", "kind": "named", "flag": "--expiry"},
         ],
         "guidance": """Interpretation guidance for the iron condor data:
 
 **Strike selection context:**
 - Both short strikes selected near target delta (default 16\u0394 each side)
-- Wings are ~10% beyond short strikes
+- Wings start at $5 wide and may iterate up to $15 to clear `min_ror`
 - The profit zone is between the two short strikes
+
+**Return-on-risk gate:**
+- The script enforces `min_ror` on the combined ROR (default 20%). If $5 wings fall short, it tries $7, $10, $15.
+- `wing_distance_used` shows what was finally chosen \u2014 surface this if it differs from $5.
+- If the JSON contains `error` with `wings_tried`, no wing distance passed: tell the user to raise delta or lower the threshold.
 
 **Risk checklist \u2014 flag these:**
 - Earnings within expiry? \u2192 gap risk through either side
@@ -594,6 +615,7 @@ _PROFILE_KEY_MAP = {
     "dte_min": "dte_min",
     "dte_max": "dte_max",
     "spread_width": "spread_width",
+    "min_ror": "min_ror",
 }
 
 
@@ -681,6 +703,12 @@ def _validate_tool_input(tool_input: dict) -> str | None:
             v = tool_input[field]
             if not isinstance(v, (int, float)) or v < 1:
                 return f"Invalid {field}: must be a positive integer"
+
+    # min_ror must be a non-negative number (0 disables the gate)
+    if "min_ror" in tool_input:
+        v = tool_input["min_ror"]
+        if not isinstance(v, (int, float)) or v < 0:
+            return "Invalid min_ror: must be a non-negative number (0 disables the gate)"
 
     # Expiry must be YYYY-MM-DD
     if "expiry" in tool_input:

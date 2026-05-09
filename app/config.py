@@ -17,9 +17,9 @@ DEFAULT_PROFILE = {
     "name": "",
     "model": DEFAULT_MODEL,
     "strategy_defaults": {
-        "bull-put-spread": {"delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10},
-        "bear-call-spread": {"delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10},
-        "iron-condor": {"delta": 0.16, "dte_min": 35, "dte_max": 45},
+        "bull-put-spread": {"delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10, "min_ror": 20},
+        "bear-call-spread": {"delta": 0.20, "dte_min": 35, "dte_max": 45, "spread_width": 10, "min_ror": 20},
+        "iron-condor": {"delta": 0.16, "dte_min": 35, "dte_max": 45, "min_ror": 20},
         "covered-call": {"delta": 0.30, "dte_min": 30, "dte_max": 45},
         "cash-secured-put": {"delta": 0.25, "dte_min": 30, "dte_max": 45},
     },

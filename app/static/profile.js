@@ -29,6 +29,7 @@ async function loadProfile() {
 
     const sd = profile.strategy_defaults || {};
     const bps = sd['bull-put-spread'] || {};
+    const bcs = sd['bear-call-spread'] || {};
     const ic = sd['iron-condor'] || {};
     const cc = sd['covered-call'] || {};
 
@@ -36,9 +37,16 @@ async function loadProfile() {
     document.getElementById('pf-bps-dte-min').value = bps.dte_min ?? '';
     document.getElementById('pf-bps-dte-max').value = bps.dte_max ?? '';
     document.getElementById('pf-bps-width').value = bps.spread_width ?? '';
+    document.getElementById('pf-bps-min-ror').value = bps.min_ror ?? '';
+    document.getElementById('pf-bcs-delta').value = bcs.delta ?? '';
+    document.getElementById('pf-bcs-dte-min').value = bcs.dte_min ?? '';
+    document.getElementById('pf-bcs-dte-max').value = bcs.dte_max ?? '';
+    document.getElementById('pf-bcs-width').value = bcs.spread_width ?? '';
+    document.getElementById('pf-bcs-min-ror').value = bcs.min_ror ?? '';
     document.getElementById('pf-ic-delta').value = ic.delta ?? '';
     document.getElementById('pf-ic-dte-min').value = ic.dte_min ?? '';
     document.getElementById('pf-ic-dte-max').value = ic.dte_max ?? '';
+    document.getElementById('pf-ic-min-ror').value = ic.min_ror ?? '';
     document.getElementById('pf-cc-delta').value = cc.delta ?? '';
     document.getElementById('pf-cc-dte-min').value = cc.dte_min ?? '';
     document.getElementById('pf-cc-dte-max').value = cc.dte_max ?? '';
@@ -68,6 +76,14 @@ async function saveProfile() {
   btn.disabled = true;
   statusEl.textContent = '';
 
+  // min_ror=0 is a valid value (disables gate), so don't use `|| default` for it
+  const parseMinRor = (id, fallback) => {
+    const raw = document.getElementById(id).value;
+    if (raw === '') return fallback;
+    const n = parseFloat(raw);
+    return Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
+
   const body = {
     name: document.getElementById('pf-name').value.trim(),
     model: document.getElementById('pf-model').value,
@@ -77,11 +93,20 @@ async function saveProfile() {
         dte_min: parseInt(document.getElementById('pf-bps-dte-min').value) || 35,
         dte_max: parseInt(document.getElementById('pf-bps-dte-max').value) || 45,
         spread_width: parseFloat(document.getElementById('pf-bps-width').value) || 10,
+        min_ror: parseMinRor('pf-bps-min-ror', 20),
+      },
+      'bear-call-spread': {
+        delta: parseFloat(document.getElementById('pf-bcs-delta').value) || 0.20,
+        dte_min: parseInt(document.getElementById('pf-bcs-dte-min').value) || 35,
+        dte_max: parseInt(document.getElementById('pf-bcs-dte-max').value) || 45,
+        spread_width: parseFloat(document.getElementById('pf-bcs-width').value) || 10,
+        min_ror: parseMinRor('pf-bcs-min-ror', 20),
       },
       'iron-condor': {
         delta: parseFloat(document.getElementById('pf-ic-delta').value) || 0.16,
         dte_min: parseInt(document.getElementById('pf-ic-dte-min').value) || 35,
         dte_max: parseInt(document.getElementById('pf-ic-dte-max').value) || 45,
+        min_ror: parseMinRor('pf-ic-min-ror', 20),
       },
       'covered-call': {
         delta: parseFloat(document.getElementById('pf-cc-delta').value) || 0.30,

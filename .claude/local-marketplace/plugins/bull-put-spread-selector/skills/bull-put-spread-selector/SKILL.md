@@ -27,6 +27,7 @@ Collect the following. Ask for anything missing:
 | Expiry preference | ~6 weeks out (look for 35–45 DTE) |
 | Short put delta target | 0.20 (20Δ) |
 | Spread width % | 10 (long put placed 10% below short strike) |
+| Min return-on-risk % | 20 (script tries wider variants 15/20/25% if needed; pass 0 to disable) |
 | Number of contracts | 1 (for display; scales linearly) |
 
 ---
@@ -39,18 +40,18 @@ The skill ships with `fetch_chain.py` in the same directory as this SKILL.md fil
 Run it via Bash before doing any web searches:
 
 ```bash
-python3 /path/to/fetch_chain.py [TICKER] [TARGET_DELTA] [DTE_MIN] [DTE_MAX] [SPREAD_WIDTH]
+python3 /path/to/fetch_chain.py [TICKER] [TARGET_DELTA] [DTE_MIN] [DTE_MAX] [SPREAD_WIDTH] [MIN_ROR]
 ```
 
 Substitute the actual absolute path to `fetch_chain.py` — it lives alongside this SKILL.md file.
-Example for default parameters:
+Example for default parameters (20% ROR floor):
 ```bash
-python3 "$(dirname "$0")/fetch_chain.py" AAPL 0.20 35 45 10
+python3 "$(dirname "$0")/fetch_chain.py" AAPL 0.20 35 45 10 20
 ```
 
 Or resolve the path dynamically from the project root:
 ```bash
-python3 "$(git rev-parse --show-toplevel)/.claude/local-marketplace/plugins/bull-put-spread-selector/skills/bull-put-spread-selector/fetch_chain.py" [TICKER] [TARGET_DELTA] 35 45 [SPREAD_WIDTH]
+python3 "$(git rev-parse --show-toplevel)/.claude/local-marketplace/plugins/bull-put-spread-selector/skills/bull-put-spread-selector/fetch_chain.py" [TICKER] [TARGET_DELTA] 35 45 [SPREAD_WIDTH] [MIN_ROR]
 ```
 
 The script returns JSON with all fields pre-calculated:
@@ -58,6 +59,7 @@ The script returns JSON with all fields pre-calculated:
 - `short_put`: `strike`, `mid`, `bid`, `ask`, `delta`, `iv`
 - `long_put`: `strike`, `mid`, `bid`, `ask`
 - `net_credit`, `spread_width`, `max_profit`, `max_loss`, `breakeven`, `return_on_risk_pct`, `prob_profit_pct`
+- `min_ror_used`, `width_pct_requested`, `width_pct_used`, `widths_tried` — iteration metadata. If `width_pct_used != width_pct_requested`, the script widened the spread to clear the ROR floor; **say so in your response** (e.g. "Widened to 15% to meet 20% return-on-risk target").
 - `delta_source`: `"live"` | `"estimated_bs"` | `"estimated_otm_pct"` — indicates data quality
 
 **If `delta_source` is `"live"`**: use all values directly — no estimation needed.
@@ -176,3 +178,4 @@ build the widget using Chart.js showing the expiry P&L curve with the three key 
 - **Very low-priced stock (<$20)**: Spread width of 10% may be only $1–2, making commissions punishing. Flag this and suggest considering a wider spread or different strategy.
 - **Very high IV (IVR > 80)**: Premium is rich but often driven by a known event. Explicitly call out the event if one exists.
 - **User asks for a different delta**: Respect their preference; adjust OTM% approximation accordingly (10Δ ≈ 12–18% OTM, 30Δ ≈ 5–8% OTM for typical IV/DTE).
+- **Script returns `error: No width clears min_ror=N% …`**: The 20% (or user-specified) return-on-risk floor wasn't met at any width tried. Tell the user: at delta=X the chain doesn't pay enough premium for that ROR — they can (a) raise the delta target (closer to ATM = more credit, lower PoP), (b) lower `min_ror`, or (c) try a different ticker / expiry. Show them the `widths_tried` array so they can see how close it came.
