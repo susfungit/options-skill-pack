@@ -7,7 +7,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.tools import _validate_tool_input, _build_args, execute_tool
+from app import tools as _tools_module
+from app.tools import (
+    _validate_tool_input,
+    _build_args,
+    cached_tools,
+    execute_tool,
+    TOOLS,
+)
 
 
 # ── 1. _validate_tool_input unit tests ──────────────────────────────────────
@@ -188,6 +195,95 @@ def test_execute_tool_skips_defaults_for_monitors(mock_run, mock_exists):
     call_args = mock_run.call_args[0][0]
     # Monitor args are: ticker, short, long, credit, expiry — no delta/width injection
     assert call_args[2:] == ["SPY", "420", "410", "2.5", "2026-05-16"]
+
+
+# ── 2b. tool-result cache tests ────────────────────────────────────────────
+
+
+@patch("app.tools.os.path.exists", return_value=True)
+@patch("app.tools.subprocess.run")
+def test_result_cache_hit_skips_subprocess(mock_run, mock_exists):
+    """Identical args within TTL must not trigger a second subprocess.run."""
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout='{"result": "ok"}', stderr=""
+    )
+    first = json.loads(execute_tool("find_bull_put_spread", {"ticker": "AAPL"}))
+    second = json.loads(execute_tool("find_bull_put_spread", {"ticker": "AAPL"}))
+    assert first == second == {"result": "ok"}
+    assert mock_run.call_count == 1
+
+
+@patch("app.tools.os.path.exists", return_value=True)
+@patch("app.tools.subprocess.run")
+def test_result_cache_miss_different_ticker(mock_run, mock_exists):
+    """Different tickers are different cache keys — both hit subprocess."""
+    mock_run.side_effect = [
+        subprocess.CompletedProcess(args=[], returncode=0, stdout='{"ticker": "AAPL"}', stderr=""),
+        subprocess.CompletedProcess(args=[], returncode=0, stdout='{"ticker": "NVDA"}', stderr=""),
+    ]
+    execute_tool("find_bull_put_spread", {"ticker": "AAPL"})
+    execute_tool("find_bull_put_spread", {"ticker": "NVDA"})
+    assert mock_run.call_count == 2
+
+
+@patch("app.tools.os.path.exists", return_value=True)
+@patch("app.tools.subprocess.run")
+def test_result_cache_miss_different_args(mock_run, mock_exists):
+    """Same tool + ticker but different delta means different cache key."""
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout='{"result": "ok"}', stderr=""
+    )
+    execute_tool("find_bull_put_spread", {"ticker": "AAPL", "target_delta": 0.20})
+    execute_tool("find_bull_put_spread", {"ticker": "AAPL", "target_delta": 0.30})
+    assert mock_run.call_count == 2
+
+
+@patch("app.tools.os.path.exists", return_value=True)
+@patch("app.tools.subprocess.run")
+def test_result_cache_ttl_expiry(mock_run, mock_exists, monkeypatch):
+    """After TTL elapses, a repeat call must re-run the subprocess."""
+    mock_run.return_value = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout='{"result": "ok"}', stderr=""
+    )
+    times = iter([1000.0, 1000.0 + _tools_module._RESULT_CACHE_TTL + 1.0])
+    monkeypatch.setattr(_tools_module.time, "time", lambda: next(times))
+    execute_tool("find_bull_put_spread", {"ticker": "AAPL"})
+    execute_tool("find_bull_put_spread", {"ticker": "AAPL"})
+    assert mock_run.call_count == 2
+
+
+@patch("app.tools.os.path.exists", return_value=True)
+@patch("app.tools.subprocess.run")
+def test_result_cache_skips_errors(mock_run, mock_exists):
+    """Error results are NOT cached — next call must re-run subprocess."""
+    mock_run.side_effect = [
+        subprocess.CompletedProcess(args=[], returncode=0, stdout='{"error": "no chain"}', stderr=""),
+        subprocess.CompletedProcess(args=[], returncode=0, stdout='{"result": "ok"}', stderr=""),
+    ]
+    first = json.loads(execute_tool("find_bull_put_spread", {"ticker": "AAPL"}))
+    second = json.loads(execute_tool("find_bull_put_spread", {"ticker": "AAPL"}))
+    assert "error" in first
+    assert second == {"result": "ok"}
+    assert mock_run.call_count == 2
+
+
+# ── 2c. cached_tools (prompt-cache marker) tests ───────────────────────────
+
+
+def test_cached_tools_marks_only_last_entry():
+    """cache_control must be on the last tool only — Anthropic caches up to it."""
+    out = cached_tools()
+    assert len(out) == len(TOOLS)
+    assert out[-1].get("cache_control") == {"type": "ephemeral"}
+    for entry in out[:-1]:
+        assert "cache_control" not in entry
+
+
+def test_cached_tools_does_not_mutate_TOOLS():
+    """TOOLS itself stays clean for tests/introspection."""
+    cached_tools()
+    for entry in TOOLS:
+        assert "cache_control" not in entry
 
 
 # ── 3. _build_args tests ───────────────────────────────────────────────────

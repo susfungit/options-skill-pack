@@ -5,6 +5,7 @@ import math
 import os
 import re
 import subprocess
+import time
 
 from app.config import PROJECT_ROOT
 from app.storage import read_profile
@@ -56,12 +57,12 @@ TOOL_REGISTRY = {
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. AAPL, NVDA)"},
-                "target_delta": {"type": "number", "description": "Target delta for short put (default 0.20 = 20 delta)"},
-                "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 35)"},
-                "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
-                "spread_width": {"type": "number", "description": "Spread width as % below short strike for long put (default 10)"},
-                "min_ror": {"type": "number", "description": "Minimum acceptable return-on-risk %, 0 to disable (default 20). Script tries wider variants (15/20/25%) before giving up."},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol (e.g. AAPL, NVDA)"},
+                "target_delta": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "Target delta for short put (default 0.20 = 20 delta)"},
+                "dte_min": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Minimum days to expiration (default 35)"},
+                "dte_max": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Maximum days to expiration (default 45)"},
+                "spread_width": {"type": "number", "exclusiveMinimum": 0, "maximum": 50, "description": "Spread width as % below short strike for long put (default 10)"},
+                "min_ror": {"type": "number", "minimum": 0, "description": "Minimum acceptable return-on-risk %, 0 to disable (default 20). Script tries wider variants (15/20/25%) before giving up."},
             },
             "required": ["ticker"],
         },
@@ -111,12 +112,12 @@ Present a clear trade summary with the strikes, all metrics, risk flags, and a b
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol (e.g. AAPL, NVDA)"},
-                "target_delta": {"type": "number", "description": "Target delta for short call (default 0.20 = 20 delta)"},
-                "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 35)"},
-                "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
-                "spread_width": {"type": "number", "description": "Spread width as % above short strike for long call (default 10)"},
-                "min_ror": {"type": "number", "description": "Minimum acceptable return-on-risk %, 0 to disable (default 20). Script tries wider variants (15/20/25%) before giving up."},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol (e.g. AAPL, NVDA)"},
+                "target_delta": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "Target delta for short call (default 0.20 = 20 delta)"},
+                "dte_min": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Minimum days to expiration (default 35)"},
+                "dte_max": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Maximum days to expiration (default 45)"},
+                "spread_width": {"type": "number", "exclusiveMinimum": 0, "maximum": 50, "description": "Spread width as % above short strike for long call (default 10)"},
+                "min_ror": {"type": "number", "minimum": 0, "description": "Minimum acceptable return-on-risk %, 0 to disable (default 20). Script tries wider variants (15/20/25%) before giving up."},
             },
             "required": ["ticker"],
         },
@@ -166,11 +167,11 @@ Present a clear trade summary with the strikes, all metrics, risk flags, and a b
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol"},
-                "short_strike": {"type": "number", "description": "Short (sold) call strike price"},
-                "long_strike": {"type": "number", "description": "Long (bought) call strike price"},
-                "net_credit": {"type": "number", "description": "Original net credit received per share"},
-                "expiry": {"type": "string", "description": "Expiry date as YYYY-MM-DD"},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol"},
+                "short_strike": {"type": "number", "exclusiveMinimum": 0, "description": "Short (sold) call strike price"},
+                "long_strike": {"type": "number", "exclusiveMinimum": 0, "description": "Long (bought) call strike price"},
+                "net_credit": {"type": "number", "exclusiveMinimum": 0, "description": "Original net credit received per share"},
+                "expiry": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Expiry date as YYYY-MM-DD"},
             },
             "required": ["ticker", "short_strike", "long_strike", "net_credit", "expiry"],
         },
@@ -213,11 +214,11 @@ Present a clear trade summary with the strikes, all metrics, risk flags, and a b
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol"},
-                "target_delta": {"type": "number", "description": "Target delta for both short strikes (default 0.16)"},
-                "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 35)"},
-                "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
-                "min_ror": {"type": "number", "description": "Minimum acceptable combined return-on-risk %, 0 to disable (default 20). Script tries wider wings ($5/$7/$10/$15) before giving up."},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol"},
+                "target_delta": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "Target delta for both short strikes (default 0.16)"},
+                "dte_min": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Minimum days to expiration (default 35)"},
+                "dte_max": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Maximum days to expiration (default 45)"},
+                "min_ror": {"type": "number", "minimum": 0, "description": "Minimum acceptable combined return-on-risk %, 0 to disable (default 20). Script tries wider wings ($5/$7/$10/$15) before giving up."},
             },
             "required": ["ticker"],
         },
@@ -264,10 +265,10 @@ Present both sides clearly, the profit zone, and flag any skew between sides."""
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol"},
-                "target_delta": {"type": "number", "description": "Target delta for short call (default 0.30)"},
-                "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 30)"},
-                "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol"},
+                "target_delta": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "Target delta for short call (default 0.30)"},
+                "dte_min": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Minimum days to expiration (default 30)"},
+                "dte_max": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Maximum days to expiration (default 45)"},
             },
             "required": ["ticker"],
         },
@@ -311,11 +312,11 @@ If the user provided a cost basis, calculate and show:
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol"},
-                "short_strike": {"type": "number", "description": "Short (sold) put strike price"},
-                "long_strike": {"type": "number", "description": "Long (bought) put strike price"},
-                "net_credit": {"type": "number", "description": "Original net credit received per share"},
-                "expiry": {"type": "string", "description": "Expiry date as YYYY-MM-DD"},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol"},
+                "short_strike": {"type": "number", "exclusiveMinimum": 0, "description": "Short (sold) put strike price"},
+                "long_strike": {"type": "number", "exclusiveMinimum": 0, "description": "Long (bought) put strike price"},
+                "net_credit": {"type": "number", "exclusiveMinimum": 0, "description": "Original net credit received per share"},
+                "expiry": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Expiry date as YYYY-MM-DD"},
             },
             "required": ["ticker", "short_strike", "long_strike", "net_credit", "expiry"],
         },
@@ -358,13 +359,13 @@ If the user provided a cost basis, calculate and show:
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol"},
-                "short_put": {"type": "number", "description": "Short put strike"},
-                "long_put": {"type": "number", "description": "Long put strike"},
-                "short_call": {"type": "number", "description": "Short call strike"},
-                "long_call": {"type": "number", "description": "Long call strike"},
-                "net_credit": {"type": "number", "description": "Total net credit received per share"},
-                "expiry": {"type": "string", "description": "Expiry date as YYYY-MM-DD"},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol"},
+                "short_put": {"type": "number", "exclusiveMinimum": 0, "description": "Short put strike"},
+                "long_put": {"type": "number", "exclusiveMinimum": 0, "description": "Long put strike"},
+                "short_call": {"type": "number", "exclusiveMinimum": 0, "description": "Short call strike"},
+                "long_call": {"type": "number", "exclusiveMinimum": 0, "description": "Long call strike"},
+                "net_credit": {"type": "number", "exclusiveMinimum": 0, "description": "Total net credit received per share"},
+                "expiry": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Expiry date as YYYY-MM-DD"},
             },
             "required": ["ticker", "short_put", "long_put", "short_call", "long_call", "net_credit", "expiry"],
         },
@@ -407,11 +408,11 @@ Identify which side (put or call) is under more pressure using worst_side.
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol"},
-                "short_call_strike": {"type": "number", "description": "Short call strike price"},
-                "net_credit": {"type": "number", "description": "Premium received per share"},
-                "expiry": {"type": "string", "description": "Expiry date as YYYY-MM-DD"},
-                "cost_basis": {"type": "number", "description": "Stock purchase price per share (optional)"},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol"},
+                "short_call_strike": {"type": "number", "exclusiveMinimum": 0, "description": "Short call strike price"},
+                "net_credit": {"type": "number", "exclusiveMinimum": 0, "description": "Premium received per share"},
+                "expiry": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Expiry date as YYYY-MM-DD"},
+                "cost_basis": {"type": "number", "exclusiveMinimum": 0, "description": "Stock purchase price per share (optional)"},
             },
             "required": ["ticker", "short_call_strike", "net_credit", "expiry"],
         },
@@ -454,10 +455,10 @@ If cost_basis provided, show effective cost basis and called-away P&L.""",
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol"},
-                "target_delta": {"type": "number", "description": "Target delta for short put (default 0.25)"},
-                "dte_min": {"type": "integer", "description": "Minimum days to expiration (default 30)"},
-                "dte_max": {"type": "integer", "description": "Maximum days to expiration (default 45)"},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol"},
+                "target_delta": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "Target delta for short put (default 0.25)"},
+                "dte_min": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Minimum days to expiration (default 30)"},
+                "dte_max": {"type": "integer", "minimum": 1, "maximum": 365, "description": "Maximum days to expiration (default 45)"},
             },
             "required": ["ticker"],
         },
@@ -502,10 +503,10 @@ If cost_basis provided, show effective cost basis and called-away P&L.""",
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol"},
-                "short_put_strike": {"type": "number", "description": "Short put strike price"},
-                "net_credit": {"type": "number", "description": "Premium received per share"},
-                "expiry": {"type": "string", "description": "Expiry date as YYYY-MM-DD"},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol"},
+                "short_put_strike": {"type": "number", "exclusiveMinimum": 0, "description": "Short put strike price"},
+                "net_credit": {"type": "number", "exclusiveMinimum": 0, "description": "Premium received per share"},
+                "expiry": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Expiry date as YYYY-MM-DD"},
             },
             "required": ["ticker", "short_put_strike", "net_credit", "expiry"],
         },
@@ -549,15 +550,15 @@ If cost_basis provided, show effective cost basis and called-away P&L.""",
         "input_schema": {
             "type": "object",
             "properties": {
-                "ticker": {"type": "string", "description": "Stock ticker symbol"},
-                "short_strike": {"type": "number", "description": "Short strike to roll (put or call)"},
-                "long_strike": {"type": "number", "description": "Long strike to roll"},
-                "net_credit": {"type": "number", "description": "Original net credit per share"},
-                "expiry": {"type": "string", "description": "Current expiry as YYYY-MM-DD"},
-                "short_call": {"type": "number", "description": "Short call strike (iron condor only)"},
-                "long_call": {"type": "number", "description": "Long call strike (iron condor only)"},
-                "roll_side": {"type": "string", "description": "Which side to roll: 'put' or 'call' (iron condor only)"},
-                "target_delta": {"type": "number", "description": "Delta target for aggressive diagonal (default 0.20 put, 0.16 condor)"},
+                "ticker": {"type": "string", "pattern": "^[A-Z]{1,5}$", "description": "Stock ticker symbol"},
+                "short_strike": {"type": "number", "exclusiveMinimum": 0, "description": "Short strike to roll (put or call)"},
+                "long_strike": {"type": "number", "exclusiveMinimum": 0, "description": "Long strike to roll"},
+                "net_credit": {"type": "number", "exclusiveMinimum": 0, "description": "Original net credit per share"},
+                "expiry": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Current expiry as YYYY-MM-DD"},
+                "short_call": {"type": "number", "exclusiveMinimum": 0, "description": "Short call strike (iron condor only)"},
+                "long_call": {"type": "number", "exclusiveMinimum": 0, "description": "Long call strike (iron condor only)"},
+                "roll_side": {"type": "string", "enum": ["put", "call"], "description": "Which side to roll: 'put' or 'call' (iron condor only)"},
+                "target_delta": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "Delta target for aggressive diagonal (default 0.20 put, 0.16 condor)"},
             },
             "required": ["ticker", "short_strike", "long_strike", "net_credit", "expiry"],
         },
@@ -595,6 +596,21 @@ TOOLS = [
     }
     for name, entry in TOOL_REGISTRY.items()
 ]
+
+
+def cached_tools() -> list:
+    """Return TOOLS with cache_control on the last entry.
+
+    Anthropic prompt caching works on a breakpoint basis: marking the last
+    tool caches everything up to that point, including all preceding tools.
+    Keeps TOOLS itself unmarked for tests/introspection.
+    """
+    if not TOOLS:
+        return TOOLS
+    out = [dict(t) for t in TOOLS]
+    out[-1] = {**out[-1], "cache_control": {"type": "ephemeral"}}
+    return out
+
 
 SCRIPT_MAP = {
     name: _skill_path(entry["plugin"], entry["skill"], entry["script"])
@@ -735,6 +751,17 @@ def _sanitize_nan(obj):
     return obj
 
 
+# In-memory result cache: skips redundant subprocess calls when identical args
+# repeat within the TTL. yfinance data is roughly minute-stale anyway, so 30s
+# adds no meaningful staleness while saving ~700ms of python3 cold-start per hit.
+_RESULT_CACHE: dict[tuple, tuple[float, str]] = {}
+_RESULT_CACHE_TTL = 30.0
+
+
+def _cache_key(tool_name: str, tool_input: dict) -> tuple:
+    return (tool_name, tuple(sorted(tool_input.items())))
+
+
 def execute_tool(tool_name: str, tool_input: dict) -> str:
     """Execute a tool by running the corresponding Python script.
 
@@ -751,6 +778,13 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
     validation_error = _validate_tool_input(tool_input)
     if validation_error:
         return json.dumps({"error": validation_error})
+
+    # Result cache lookup (after profile defaults so key reflects actual args)
+    key = _cache_key(tool_name, tool_input)
+    now = time.time()
+    cached = _RESULT_CACHE.get(key)
+    if cached and (now - cached[0]) < _RESULT_CACHE_TTL:
+        return cached[1]
 
     script_path = SCRIPT_MAP.get(tool_name)
     if not script_path:
@@ -786,7 +820,11 @@ def execute_tool(tool_name: str, tool_input: dict) -> str:
             return json.dumps({"error": stdout or f"Script failed for {tool_name}. Check server logs."})
         output = result.stdout.strip()
         try:
-            return json.dumps(_sanitize_nan(json.loads(output)))
+            parsed = _sanitize_nan(json.loads(output))
+            result_json = json.dumps(parsed)
+            if not (isinstance(parsed, dict) and "error" in parsed):
+                _RESULT_CACHE[key] = (now, result_json)
+            return result_json
         except json.JSONDecodeError:
             return json.dumps({"error": f"Script returned invalid output for {tool_name}"})
 

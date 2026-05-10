@@ -14,11 +14,23 @@ import anthropic
 
 from app.config import DEFAULT_MODEL, limiter
 from app.storage import read_profile
-from app.tools import TOOLS, SKILL_GUIDANCE, execute_tool
+from app.tools import TOOLS, SKILL_GUIDANCE, cached_tools, execute_tool
 from app.prompts import build_system_prompt
 
 logger = logging.getLogger("options_skill_pack")
 router = APIRouter()
+
+
+def _log_usage(label: str, usage) -> None:
+    """Emit token usage with cache stats so prompt-cache effectiveness is visible."""
+    logger.info(
+        "%s usage: input=%d cache_create=%d cache_read=%d output=%d",
+        label,
+        getattr(usage, "input_tokens", 0),
+        getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        getattr(usage, "cache_read_input_tokens", 0) or 0,
+        getattr(usage, "output_tokens", 0),
+    )
 
 # ── Claude API client ────────────────────────────────────────────────────────
 
@@ -108,14 +120,20 @@ async def chat(request: Request, req: ChatRequest):
     model = profile.get("model", DEFAULT_MODEL)
     system_prompt = build_system_prompt(profile)
 
+    cached_system = [
+        {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
+    ]
+    cached_tool_list = cached_tools()
+
     try:
         response = client.messages.create(
             model=model,
             max_tokens=16384,
-            system=system_prompt,
-            tools=TOOLS,
+            system=cached_system,
+            tools=cached_tool_list,
             messages=messages,
         )
+        _log_usage("chat round=0", response.usage)
 
         max_tool_rounds = 5
         tool_round = 0
@@ -147,10 +165,11 @@ async def chat(request: Request, req: ChatRequest):
             response = client.messages.create(
                 model=model,
                 max_tokens=16384,
-                system=system_prompt,
-                tools=TOOLS,
+                system=cached_system,
+                tools=cached_tool_list,
                 messages=messages,
             )
+            _log_usage(f"chat round={tool_round}", response.usage)
 
         if tool_round >= max_tool_rounds and response.stop_reason == "tool_use":
             return ChatResponse(
@@ -180,6 +199,11 @@ async def _stream_chat(messages: list, model: str, system_prompt: str):
     tool_round = 0
     max_tool_rounds = 5
 
+    cached_system = [
+        {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
+    ]
+    cached_tool_list = cached_tools()
+
     def _sse(event: str, data: dict) -> ServerSentEvent:
         return ServerSentEvent(data=json.dumps(data), event=event)
 
@@ -188,8 +212,8 @@ async def _stream_chat(messages: list, model: str, system_prompt: str):
             async with aclient.messages.stream(
                 model=model,
                 max_tokens=16384,
-                system=system_prompt,
-                tools=TOOLS,
+                system=cached_system,
+                tools=cached_tool_list,
                 messages=messages,
             ) as stream:
                 async for event in stream:
@@ -197,6 +221,7 @@ async def _stream_chat(messages: list, model: str, system_prompt: str):
                         yield _sse("token", {"text": event.delta.text})
 
                 response = await stream.get_final_message()
+                _log_usage(f"stream round={tool_round}", response.usage)
 
             if response.stop_reason != "tool_use" or tool_round >= max_tool_rounds:
                 break

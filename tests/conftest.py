@@ -32,6 +32,9 @@ def tmp_data_dir(tmp_path, monkeypatch):
     # Clear in-memory trade-plan jobs between tests
     from app import trade_plan_runner
     trade_plan_runner._JOBS.clear()
+    # Clear in-memory tool-result cache between tests so subprocess mocks fire
+    from app import tools as _tools
+    _tools._RESULT_CACHE.clear()
 
 
 @pytest.fixture
