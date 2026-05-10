@@ -132,6 +132,12 @@ async def _run_job(job_id: str, ticker: str, timeframe: Optional[str],
     model = os.environ.get("TRADE_PLAN_MODEL", "claude-haiku-4-5-20251001")
     cmd = [_CLAUDE_BIN, "-p", "--model", model, "--permission-mode", "bypassPermissions", prompt]
 
+    # Strip ANTHROPIC_API_KEY so the subprocess falls back to the host's
+    # claude.ai subscription auth instead of billing the API. The env var
+    # otherwise takes precedence even when the user is logged in.
+    sub_env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
+
+    run_start = time.time()
     async with _semaphore():
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -139,6 +145,7 @@ async def _run_job(job_id: str, ticker: str, timeframe: Optional[str],
                 cwd=config.PROJECT_ROOT,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=sub_env,
             )
             try:
                 stdout_b, stderr_b = await asyncio.wait_for(
@@ -161,8 +168,15 @@ async def _run_job(job_id: str, ticker: str, timeframe: Optional[str],
         return
 
     after = _snapshot(trade_plans_dir)
-    new_files = sorted(after - before, key=lambda n: (trade_plans_dir / n).stat().st_mtime, reverse=True)
-    match = next((n for n in new_files if ticker in n), new_files[0] if new_files else None)
+    # Detect files added OR modified during this run. The renderer writes a
+    # deterministic filename ({ticker}_{expiry}.html), so a re-run of the same
+    # plan overwrites in place — set-difference would miss it.
+    candidates = sorted(
+        (n for n in after if n not in before or (trade_plans_dir / n).stat().st_mtime >= run_start),
+        key=lambda n: (trade_plans_dir / n).stat().st_mtime,
+        reverse=True,
+    )
+    match = next((n for n in candidates if ticker in n), candidates[0] if candidates else None)
 
     if not match:
         stdout = (stdout_b or b"").decode("utf-8", errors="replace").strip()

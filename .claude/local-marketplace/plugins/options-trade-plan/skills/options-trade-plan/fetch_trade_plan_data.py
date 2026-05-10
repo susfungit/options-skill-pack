@@ -19,6 +19,11 @@ and timeframe. Outputs a single JSON object to stdout with:
 Usage:
   python3 fetch_trade_plan_data.py TICKER
     [--expiry YYYY-MM-DD] [--dte N] [--timeframe weekly|monthly|eom]
+    [--fragments-out PATH]
+
+  --fragments-out PATH writes the bulky html.* fragments to PATH instead of
+  embedding them in stdout. Stdout then carries only data.* fields. Use this
+  with render_trade_plan.py to keep fragments out of the model's context.
 
 Timeframe resolution rules:
   --expiry takes priority
@@ -40,6 +45,7 @@ import json
 import math
 import calendar as _cal
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from _shared.options_lib import (
     _safe_int, error_exit, get_stock_price,
@@ -939,12 +945,12 @@ def render_html_fragments(result):
 
 def parse_flags(argv):
     argv = list(argv)
-    out = {"expiry": None, "dte": None, "timeframe": None}
-    for flag in ("--expiry", "--dte", "--timeframe"):
+    out = {"expiry": None, "dte": None, "timeframe": None, "fragments_out": None}
+    for flag in ("--expiry", "--dte", "--timeframe", "--fragments-out"):
         if flag in argv:
             idx = argv.index(flag)
             if idx + 1 < len(argv):
-                out[flag.lstrip("-")] = argv[idx + 1]
+                out[flag.lstrip("-").replace("-", "_")] = argv[idx + 1]
             argv = argv[:idx] + argv[idx + 2:]
     if out["dte"] is not None:
         try:
@@ -1207,9 +1213,21 @@ def main():
         "warnings": warnings_out,
         "data_source": "yfinance",
         "delta_source": "bs_from_mid (model estimate)",
+        "skip_dividend_search": (dte or 0) <= 30,
     }
 
-    result["html"] = render_html_fragments(result)
+    fragments = render_html_fragments(result)
+
+    if flags.get("fragments_out"):
+        # Two-channel mode: html.* fragments to a sidecar file, slim data on stdout.
+        # Lets the renderer (render_trade_plan.py) merge prose + fragments + template
+        # without those bytes ever passing through the model's context.
+        frag_path = Path(flags["fragments_out"])
+        frag_path.parent.mkdir(parents=True, exist_ok=True)
+        frag_path.write_text(json.dumps(fragments, indent=2, default=str))
+        result["fragments_path"] = str(frag_path)
+    else:
+        result["html"] = fragments
 
     print(json.dumps(result, indent=2, default=str))
 

@@ -15,12 +15,12 @@ description: >
 
 # Options Trade Plan Skill
 
-Produce a **professional, data-driven options spread trade plan** for any ticker and timeframe.
-The output is a self-contained HTML page the trader can save and share.
+Produce a professional, data-driven options spread trade plan for any ticker and timeframe.
+Output is a self-contained HTML page assembled by `render_trade_plan.py`.
 
-The Python data script does all numeric work and pre-renders most of the HTML. Your job is
-narrow: write the qualitative narrative blocks, fill three short prose slots per trade card,
-and assemble the final HTML.
+**Your job is narrow:** write 13 short prose blocks as JSON. Python pre-renders all numeric
+HTML (cards, tables, charts, sizing rows) and stitches the final page. You never read or
+write the HTML template.
 
 ---
 
@@ -35,151 +35,136 @@ and assemble the final HTML.
 
 ---
 
-## Step 1 — Run the data script (mandatory, first action)
+## Step 1 — Run the data script
 
 ```bash
+mkdir -p trade-plans/.tmp
 python3 /path/to/fetch_trade_plan_data.py TICKER \
-  [--expiry YYYY-MM-DD] [--dte N] [--timeframe weekly|monthly|eom]
+  [--expiry YYYY-MM-DD] [--dte N] [--timeframe weekly|monthly|eom] \
+  --fragments-out trade-plans/.tmp/TICKER_fragments.json \
+  > trade-plans/.tmp/TICKER_data.json
 ```
 
-The script returns a single JSON object with two top-level surfaces:
+The redirected stdout file is a single JSON object with `data.*` fields you'll cite in prose:
+`price`, `atm_iv_pct`, `hv_30d_pct`, `iv_hv_ratio`, `iv_hv_verdict`, `expected_move`,
+`pivot`, `expiry`, `dte`, `earnings`, `strike_guidance`, `trades.{bull_put, iron_condor,
+bear_call}`, `chain_summary`, `warnings`, `skip_dividend_search`.
 
-- **`data.*`** (numeric/structured) — `price`, `atm_iv_pct`, `hv_30d_pct`, `iv_hv_ratio`,
-  `iv_hv_verdict`, `expected_move`, `pivot`, `expiry`, `dte`, `earnings`, `strike_guidance`,
-  `trades.{bull_put, iron_condor, bear_call}`, `chain_summary`, `warnings`. Use this when
-  you write narrative — cite specific numbers from here.
-- **`html.*`** (pre-rendered HTML fragments) — already-built HTML for every structural
-  block of the page. **You do not rebuild these.** Paste them into the template verbatim.
+Bulky pre-rendered HTML fragments are written to the `--fragments-out` file — do not read
+that file; the renderer consumes it directly.
 
-**If the script errors:** still produce a plan. Use web search + estimation. Label every
-model value as `(estimated)`. Skip the `html.*` fragments and write minimal HTML by hand.
+**If the script errors:** still produce a plan. Use web search + estimation, label every
+model value `(estimated)`, and skip the renderer step (write minimal HTML by hand into
+`trade-plans/trade_plan_TICKER_EXPIRY.html`).
 
 ### Web searches (run in parallel as a single tool-use turn)
 
-Dispatch these in **one** tool-use turn (parallel tool calls), not across multiple turns:
+Before searching, check `trade-plans/.tmp/search_cache/TICKER_TODAY.json` (where
+`TODAY` is `YYYY-MM-DD` UTC). If the file exists, read it and skip the searches.
+Otherwise dispatch these in **one** tool-use turn:
 
 1. `[TICKER] recent earnings report beat miss guidance [CURRENT_YEAR]`
 2. `[TICKER] analyst rating change price target [CURRENT_YEAR]`
 3. `[TICKER] news catalyst [CURRENT_MONTH] [CURRENT_YEAR]`
 
-If `data.dte > 30`, also dispatch (in the same turn):
+If `data.skip_dividend_search` is **false**, also dispatch (in the same turn):
 
 4. `[TICKER] ex-dividend date [NEXT_FEW_MONTHS] catalyst event conference`
 
-These feed the Executive Summary and Market Context narrative — they do not recompute
+After the searches return, write a short JSON summary of the findings to
+`trade-plans/.tmp/search_cache/TICKER_TODAY.json` so future runs the same day skip the
+searches. Use the file path the cache check would have read.
+
+These results feed your `context_html` and `sources_html` prose — they do not recompute
 numbers.
 
 ---
 
-## Step 2 — Read the script output
+## Step 2 — Read the data and identify the angle
 
 Spend most of your reasoning here. Identify:
 
-- The IV/HV verdict (`data.iv_hv_verdict`) — premium selling attractive or thin?
-- Whether earnings is in-window (`data.earnings.within_expiry_window`) — flag prominently.
-- The DTE bucket (`data.strike_guidance.dte_bucket`) — drives entry/management cadence.
-- Any warnings (`data.warnings`) — earnings, low-IV, LEAPS, thin chain.
-- For each trade in `data.trades`, the short strike vs. nearest support/resistance:
+- IV/HV verdict (`data.iv_hv_verdict`) — premium selling attractive or thin?
+- Earnings within window (`data.earnings.within_expiry_window`) — flag prominently.
+- DTE bucket (`data.strike_guidance.dte_bucket`) — drives entry/management cadence.
+- Warnings (`data.warnings`) — earnings, low IV, LEAPS, thin chain.
+- Each short strike vs. the relevant level:
   - bull put short put vs. `pivot.S1`, `sma_50`, `chain_summary.put_oi_wall`
   - bear call short call vs. `pivot.R1`, `chain_summary.call_oi_wall`, `sma_50/200`
   - iron condor: both sides
 
-You will cite these specific levels in the per-trade prose.
+Cite these specific levels by name and number in the per-trade prose.
 
 ---
 
 ## Step 3 — Earnings handling
 
 If `data.earnings.within_expiry_window` is true:
-- Flag in the Executive Summary
-- In the affected trade cards' **rationale**, state explicitly that you are either
-  (a) accepting the risk because shorts are 1.5× the earnings expected move beyond support, or
-  (b) recommending the trader avoid this expiry and wait for post-earnings IV crush
+- Flag in `exec_summary_html` and the affected card's rationale prose
+- State explicitly that you are either (a) accepting the risk because shorts are 1.5× the
+  earnings expected move beyond support, or (b) recommending the trader avoid this expiry
+  and wait for post-earnings IV crush
 - Never silently ignore it
 
-If earnings falls within ~7 days *after* expiry, note in Market Context that pre-earnings
+If earnings falls within ~7 days *after* expiry, note in `context_html` that pre-earnings
 IV is likely inflating premium.
 
 ---
 
-## Step 4 — Produce the HTML output
+## Step 4 — Write the prose JSON and render
 
-Read `assets/template.html` (lives alongside this SKILL.md). Do **string replacement** for
-each `{{TOKEN}}`. Most tokens are pre-rendered in `data.html.*`:
+Write a single file `trade-plans/.tmp/TICKER_prose.json` with these 13 keys (all string
+values, all valid HTML fragments):
 
-| Token | Source |
+| Key | What to write |
 |---|---|
-| `{{TICKER}}` | `html.ticker` |
-| `{{STRATEGY_LABEL}}` | `html.strategy_label` |
-| `{{EXPIRY}}` | `html.expiry` |
-| `{{DTE}}` | `html.dte` |
-| `{{PUB_DATE}}` | `html.pub_date` |
-| `{{EXPIRY_RESOLUTION}}` | `html.expiry_resolution` |
-| `{{SPOT}}`, `{{CHG_PCT}}`, `{{IV}}`, `{{HV}}`, `{{IV_HV_RATIO}}`, `{{IV_RANK}}`, `{{MAX_PAIN}}`, `{{EARNINGS_LINE}}`, `{{EXPECTED_MOVE}}`, `{{IV_VERDICT}}` | matching `html.*` keys |
-| `{{LEVELS_ROWS_HTML}}` | `html.levels_rows_html` |
-| `{{TRADE_SUMMARY_ROWS_HTML}}` | `html.trade_summary_rows_html` |
-| `{{BULL_PUT_CARD_HTML}}` | `html.bull_put_card_html` (see slot-fill below) |
-| `{{CONDOR_CARD_HTML}}` | `html.condor_card_html` (see slot-fill below) |
-| `{{BEAR_CALL_CARD_HTML}}` | `html.bear_call_card_html` (see slot-fill below) |
-| `{{FLOWCHART_HTML}}` | `html.flowchart_html` |
-| `{{VOL_BARS_HTML}}` | `html.vol_bars_html` |
-| `{{POSITIONING_HTML}}` | `html.positioning_html` |
-| `{{SIZING_ROWS_HTML}}` | `html.sizing_rows_html` |
-| `{{CHART_CONFIG_JSON}}` | `JSON.stringify(html.chart_config_json)` (paste as a JS object literal) |
+| `exec_summary_html` | 2–4 `<p>` paragraphs. State IV verdict, directional read, recommended scenario, earnings status. First `<p>` should have class `lead` for the drop-cap. |
+| `context_html` | Catalyst summary from web searches: recent earnings result, analyst moves, news/events. `<p>` blocks or `<ul><li>` bullets. Cite sources inline as `(source: …)`. |
+| `earnings_html` | If clean: a single `<div class="earnings-callout clean">` saying so, with the days-after note if applicable. If in-window: a `<div class="earnings-callout">` with the date, EM widening logic, and your recommended action. |
+| `sources_html` | `<li>` items: data script (yfinance, timestamp from `data.as_of`), each web search query + finding, and any other external fact. |
+| `bull_put_rationale` | One `<p>`, 1–3 sentences. Why this short strike is defensible — cite the specific level (pivot S1, SMA 50, OI wall) and how far the short sits beyond it. |
+| `bull_put_entry_trigger` | One `<p>`. Specific, price-action-conditional. *"Enter only if AAPL holds above $278.50 (S1) for the first 30 minutes of Monday's session."* Not "enter if bullish." |
+| `bull_put_stop_rule` | One `<p>`. Specific price OR delta level. *"Close if short-put delta reaches 0.30, or if AAPL closes below $275 (S2)."* |
+| `iron_condor_rationale` | Same shape as bull_put_rationale, citing both sides. |
+| `iron_condor_entry_trigger` | Same shape. |
+| `iron_condor_stop_rule` | Same shape. |
+| `bear_call_rationale` | Same shape as bull_put_rationale, for the call side. |
+| `bear_call_entry_trigger` | Same shape. |
+| `bear_call_stop_rule` | Same shape. |
 
-**You write only these four narrative blocks** (each a few short paragraphs of HTML):
+Then call the renderer:
 
-| Token | What to write |
-|---|---|
-| `{{EXEC_SUMMARY_HTML}}` | 2–4 `<p>` paragraphs. State the IV verdict, the directional read, the recommended scenario, earnings status. The first `<p>` should have class `lead` for the drop-cap. |
-| `{{CONTEXT_HTML}}` | Catalyst summary from the web searches: recent earnings result, analyst moves, news/events. Bullet list or `<p>` blocks. Cite sources inline as `(source: …)`. |
-| `{{EARNINGS_HTML}}` | If clean: a single `<div class="earnings-callout clean">` saying so, with the days-after note if applicable. If in-window: a `<div class="earnings-callout">` with the date, EM widening logic, and your recommended action. |
-| `{{SOURCES_HTML}}` | `<li>` items: data script (yfinance, timestamp from `data.as_of`), each web search query + finding, and any other external fact. |
-
-### Per-card prose slots (fill the `<!-- MODEL_SLOT:* -->` markers in each card)
-
-Each pre-rendered card contains three placeholders that look like:
-
-```html
-<!-- MODEL_SLOT:bull_put_rationale --><p>[bull put rationale]</p>
+```bash
+python3 /path/to/render_trade_plan.py \
+  --data trade-plans/.tmp/TICKER_data.json \
+  --fragments trade-plans/.tmp/TICKER_fragments.json \
+  --prose trade-plans/.tmp/TICKER_prose.json \
+  --out trade-plans
 ```
 
-Replace **both the comment AND the placeholder `<p>` immediately after it** with one short
-`<p>` of your own (1–3 sentences). The slots:
-
-| Slot suffix | What to write |
-|---|---|
-| `*_rationale` | Why this short strike is defensible. Cite the specific support/resistance level (pivot S1/R1, SMA 50/200, OI wall) and how far the short strike sits beyond it. |
-| `*_entry_trigger` | A specific, price-action-conditional entry. Example: *"Enter only if AAPL holds above $278.50 (S1) for the first 30 minutes of Monday's session."* Not "enter if bullish." |
-| `*_stop_rule` | A specific price OR delta level. Example: *"Close if short-put delta reaches 0.30, or if AAPL closes below $275 (S2)."* |
-
-There are 9 slots total (3 cards × 3 slots). Fill all of them.
-
-### Where to write the file
-
-Write to `trade-plans/trade_plan_[TICKER]_[EXPIRY].html` in the current working directory.
-Create the dir if missing (`mkdir -p trade-plans`). Tell the user the path at the end.
+The renderer prints the output path. Tell the user that path. It validates that every
+`{{TOKEN}}` and `MODEL_SLOT` is replaced; if a prose key is missing or malformed, the
+renderer fails loudly and the user sees the error.
 
 ---
 
-## Quality checklist (run before finishing)
+## Quality checklist
 
-- [ ] Script ran and JSON parsed before any HTML was written
-- [ ] All `{{TOKEN}}` placeholders are replaced (search the output for `{{` — none should remain)
-- [ ] All 9 `MODEL_SLOT` markers replaced with prose `<p>` (search the output for `MODEL_SLOT` — none should remain)
-- [ ] Executive Summary explicitly states IV/HV verdict, directional read, recommended scenario, earnings status
+- [ ] Data script ran and the JSON parsed before any prose was written
+- [ ] Executive summary explicitly states IV/HV verdict, directional read, recommended scenario, earnings status
 - [ ] Earnings is addressed (in-window or clean, with days noted)
-- [ ] Each card's rationale cites a specific level (pivot/SMA/OI wall) by name and number
-- [ ] Each card's entry trigger references a specific price + time-of-day condition
-- [ ] Sources section lists data script + every web search with timestamp
-- [ ] For DTE > 90, the executive summary flags that standard short-premium is suboptimal
+- [ ] Each rationale cites a specific level (pivot/SMA/OI wall) by name and number
+- [ ] Each entry trigger references a specific price + time-of-day condition
+- [ ] Sources lists data script + every web search with timestamp
+- [ ] For DTE > 90, executive summary flags that standard short-premium is suboptimal
+- [ ] Renderer exited 0 and printed the output HTML path
 
 ---
 
 ## Edge cases
 
-- **Script errors / yfinance offline:** fall back to web-search estimation; label every value `(estimated)`; produce minimal HTML by hand.
-- **Very low IV rank (`data.iv_rank_pct_proxy < 25`):** call out in Executive Summary that premium is thin.
-- **LEAPS zone (`dte > 90`):** Executive Summary recommends diagonal/calendar; spread cards stay but are labelled suboptimal.
-- **Thin option chain / strike not near target delta:** the script returns the nearest available; flag liquidity in the rationale.
+- **Script errors / yfinance offline:** skip the renderer; produce minimal HTML by hand and label every value `(estimated)`.
+- **Very low IV rank (`data.iv_rank_pct_proxy < 25`):** call out in `exec_summary_html` that premium is thin.
+- **LEAPS zone (`dte > 90`):** `exec_summary_html` recommends diagonal/calendar; spread cards stay but are labelled suboptimal.
+- **Thin chain / strike not near target delta:** the script returns the nearest available; flag liquidity in the rationale.
 - **No directional bias given:** treat as neutral; iron condor is the primary pick.
