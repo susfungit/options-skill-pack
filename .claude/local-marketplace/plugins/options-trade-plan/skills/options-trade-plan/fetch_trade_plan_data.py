@@ -438,6 +438,503 @@ def fetch_earnings(tk):
     return None
 
 
+# ── HTML rendering (pre-built fragments — keeps the model out of structural HTML) ──
+
+_BULL_KICKER = "Bullish / stable tape"
+_NEUTRAL_KICKER = "Neutral / range-bound tape"
+_BEAR_KICKER = "Bearish / rejection tape"
+
+_MGMT_TIMELINE = {
+    "weekly (0-7 DTE)":
+        "Take 50% profit by day 3. Close Thursday if the short strike is threatened. Hard stop at 2× credit.",
+    "bi-weekly (8-21 DTE)":
+        "Take 50% profit at 50% of time elapsed. Close at 7 DTE remaining. Hard stop at 2× credit.",
+    "monthly (22-45 DTE)":
+        "Take 50% profit or close at 21 DTE remaining, whichever comes first. Hard stop at 2× credit.",
+    "extended (46-90 DTE)":
+        "Take 50% profit. Close at 30 DTE remaining. Hard stop at 2× credit.",
+    "LEAPS zone (>90 DTE)":
+        "Diagonal/calendar preferred at this DTE. If holding the spread: take 50% profit, close at 30 DTE remaining. Hard stop at 2× credit.",
+}
+
+_RISK_BUDGET = {
+    "bull_put": 0.0035,
+    "bear_call": 0.0035,
+    "iron_condor": 0.0025,
+}
+
+
+def _fmt_money(x, decimals=2):
+    if x is None:
+        return "—"
+    try:
+        return f"${float(x):,.{decimals}f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _fmt_pct(x, decimals=1):
+    if x is None:
+        return "—"
+    try:
+        return f"{float(x):.{decimals}f}%"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _strategy_label(dte):
+    if dte is None:
+        return "Credit Spread Framework"
+    if dte <= 7:
+        return "Weekly Credit Spread Framework"
+    if dte <= 21:
+        return "Bi-Weekly Credit Spread Framework"
+    if dte <= 45:
+        return "Monthly Credit Spread Framework"
+    if dte <= 90:
+        return "Extended-Dated Spread Framework"
+    return "LEAPS-Zone Framework"
+
+
+def _pretty_expiry(expiry_str):
+    try:
+        d = datetime.strptime(expiry_str, "%Y-%m-%d").date()
+        return d.strftime("%B %d, %Y")
+    except (TypeError, ValueError):
+        return expiry_str or "—"
+
+
+def _render_levels_rows(pivot, sma_50, sma_200, ohlc_prev):
+    rows = []
+    src = pivot.get("source_session", "prev session")
+    rows.append(f'<tr><td>R2</td><td class="num">${pivot["R2"]:.2f}</td><td>Pivot resistance 2 ({src})</td></tr>')
+    rows.append(f'<tr><td>R1</td><td class="num">${pivot["R1"]:.2f}</td><td>Pivot resistance 1 ({src})</td></tr>')
+    rows.append(f'<tr class="highlight"><td>Pivot</td><td class="num">${pivot["P"]:.2f}</td><td>Classical pivot from {src} OHLC</td></tr>')
+    rows.append(f'<tr><td>S1</td><td class="num">${pivot["S1"]:.2f}</td><td>Pivot support 1 ({src})</td></tr>')
+    rows.append(f'<tr><td>S2</td><td class="num">${pivot["S2"]:.2f}</td><td>Pivot support 2 ({src})</td></tr>')
+    if sma_50 is not None:
+        rows.append(f'<tr><td>SMA 50</td><td class="num">${sma_50:.2f}</td><td>50-day simple moving average</td></tr>')
+    if sma_200 is not None:
+        rows.append(f'<tr><td>SMA 200</td><td class="num">${sma_200:.2f}</td><td>200-day simple moving average</td></tr>')
+    if ohlc_prev:
+        rows.append(
+            f'<tr><td>Prev close</td><td class="num">${ohlc_prev["close"]:.2f}</td>'
+            f'<td>Last completed session ({ohlc_prev["date"]})</td></tr>'
+        )
+    return "\n".join(rows)
+
+
+def _render_trade_summary_rows(trades):
+    rows = []
+    if "bull_put" in trades:
+        bp = trades["bull_put"]
+        rows.append(
+            '<tr>'
+            '<td class="tag tag-bull">Bullish / stable</td>'
+            f'<td>Bull put {bp["short_strike"]:.0f}/{bp["long_strike"]:.0f}</td>'
+            f'<td class="num">${bp["net_credit"]:.2f}</td>'
+            f'<td class="num">${bp["max_profit"]:.0f}</td>'
+            f'<td class="num">${bp["max_loss"]:.0f}</td>'
+            f'<td class="num">{bp["prob_profit_pct"]:.0f}%</td>'
+            '</tr>'
+        )
+    if "iron_condor" in trades:
+        ic = trades["iron_condor"]
+        bp = ic["put_side"]
+        bc = ic["call_side"]
+        rows.append(
+            '<tr>'
+            '<td class="tag tag-neutral">Neutral / range</td>'
+            f'<td>IC {bp["long_strike"]:.0f}/{bp["short_strike"]:.0f} – {bc["short_strike"]:.0f}/{bc["long_strike"]:.0f}</td>'
+            f'<td class="num">${ic["total_credit"]:.2f}</td>'
+            f'<td class="num">${ic["max_profit"]:.0f}</td>'
+            f'<td class="num">${ic["max_loss"]:.0f}</td>'
+            f'<td class="num">{ic["prob_profit_pct"]:.0f}%</td>'
+            '</tr>'
+        )
+    if "bear_call" in trades:
+        bc = trades["bear_call"]
+        rows.append(
+            '<tr>'
+            '<td class="tag tag-bear">Bearish / rejection</td>'
+            f'<td>Bear call {bc["short_strike"]:.0f}/{bc["long_strike"]:.0f}</td>'
+            f'<td class="num">${bc["net_credit"]:.2f}</td>'
+            f'<td class="num">${bc["max_profit"]:.0f}</td>'
+            f'<td class="num">${bc["max_loss"]:.0f}</td>'
+            f'<td class="num">{bc["prob_profit_pct"]:.0f}%</td>'
+            '</tr>'
+        )
+    return "\n".join(rows)
+
+
+def _legs_table(rows):
+    """rows: list of (action, strike, premium, oi, delta_or_blank)."""
+    body = []
+    for action, strike, premium, oi, delta_str in rows:
+        cls = "sell" if action == "SELL" else "buy"
+        body.append(
+            f'<tr>'
+            f'<td class="act {cls}">{action}</td>'
+            f'<td class="num">${strike:.2f}</td>'
+            f'<td class="num">${premium:.2f}</td>'
+            f'<td class="num">{oi if oi is not None else "—"}</td>'
+            f'<td class="num">{delta_str}</td>'
+            '</tr>'
+        )
+    return (
+        '<table class="legs">'
+        '<thead><tr><th>Action</th><th class="num">Strike</th>'
+        '<th class="num">Premium (mid)</th><th class="num">OI</th>'
+        '<th class="num">Δ</th></tr></thead>'
+        f'<tbody>{"".join(body)}</tbody></table>'
+    )
+
+
+def _card_metrics(max_profit, max_loss, breakeven, pop):
+    be_str = breakeven if isinstance(breakeven, str) else f'${breakeven:.2f}'
+    return (
+        '<div class="metrics">'
+        f'<div><div class="lab">Max profit</div><div class="v">${max_profit:.0f}</div></div>'
+        f'<div><div class="lab">Max loss</div><div class="v">${max_loss:.0f}</div></div>'
+        f'<div><div class="lab">Breakeven</div><div class="v">{be_str}</div></div>'
+        f'<div><div class="lab">POP</div><div class="v">{pop:.0f}%</div></div>'
+        '</div>'
+    )
+
+
+def _model_slot(name):
+    """Single-paragraph placeholder for the model to replace verbatim."""
+    return f'<!-- MODEL_SLOT:{name} --><p>[{name.replace("_", " ")}]</p>'
+
+
+def _disclaimer():
+    return (
+        '<p class="disclaimer">Premiums are model estimates from Black-Scholes against '
+        'bid/ask mid; verify against your broker before trading.</p>'
+    )
+
+
+def _render_card_bull_put(bp, expiry_str, mgmt_text):
+    sp_d = abs(bp.get("short_delta") or 0)
+    legs = _legs_table([
+        ("SELL", bp["short_strike"], bp["short_mid"], bp["short_oi"], f"{sp_d:.2f}"),
+        ("BUY",  bp["long_strike"],  bp["long_mid"],  bp["long_oi"],  ""),
+    ])
+    return (
+        '<article class="card bull">'
+        f'<div class="card-kicker">{_BULL_KICKER}</div>'
+        f'<h3>Bull put spread — short {bp["short_strike"]:.0f}P / long {bp["long_strike"]:.0f}P</h3>'
+        f'<p class="credit-big">${bp["net_credit"]:.2f} <small>net credit per contract</small></p>'
+        f'{_card_metrics(bp["max_profit"], bp["max_loss"], bp["breakeven"], bp["prob_profit_pct"])}'
+        f'{legs}'
+        f'<div class="sect"><h4>Rationale</h4>{_model_slot("bull_put_rationale")}</div>'
+        f'<div class="sect"><h4>Entry trigger</h4>{_model_slot("bull_put_entry_trigger")}</div>'
+        f'<div class="sect"><h4>Stop / adjustment</h4>{_model_slot("bull_put_stop_rule")}</div>'
+        f'<div class="sect"><h4>Management timeline</h4><p>{mgmt_text}</p></div>'
+        f'{_disclaimer()}'
+        '</article>'
+    )
+
+
+def _render_card_iron_condor(ic, expiry_str, mgmt_text):
+    bp = ic["put_side"]
+    bc = ic["call_side"]
+    sp_d = abs(bp.get("short_delta") or 0)
+    sc_d = abs(bc.get("short_delta") or 0)
+    legs = _legs_table([
+        ("BUY",  bp["long_strike"],  bp["long_mid"],  bp["long_oi"],  ""),
+        ("SELL", bp["short_strike"], bp["short_mid"], bp["short_oi"], f"{sp_d:.2f}"),
+        ("SELL", bc["short_strike"], bc["short_mid"], bc["short_oi"], f"{sc_d:.2f}"),
+        ("BUY",  bc["long_strike"],  bc["long_mid"],  bc["long_oi"],  ""),
+    ])
+    profit_zone = ic.get("profit_zone") or (
+        f'${ic["breakeven_low"]:.2f} – ${ic["breakeven_high"]:.2f}'
+    )
+    return (
+        '<article class="card neutral">'
+        f'<div class="card-kicker">{_NEUTRAL_KICKER}</div>'
+        f'<h3>Iron condor — {bp["long_strike"]:.0f}/{bp["short_strike"]:.0f} put · '
+        f'{bc["short_strike"]:.0f}/{bc["long_strike"]:.0f} call</h3>'
+        f'<p class="credit-big">${ic["total_credit"]:.2f} <small>net credit per contract</small></p>'
+        f'{_card_metrics(ic["max_profit"], ic["max_loss"], profit_zone, ic["prob_profit_pct"])}'
+        f'{legs}'
+        f'<div class="sect"><h4>Rationale</h4>{_model_slot("iron_condor_rationale")}</div>'
+        f'<div class="sect"><h4>Entry trigger</h4>{_model_slot("iron_condor_entry_trigger")}</div>'
+        f'<div class="sect"><h4>Stop / adjustment</h4>{_model_slot("iron_condor_stop_rule")}</div>'
+        f'<div class="sect"><h4>Management timeline</h4><p>{mgmt_text}</p></div>'
+        f'{_disclaimer()}'
+        '</article>'
+    )
+
+
+def _render_card_bear_call(bc, expiry_str, mgmt_text):
+    sc_d = abs(bc.get("short_delta") or 0)
+    legs = _legs_table([
+        ("SELL", bc["short_strike"], bc["short_mid"], bc["short_oi"], f"{sc_d:.2f}"),
+        ("BUY",  bc["long_strike"],  bc["long_mid"],  bc["long_oi"],  ""),
+    ])
+    return (
+        '<article class="card bear">'
+        f'<div class="card-kicker">{_BEAR_KICKER}</div>'
+        f'<h3>Bear call spread — short {bc["short_strike"]:.0f}C / long {bc["long_strike"]:.0f}C</h3>'
+        f'<p class="credit-big">${bc["net_credit"]:.2f} <small>net credit per contract</small></p>'
+        f'{_card_metrics(bc["max_profit"], bc["max_loss"], bc["breakeven"], bc["prob_profit_pct"])}'
+        f'{legs}'
+        f'<div class="sect"><h4>Rationale</h4>{_model_slot("bear_call_rationale")}</div>'
+        f'<div class="sect"><h4>Entry trigger</h4>{_model_slot("bear_call_entry_trigger")}</div>'
+        f'<div class="sect"><h4>Stop / adjustment</h4>{_model_slot("bear_call_stop_rule")}</div>'
+        f'<div class="sect"><h4>Management timeline</h4><p>{mgmt_text}</p></div>'
+        f'{_disclaimer()}'
+        '</article>'
+    )
+
+
+def _render_flowchart(pivot):
+    s1 = pivot["S1"]
+    r1 = pivot["R1"]
+    r2 = pivot["R2"]
+    return (
+        '<div class="flow-node"><div class="q">Open: where is price after first 30–60 min?</div></div>'
+        f'<div class="flow-node"><div class="q">Above ${s1:.2f} (S1)?</div>'
+        '<div class="flow-node"><span class="yes">YES</span> '
+        f'<span class="q">→ Rejection below ${r1:.2f}–${r2:.2f}?</span>'
+        '<div class="flow-node"><span class="no">NO</span> '
+        '<span class="outcome">→ Scenario A · bull put spread</span></div>'
+        '<div class="flow-node"><span class="yes">YES</span> '
+        '<span class="outcome">→ Scenario C · bear call spread</span></div>'
+        '</div>'
+        '<div class="flow-node"><span class="no">NO</span> '
+        f'<span class="q">→ Range-bound inside ${s1:.2f}–${r1:.2f}?</span>'
+        '<div class="flow-node"><span class="yes">YES</span> '
+        '<span class="outcome">→ Scenario B · iron condor</span></div>'
+        '<div class="flow-node"><span class="no">NO</span> '
+        '<span class="outcome">→ No trade. Wait for next session.</span></div>'
+        '</div></div>'
+    )
+
+
+def _sizing_for(max_loss, budget_pct, portfolio):
+    if not max_loss or max_loss <= 0:
+        return 0
+    return int((portfolio * budget_pct) // max_loss)
+
+
+def _render_sizing_rows(trades):
+    sizes = [250_000, 500_000, 1_000_000]
+    out = []
+
+    def row(label, max_loss, budget_pct):
+        cells = "".join(
+            f'<td class="num">{_sizing_for(max_loss, budget_pct, s)}</td>' for s in sizes
+        )
+        return (
+            f'<tr><td>{label}</td><td class="num">${max_loss:.0f}</td>{cells}</tr>'
+        )
+
+    if "bull_put" in trades:
+        out.append(row("Bull put", trades["bull_put"]["max_loss"], _RISK_BUDGET["bull_put"]))
+    if "iron_condor" in trades:
+        out.append(row("Iron condor", trades["iron_condor"]["max_loss"], _RISK_BUDGET["iron_condor"]))
+    if "bear_call" in trades:
+        out.append(row("Bear call", trades["bear_call"]["max_loss"], _RISK_BUDGET["bear_call"]))
+    return "\n".join(out)
+
+
+def _render_chart_config(trades, price):
+    """Build {labels, bullPut, condor, bearCall} dict ready to be JSON-encoded."""
+    if not price:
+        return {"labels": [], "bullPut": [], "condor": [], "bearCall": []}
+
+    low = price * 0.85
+    high = price * 1.15
+    step = 0.5
+    n_steps = max(1, int((high - low) / step) + 1)
+    xs = [round(low + i * step, 2) for i in range(n_steps)]
+
+    def bull_put_pnl(x):
+        if "bull_put" not in trades:
+            return None
+        bp = trades["bull_put"]
+        cr = bp["net_credit"]
+        w = bp["width"]
+        sp = bp["short_strike"]
+        lp = bp["long_strike"]
+        if x >= sp:
+            v = cr
+        elif x <= lp:
+            v = cr - w
+        else:
+            v = cr - (sp - x)
+        return round(v * 100, 2)
+
+    def bear_call_pnl(x):
+        if "bear_call" not in trades:
+            return None
+        bc = trades["bear_call"]
+        cr = bc["net_credit"]
+        w = bc["width"]
+        sc = bc["short_strike"]
+        lc = bc["long_strike"]
+        if x <= sc:
+            v = cr
+        elif x >= lc:
+            v = cr - w
+        else:
+            v = cr - (x - sc)
+        return round(v * 100, 2)
+
+    def condor_pnl(x):
+        if "iron_condor" not in trades:
+            return None
+        ic = trades["iron_condor"]
+        bp = ic["put_side"]
+        bc = ic["call_side"]
+        cr = ic["total_credit"]
+        sp, lp = bp["short_strike"], bp["long_strike"]
+        sc, lc = bc["short_strike"], bc["long_strike"]
+        bp_w = bp["width"]
+        bc_w = bc["width"]
+        # Put-side loss
+        if x >= sp:
+            put_loss = 0.0
+        elif x <= lp:
+            put_loss = bp_w
+        else:
+            put_loss = sp - x
+        # Call-side loss
+        if x <= sc:
+            call_loss = 0.0
+        elif x >= lc:
+            call_loss = bc_w
+        else:
+            call_loss = x - sc
+        v = cr - put_loss - call_loss
+        return round(v * 100, 2)
+
+    return {
+        "labels": xs,
+        "bullPut": [bull_put_pnl(x) for x in xs],
+        "condor": [condor_pnl(x) for x in xs],
+        "bearCall": [bear_call_pnl(x) for x in xs],
+    }
+
+
+def _render_earnings_line(earnings_info, expiry_str):
+    if not earnings_info:
+        return "None scheduled before expiry"
+    d = earnings_info["date"]
+    timing = earnings_info.get("timing")
+    days_from = earnings_info.get("days_from_expiry")
+    in_window = earnings_info.get("within_expiry_window")
+    timing_str = f", {timing}" if timing else ""
+    if in_window:
+        return f"{d}{timing_str} (INSIDE window)"
+    if days_from is None:
+        return f"{d}{timing_str}"
+    if days_from > 0:
+        return f"{d}{timing_str} ({days_from}d after expiry)"
+    return f"{d}{timing_str} ({abs(days_from)}d before expiry)"
+
+
+def _render_vol_bars(atm_iv_pct, hv_30_pct):
+    cap = max(atm_iv_pct or 0, hv_30_pct or 0, 1.0) * 1.15
+    iv_w = round((atm_iv_pct or 0) / cap * 100, 1)
+    hv_w = round((hv_30_pct or 0) / cap * 100, 1)
+    return (
+        f'<div class="vol-bar-row"><span class="lab">IV</span>'
+        f'<span class="bar"><span class="fill" style="width:{iv_w}%"></span></span>'
+        f'<span class="num">{(atm_iv_pct or 0):.1f}%</span></div>'
+        f'<div class="vol-bar-row"><span class="lab">HV 30d</span>'
+        f'<span class="bar"><span class="fill" style="width:{hv_w}%"></span></span>'
+        f'<span class="num">{(hv_30_pct or 0):.1f}%</span></div>'
+    )
+
+
+def _render_positioning(chain_summary):
+    items = []
+    mp = chain_summary.get("max_pain")
+    if mp is not None:
+        items.append(f'<li>Max pain: <b class="mono">${mp:.2f}</b></li>')
+    pw = chain_summary.get("put_oi_wall")
+    if pw:
+        items.append(f'<li>Put OI wall: <b class="mono">${pw["strike"]:.2f}</b> ({pw["oi"]:,} contracts)</li>')
+    cw = chain_summary.get("call_oi_wall")
+    if cw:
+        items.append(f'<li>Call OI wall: <b class="mono">${cw["strike"]:.2f}</b> ({cw["oi"]:,} contracts)</li>')
+    pcr = chain_summary.get("put_call_oi_ratio")
+    if pcr is not None:
+        bias = "put-heavy" if pcr > 1.1 else ("call-heavy" if pcr < 0.9 else "balanced")
+        items.append(f'<li>Put/Call OI ratio: <b class="mono">{pcr:.2f}</b> ({bias})</li>')
+    return f'<ul>{"".join(items)}</ul>' if items else "<p>No positioning data available.</p>"
+
+
+def render_html_fragments(result):
+    """Return a dict of pre-rendered HTML fragments and pre-formatted scalars
+    keyed to template.html placeholder names. The model uses these directly
+    rather than reconstructing them."""
+    trades = result.get("trades") or {}
+    pivot = result.get("pivot") or {}
+    guidance = result.get("strike_guidance") or {}
+    bucket = guidance.get("dte_bucket")
+    mgmt_text = _MGMT_TIMELINE.get(bucket, "Take 50% profit; close before final week. Hard stop at 2× credit.")
+
+    expiry_str = result.get("expiry") or ""
+    em = result.get("expected_move") or {}
+    em_str = "—"
+    if em.get("dollar") is not None and em.get("pct") is not None:
+        em_str = f'±${em["dollar"]:.2f} (±{em["pct"]:.2f}%)'
+
+    ch = result.get("change_pct")
+    if ch is None:
+        chg_str = "—"
+    else:
+        chg_str = f"{ch:+.2f}%"
+
+    chain_summary = result.get("chain_summary") or {}
+
+    return {
+        # Scalar tokens (already-formatted strings)
+        "ticker": result.get("ticker", ""),
+        "strategy_label": _strategy_label(result.get("dte")),
+        "expiry": _pretty_expiry(expiry_str),
+        "dte": result.get("dte"),
+        "pub_date": date.today().strftime("%B %d, %Y"),
+        "expiry_resolution": result.get("expiry_resolution") or "",
+        "spot": f'{result.get("price"):.2f}' if result.get("price") is not None else "—",
+        "chg_pct": chg_str,
+        "iv": _fmt_pct(result.get("atm_iv_pct")),
+        "hv": _fmt_pct(result.get("hv_30d_pct")),
+        "iv_hv_ratio": f'{result["iv_hv_ratio"]:.2f}' if result.get("iv_hv_ratio") is not None else "—",
+        "iv_rank": f'{result["iv_rank_pct_proxy"]:.0f}' if result.get("iv_rank_pct_proxy") is not None else "—",
+        "max_pain": _fmt_money(chain_summary.get("max_pain")),
+        "earnings_line": _render_earnings_line(result.get("earnings"), expiry_str),
+        "expected_move": em_str,
+        "iv_verdict": result.get("iv_hv_verdict") or "Neutral.",
+        # HTML fragments
+        "levels_rows_html": _render_levels_rows(
+            pivot, result.get("sma_50"), result.get("sma_200"), result.get("ohlc_prev_session")
+        ),
+        "trade_summary_rows_html": _render_trade_summary_rows(trades),
+        "bull_put_card_html": (
+            _render_card_bull_put(trades["bull_put"], expiry_str, mgmt_text)
+            if "bull_put" in trades else "<p><em>Bull put spread not available for this chain.</em></p>"
+        ),
+        "condor_card_html": (
+            _render_card_iron_condor(trades["iron_condor"], expiry_str, mgmt_text)
+            if "iron_condor" in trades else "<p><em>Iron condor not available for this chain.</em></p>"
+        ),
+        "bear_call_card_html": (
+            _render_card_bear_call(trades["bear_call"], expiry_str, mgmt_text)
+            if "bear_call" in trades else "<p><em>Bear call spread not available for this chain.</em></p>"
+        ),
+        "flowchart_html": _render_flowchart(pivot) if pivot else "",
+        "vol_bars_html": _render_vol_bars(result.get("atm_iv_pct"), result.get("hv_30d_pct")),
+        "positioning_html": _render_positioning(chain_summary),
+        "sizing_rows_html": _render_sizing_rows(trades),
+        "chart_config_json": _render_chart_config(trades, result.get("price")),
+    }
+
+
 # ── Main ────────────────────────────────────────────────────────────────────
 
 def parse_flags(argv):
@@ -711,6 +1208,8 @@ def main():
         "data_source": "yfinance",
         "delta_source": "bs_from_mid (model estimate)",
     }
+
+    result["html"] = render_html_fragments(result)
 
     print(json.dumps(result, indent=2, default=str))
 

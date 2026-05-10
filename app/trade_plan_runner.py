@@ -22,6 +22,10 @@ _SEMAPHORE: Optional[asyncio.Semaphore] = None
 
 _PRUNE_AFTER_SEC = 15 * 60  # Drop finished jobs from the in-memory list after 15 min
 
+# (ticker, expiry-or-timeframe, bias) → (output_filename, completed_at_epoch)
+_PLAN_CACHE: dict[tuple, tuple[str, float]] = {}
+_PLAN_CACHE_TTL_SEC = 30 * 60
+
 
 @dataclass
 class Job:
@@ -68,21 +72,46 @@ def _build_prompt(ticker: str, timeframe: Optional[str], expiry: Optional[str],
     return " ".join([lead, *extras, tail])
 
 
+def _cache_key(ticker: str, timeframe: Optional[str], expiry: Optional[str],
+               bias: Optional[str]) -> tuple:
+    return (ticker, expiry or timeframe or "", bias or "")
+
+
 async def submit_job(ticker: str, timeframe: Optional[str] = None,
                      expiry: Optional[str] = None,
                      portfolio_size: Optional[str] = None,
-                     bias: Optional[str] = None) -> str:
-    """Register a new job and spawn its background task. Returns the job_id."""
+                     bias: Optional[str] = None,
+                     force: bool = False) -> str:
+    """Register a new job and spawn its background task. Returns the job_id.
+
+    If a recent identical plan exists in the cache (and the file is still on disk),
+    short-circuits with a job marked done immediately. Pass force=True to bypass.
+    """
     job_id = uuid.uuid4().hex[:12]
+    now = time.time()
     job = Job(
         job_id=job_id,
         ticker=ticker,
         timeframe=timeframe,
         status="running",
-        started_at=time.time(),
+        started_at=now,
     )
     async with _JOBS_LOCK:
         _JOBS[job_id] = job
+
+    if not force:
+        key = _cache_key(ticker, timeframe, expiry, bias)
+        cached = _PLAN_CACHE.get(key)
+        if cached:
+            filename, finished_at = cached
+            file_path = Path(config.TRADE_PLANS_DIR) / filename
+            if (now - finished_at) < _PLAN_CACHE_TTL_SEC and file_path.exists():
+                async with _JOBS_LOCK:
+                    job.status = "done"
+                    job.output_filename = filename
+                    job.finished_at = now
+                return job_id
+            _PLAN_CACHE.pop(key, None)
 
     asyncio.create_task(_run_job(job_id, ticker, timeframe, expiry, portfolio_size, bias))
     return job_id
@@ -100,7 +129,8 @@ async def _run_job(job_id: str, ticker: str, timeframe: Optional[str],
     before = _snapshot(trade_plans_dir)
 
     prompt = _build_prompt(ticker, timeframe, expiry, portfolio_size, bias)
-    cmd = [_CLAUDE_BIN, "-p", "--permission-mode", "bypassPermissions", prompt]
+    model = os.environ.get("TRADE_PLAN_MODEL", "claude-haiku-4-5-20251001")
+    cmd = [_CLAUDE_BIN, "-p", "--model", model, "--permission-mode", "bypassPermissions", prompt]
 
     async with _semaphore():
         try:
@@ -139,6 +169,7 @@ async def _run_job(job_id: str, ticker: str, timeframe: Optional[str],
         await _finish(job_id, error="No HTML file produced. " + (stdout[-500:] if stdout else ""))
         return
 
+    _PLAN_CACHE[_cache_key(ticker, timeframe, expiry, bias)] = (match, time.time())
     await _finish(job_id, output_filename=match)
 
 

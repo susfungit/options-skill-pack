@@ -29,6 +29,7 @@ class TradePlanRequest(BaseModel):
     expiry: Optional[str] = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
     portfolio_size: Optional[str] = Field(None, max_length=32)
     bias: Optional[str] = None
+    force: bool = False
 
 
 @router.post("/api/trade-plans")
@@ -69,6 +70,7 @@ async def create_trade_plan(request: Request, req: TradePlanRequest):
         expiry=req.expiry,
         portfolio_size=portfolio_size,
         bias=bias,
+        force=req.force,
     )
     return {"job_id": job_id}
 
