@@ -8,9 +8,15 @@ This is what `write_evening.py` validates and what gets persisted at `morning-br
   "morning_brief_volume": 42,
   "morning_brief_meta_signal_summary": "Markets entered week at record SPX; iron condor + bull puts on relative strength + post-earnings name.",
   "market_status": "open",
+  "highlight_strip_text": "<optional> 1-2 sentence narrative banner near the top of the HTML report. If absent, the renderer omits the strip entirely.",
   "eod_quote_table": [
-    {"ticker": "SPY",  "eod_price": 716.20, "timestamp": "2026-04-27 16:00 ET", "source": "URL: finance.yahoo.com/quote/SPY/"},
-    {"ticker": "INTC", "eod_price": 84.10,  "timestamp": "2026-04-27 16:00 ET", "source": "search: INTC close April 27 2026"}
+    // change_pct + prev_close are OPTIONAL but recommended — they come for free from
+    // fetch_eod_prices.py (yfinance) and drive the ticker-bar coloring + the EOD table's
+    // "Day Chg" column in the rendered HTML. Without them, those cells show "—".
+    {"ticker": "SPY",  "eod_price": 716.20, "prev_close": 714.15, "change_pct": 0.29,
+     "timestamp": "2026-04-27 16:00 ET", "source": "yfinance"},
+    {"ticker": "INTC", "eod_price": 84.10,  "timestamp": "2026-04-27 16:00 ET",
+     "source": "search: INTC close April 27 2026"}
   ],
   "scored_recommendations": [
     {

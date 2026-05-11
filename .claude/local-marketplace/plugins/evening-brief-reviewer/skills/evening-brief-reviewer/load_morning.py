@@ -44,6 +44,39 @@ def _load_json(path: Path, default):
         return default
 
 
+# Fields the evening scorer reads from each open position. Everything else
+# (catalyst/thesis prose, full reviews[] history, full evening_reviews[]
+# history, price-source citations) is dropped to keep the bootstrap payload
+# small for scheduled / cloud execution. The most recent evening_review is
+# preserved as last_evening_review so the scorer still has yesterday's
+# outcome + diagnosis for trend context.
+_POSITION_KEEP_FIELDS = (
+    "id",
+    "date_recommended",
+    "ticker",
+    "strategy",
+    "directional_bias",
+    "conviction",
+    "legs",
+    "expiry_date",
+    "dte_at_entry",
+    "spread_width",
+    "estimated_credit",
+    "max_profit",
+    "max_loss",
+    "break_even",
+    "live_price_at_recommendation",
+    "status",
+)
+
+
+def _slim_position(rec: dict) -> dict:
+    out = {k: rec[k] for k in _POSITION_KEEP_FIELDS if k in rec}
+    evening_reviews = rec.get("evening_reviews") or []
+    out["last_evening_review"] = evening_reviews[-1] if evening_reviews else None
+    return out
+
+
 def _open_positions(recs: list[dict], today_iso: str) -> list[dict]:
     out = []
     for r in recs:
@@ -52,7 +85,7 @@ def _open_positions(recs: list[dict], today_iso: str) -> list[dict]:
         exp = r.get("expiry_date")
         if not exp or exp < today_iso:
             continue
-        out.append(r)
+        out.append(_slim_position(r))
     return out
 
 

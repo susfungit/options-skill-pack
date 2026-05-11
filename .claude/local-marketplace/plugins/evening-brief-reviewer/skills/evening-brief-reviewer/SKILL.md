@@ -86,11 +86,33 @@ review is a function of the morning brief — without one, there's nothing to sc
 
 Same anti-fabrication gate as the morning. For every ticker that needs scoring (the union of
 `open_positions_full_book` tickers + any ticker the morning brief named in `quote_table`,
-`implied_move_watch`, or `index_read`), web-search the **EOD close**:
+`implied_move_watch`, or `index_read`), source the **EOD close**.
+
+### Step 1a — Primary path: `fetch_eod_prices.py` (yfinance)
+
+```bash
+python3 /absolute/path/to/fetch_eod_prices.py --tickers SPY,QQQ,IWM,... 2>/dev/null
+```
+
+Returns a JSON object with `quotes[]` (each entry has `ticker`, `eod_price`, `prev_close`,
+`change_pct`, `timestamp`, `source: "yfinance"`) and `failed[]` (tickers that errored). yfinance
+is the canonical source: one call, one authoritative close per ticker, with `change_pct` already
+computed off the prior close.
+
+Pass every entry in `quotes[]` straight through into your `eod_quote_table` (the JSON schema
+matches). Keep the `change_pct` and `prev_close` fields — the HTML renderer uses them for the
+ticker-bar coloring and the EOD table's "Day Chg" column.
+
+### Step 1b — Fallback: WebSearch (for failed/sandboxed cases)
+
+If a ticker shows up in `failed[]`, OR if the script itself errors out (e.g. cloud sandbox with
+no outbound HTTP), fall back to WebSearch **only for those specific tickers**:
 
 - Today's 4:00 PM ET close (or last available print)
 - Day's % change
 - Source URL or exact search query
+
+This preserves one canonical source per ticker with a documented fallback path.
 
 Build the **`eod_quote_table`** — same structure as the morning brief's quote table, but with
 end-of-day prints. This populates the JSON and renders visibly in the HTML.
@@ -229,14 +251,30 @@ Surface those in the HTML — especially any with `action_threshold_met: true`.
 
 ## Step 6 — Render the HTML evening report
 
-Write `morning-briefs/YYYY-MM-DD-evening.html` — same magazine design language as the morning brief but with **outcome cards** instead of trade-recommendation cards. Read `references/evening_html_spec.md` (alongside this SKILL.md) for the full design spec — masthead, ticker-bar color, card content, proposals section, EOD quote table, meta review, tomorrow focus.
+Run `render_evening_html.py` against the persisted evening JSON:
 
-The outcome → card-border-color mapping is reproduced inline because it is a classification rule the LLM applies during scoring, not styling:
+```bash
+python3 /absolute/path/to/render_evening_html.py \
+    --input morning-briefs/YYYY-MM-DD-evening.json \
+    --output morning-briefs/YYYY-MM-DD-evening.html
+```
+
+The renderer owns the layout spec — masthead, ticker bar, EOD quote table, scorecard strip,
+outcome cards (sorted by outcome severity), meta review block, proposals section, tomorrow
+focus, disclaimer. The LLM never writes markup — narrative content goes into the JSON fields
+(`thesis_check`, `lesson`, `meta_review`, `tomorrow_focus`, optional `highlight_strip_text`)
+and the renderer styles it.
+
+The outcome → card-border-color mapping is enforced by the renderer's CSS:
 
 - `working` → green (`#1a7a3a`)
 - `neutral` → grey (`#888`)
 - `not_working` → amber (`#b8860b`)
 - `thesis_broken` → red (`#c41e3a`)
+
+**Optional**: add a `highlight_strip_text` field to the evening JSON if you want a 1–2 sentence
+narrative banner near the top of the HTML (analog to the morning brief's "Day Highlight" strip).
+If absent, the renderer omits the strip entirely.
 
 ---
 
