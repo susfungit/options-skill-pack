@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.config import TICKER_RE, limiter
+from app.storage import append_analyzer_history
 from app.tools import execute_tool
 
 logger = logging.getLogger("options_skill_pack")
@@ -27,6 +28,68 @@ _STRATEGY_TO_TOOL = {
     "covered-call": "find_covered_call",
     "cash-secured-put": "find_cash_secured_put",
 }
+
+
+def _summarize_single(strategy: str, d: dict) -> dict:
+    """Extract slim metric snapshot for a single-strategy result. Tolerates missing fields."""
+    if not isinstance(d, dict) or d.get("error"):
+        return {"error": d.get("error") if isinstance(d, dict) else "no result"}
+    s = {
+        "price": d.get("price") or d.get("stock_price"),
+        "prev_close": d.get("prev_close"),
+        "change_pct": d.get("change_pct"),
+        "expiry": d.get("expiry"),
+        "dte": d.get("dte"),
+    }
+    if strategy in ("bull-put-spread", "bear-call-spread", "iron-condor"):
+        s["return_on_risk_pct"] = d.get("return_on_risk_pct")
+        s["prob_profit_pct"] = d.get("prob_profit_pct")
+        s["credit"] = d.get("net_credit") if strategy != "iron-condor" else d.get("total_credit")
+    elif strategy == "covered-call":
+        s["annualized_return_pct"] = d.get("annualized_return_pct")
+        s["prob_called_pct"] = d.get("prob_called_pct")
+        s["premium"] = d.get("premium_per_share")
+    elif strategy == "cash-secured-put":
+        s["annualized_return_pct"] = d.get("annualized_return_pct")
+        s["prob_profit_pct"] = d.get("prob_profit_pct")
+        s["premium"] = d.get("premium_per_share")
+    return s
+
+
+def _summarize_compare(result: dict) -> dict:
+    """Extract slim per-strategy snapshot + best pick for a compare result."""
+    summary = {
+        "per_strategy": {
+            "bull-put-spread": _summarize_single("bull-put-spread", result.get("bull_put_spread", {})),
+            "bear-call-spread": _summarize_single("bear-call-spread", result.get("bear_call_spread", {})),
+            "iron-condor": _summarize_single("iron-condor", result.get("iron_condor", {})),
+            "covered-call": _summarize_single("covered-call", result.get("covered_call", {})),
+            "cash-secured-put": _summarize_single("cash-secured-put", result.get("cash_secured_put", {})),
+        },
+        "best_pick": None,
+        "trend_pick": None,
+    }
+    mc = result.get("market_context") or {}
+    if not mc.get("error"):
+        if mc.get("suggestion"):
+            summary["best_pick"] = mc["suggestion"].get("strategy")
+        if mc.get("trend_pick"):
+            summary["trend_pick"] = mc["trend_pick"].get("strategy")
+    return summary
+
+
+def _log_search(ticker: str, strategy: str, params: dict, summary: dict) -> None:
+    """Best-effort append to analyzer_history.json. Never raises."""
+    try:
+        append_analyzer_history({
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
+            "ticker": ticker,
+            "strategy": strategy,
+            "params": params,
+            "summary": summary,
+        })
+    except Exception as e:
+        logger.warning("History append failed: %s", e)
 
 
 class StrategyType(str, Enum):
@@ -74,7 +137,21 @@ async def analyze(request: Request, req: AnalyzeRequest):
         tool_input["spread_width"] = req.spread_width
 
     result_json = execute_tool(tool_name, tool_input)
-    return json.loads(result_json)
+    result = json.loads(result_json)
+
+    _log_search(
+        ticker=ticker,
+        strategy=req.strategy.value,
+        params={
+            "target_delta": req.target_delta,
+            "dte_min": req.dte_min,
+            "dte_max": req.dte_max,
+            "spread_width": req.spread_width,
+            "expiry": req.expiry,
+        },
+        summary=_summarize_single(req.strategy.value, result),
+    )
+    return result
 
 
 # ── Compare mode ──────────────────────────────────────────────────────────────
@@ -289,7 +366,7 @@ async def analyze_compare(request: Request, req: CompareRequest):
         if best:
             market_ctx["suggestion"] = best
 
-    return {
+    result = {
         "ticker": ticker,
         "bull_put_spread": bps,
         "bear_call_spread": bcs,
@@ -298,6 +375,18 @@ async def analyze_compare(request: Request, req: CompareRequest):
         "cash_secured_put": csp,
         "market_context": market_ctx,
     }
+
+    _log_search(
+        ticker=ticker,
+        strategy="compare",
+        params={
+            "dte_min": req.dte_min,
+            "dte_max": req.dte_max,
+            "expiry": req.expiry,
+        },
+        summary=_summarize_compare(result),
+    )
+    return result
 
 
 # ── Expirations endpoint ─────────────────────────────────────────────────────

@@ -107,6 +107,39 @@ def _load_recommendations(path: Path) -> dict:
         return {"recommendations": []}
 
 
+def _slim_rec(r: dict, today_iso: str) -> dict:
+    """Return a copy of `r` with reviews/evening_reviews trimmed to the latest entry only,
+    plus a `recent_lessons` summary aggregating lessons from evening_reviews in the last 14 days.
+
+    Morning brief needs current state + recent lessons, not full daily history (which lives in
+    recommendations.json and is read by the evening reviewer).
+    """
+    cutoff = (datetime.strptime(today_iso, "%Y-%m-%d").date() - timedelta(days=14)).isoformat()
+    slim = {k: v for k, v in r.items() if k not in ("reviews", "evening_reviews")}
+
+    reviews = r.get("reviews") or []
+    if reviews:
+        slim["latest_review"] = reviews[-1]
+    slim["review_count"] = len(reviews)
+
+    evening = r.get("evening_reviews") or []
+    if evening:
+        slim["latest_evening_review"] = evening[-1]
+    slim["evening_review_count"] = len(evening)
+
+    slim["recent_lessons"] = [
+        {
+            "date": e.get("review_date"),
+            "lesson": e.get("lesson"),
+            "diagnosis_category": e.get("diagnosis_category"),
+        }
+        for e in evening
+        if e.get("lesson") and (e.get("review_date") or "") >= cutoff
+    ]
+
+    return slim
+
+
 def _carry_forward(recs: list[dict], today_iso: str) -> list[dict]:
     out = []
     for r in recs:
@@ -115,7 +148,7 @@ def _carry_forward(recs: list[dict], today_iso: str) -> list[dict]:
         exp = r.get("expiry_date")
         if not exp or exp < today_iso:
             continue
-        out.append(r)
+        out.append(_slim_rec(r, today_iso))
     return out
 
 
@@ -189,8 +222,8 @@ def main() -> int:
         "brief_volume": _next_volume(output_dir),
         "output_dir": str(output_dir),
         "recommendations_path": str(recs_path),
-        "carry_forward": _carry_forward(recs.get("recommendations", []), today_iso),
-        "carry_forward_count": len(_carry_forward(recs.get("recommendations", []), today_iso)),
+        "carry_forward": (cf := _carry_forward(recs.get("recommendations", []), today_iso)),
+        "carry_forward_count": len(cf),
     }
     print(json.dumps(payload, indent=2))
     return 0

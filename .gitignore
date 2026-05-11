@@ -38,6 +38,7 @@ portfolio.json
 profile.json
 monitor_config.json
 portfolio-*.csv
+analyzer_history.json
 
 # App — API key (copy from .env.example)
 app/.env

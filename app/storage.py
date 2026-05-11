@@ -11,6 +11,7 @@ from app import config
 
 _portfolio_lock = threading.Lock()
 _profile_lock = threading.Lock()
+_analyzer_history_lock = threading.Lock()
 
 
 def _atomic_write_json(path: str, data):
@@ -69,3 +70,32 @@ def read_profile() -> dict:
 def write_profile(data: dict):
     with _profile_lock:
         _atomic_write_json(config.PROFILE_PATH, data)
+
+
+def read_analyzer_history() -> list[dict]:
+    with _analyzer_history_lock:
+        if not os.path.exists(config.ANALYZER_HISTORY_PATH):
+            return []
+        try:
+            with open(config.ANALYZER_HISTORY_PATH, "r") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else []
+        except (json.JSONDecodeError, OSError):
+            return []
+
+
+def append_analyzer_history(entry: dict) -> None:
+    with _analyzer_history_lock:
+        history: list[dict] = []
+        if os.path.exists(config.ANALYZER_HISTORY_PATH):
+            try:
+                with open(config.ANALYZER_HISTORY_PATH, "r") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, list):
+                    history = loaded
+            except (json.JSONDecodeError, OSError):
+                history = []
+        history.append(entry)
+        if len(history) > config.ANALYZER_HISTORY_CAP:
+            history = history[-config.ANALYZER_HISTORY_CAP:]
+        _atomic_write_json(config.ANALYZER_HISTORY_PATH, history)

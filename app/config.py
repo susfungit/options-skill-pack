@@ -7,6 +7,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PORTFOLIO_PATH = os.path.join(PROJECT_ROOT, "portfolio.json")
 PROFILE_PATH = os.path.join(PROJECT_ROOT, "profile.json")
 TRADE_PLANS_DIR = os.path.join(PROJECT_ROOT, "trade-plans")
+ANALYZER_HISTORY_PATH = os.path.join(PROJECT_ROOT, "analyzer_history.json")
+ANALYZER_HISTORY_CAP = 1000
 
 CLAUDE_CLI_TIMEOUT_SEC = int(os.environ.get("CLAUDE_CLI_TIMEOUT_SEC", "600"))
 TRADE_PLAN_MAX_CONCURRENT = int(os.environ.get("TRADE_PLAN_MAX_CONCURRENT", "5"))
