@@ -1,0 +1,36 @@
+ai-trading-analyst
+==================
+
+This plugin vendors skills from an upstream open-source project:
+
+    Repository: https://github.com/zubair-trabzada/ai-trading-claude
+    License:    MIT (see ./LICENSE)
+    Snapshot:   c6d7252211a72405cefaff3e62d27a032c58348c (main branch)
+    Vendored:   2026-05-11
+
+Vendored skills (under skills/):
+    trade-analyze, trade-thesis, trade-risk,
+    trade-fundamental, trade-technical, trade-sentiment,
+    trade-earnings, trade-options
+
+Vendored helper scripts (under scripts/):
+    generate_trade_html.py
+        Used by trade-analyze to render the JSON payload it writes to
+        /tmp/trade_report_data.json into a self-contained HTML file.
+        Stdlib-only, no external dependencies. The web app's wrapper
+        prompt points trade-analyze at this vendored copy instead of
+        the upstream ~/.claude/skills/trade/scripts/ location.
+
+Not vendored (out of scope for the Analysis tab UI):
+    trade, trade-quick, trade-compare, trade-screen, trade-watchlist,
+    trade-portfolio, trade-sector, trade-report-pdf, generate_trade_pdf.py
+        trade-quick is intentionally excluded: its SKILL.md is terminal-only
+        ("Do NOT write any files") and cannot be reliably coerced into a
+        single-HTML-file pipeline.
+
+Local modifications: none. SKILL.md and script files are byte-for-byte
+copies from the upstream snapshot. The wrapper prompt issued by
+`app/trade_plan_runner.py` overrides per-skill output instructions where
+needed (e.g. markdown-only skills are told to render HTML inline instead).
+If a skill diverges from this behaviour, raise an issue against this repo
+rather than modifying the vendored files in place.

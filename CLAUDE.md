@@ -69,7 +69,7 @@ Scripts accept CLI args, use yfinance for market data, output a single JSON obje
 
 ### Frontend (`app/static/`)
 
-Single-page app: `index.html` + `style.css` + `app.js`. Four tabs: Chat, Portfolio, Analyzer, Profile. The analyzer runs scripts server-side without using Claude API tokens.
+Single-page app: `index.html` + `style.css` + `app.js`. Tabs: Chat, Portfolio, Options Finder (formerly "Analyzer"), Analysis (formerly "Trade Plans"), Profile. The Options Finder runs selector scripts server-side without using Claude API tokens; the Analysis tab shells out to the `claude` CLI to run the `options-trade-plan` skill or one of the vendored `trade-*` analyst skills.
 
 ## Adding a new strategy
 

@@ -1,0 +1,8 @@
+{
+  "name": "ai-trading-analyst",
+  "version": "1.0.0",
+  "description": "Vendored AI Trading Analyst skill bundle (trade-analyze, trade-thesis, trade-risk, trade-fundamental, trade-technical, trade-sentiment, trade-earnings, trade-options) plus the generate_trade_html.py renderer. Originally from https://github.com/zubair-trabzada/ai-trading-claude (MIT). See NOTICE for attribution.",
+  "author": {
+    "name": "Zubair Trabzada (upstream); vendored by sushant"
+  }
+}

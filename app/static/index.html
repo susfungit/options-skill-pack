@@ -58,10 +58,10 @@
           <span class="tab-icon">&#9633;</span> Portfolio
         </button>
         <button class="nav-tab" data-tab="analyzer">
-          <span class="tab-icon">&#9671;</span> Analyzer
+          <span class="tab-icon">&#9671;</span> Options Finder
         </button>
         <button class="nav-tab" data-tab="trade-plans">
-          <span class="tab-icon">&#9998;</span> Trading Plans
+          <span class="tab-icon">&#9998;</span> Analysis
         </button>
         <button class="nav-tab" data-tab="profile">
           <span class="tab-icon">&#9881;</span> Profile
@@ -95,7 +95,7 @@
         </div>
       </section>
 
-      <!-- Analyzer Panel -->
+      <!-- Options Finder Panel (formerly "Analyzer") -->
       <section id="panel-analyzer" class="panel">
         <div class="analyzer-controls">
           <div class="form-row">
@@ -153,18 +153,32 @@
         </div>
       </section>
 
-      <!-- Trade Plans Panel -->
+      <!-- Analysis Panel (formerly Trade Plans) -->
       <section id="panel-trade-plans" class="panel">
         <div id="tp-unavailable-banner" class="tp-form-error" style="display:none;">
-          <code>claude</code> CLI not found on the server — Trading Plans are unavailable. Install the Claude Code CLI and ensure it is on the server's PATH.
+          <code>claude</code> CLI not found on the server — Analysis is unavailable. Install the Claude Code CLI and ensure it is on the server's PATH.
         </div>
         <div class="analyzer-controls">
           <div class="form-row">
+            <div class="form-group" id="tp-skill-group">
+              <label>Skill</label>
+              <select id="tp-skill">
+                <option value="options-trade-plan" selected>Spread Trade Plan</option>
+                <option value="trade-options">Options Market Read</option>
+                <option value="trade-analyze">Full Analysis</option>
+                <option value="trade-thesis">Investment Thesis</option>
+                <option value="trade-risk">Risk Assessment</option>
+                <option value="trade-fundamental">Fundamental</option>
+                <option value="trade-technical">Technical</option>
+                <option value="trade-sentiment">Sentiment</option>
+                <option value="trade-earnings">Pre-Earnings</option>
+              </select>
+            </div>
             <div class="form-group">
               <label>Ticker</label>
               <input type="text" id="tp-ticker" placeholder="AAPL" style="text-transform:uppercase" maxlength="5">
             </div>
-            <div class="form-group">
+            <div class="form-group" id="tp-timeframe-group">
               <label>Timeframe</label>
               <select id="tp-timeframe">
                 <option value="">Default (weekly)</option>
@@ -174,11 +188,11 @@
                 <option value="eom">End of month</option>
               </select>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="tp-portfolio-size-group">
               <label>Portfolio Size</label>
               <input type="text" id="tp-portfolio-size" placeholder="$500k" maxlength="16">
             </div>
-            <div class="form-group">
+            <div class="form-group" id="tp-bias-group">
               <label>Bias</label>
               <select id="tp-bias">
                 <option value="">Neutral</option>
@@ -200,16 +214,16 @@
             <span class="tp-count" id="tp-inflight-count">0</span>
           </div>
           <div id="tp-inflight-list" class="tp-list"></div>
-          <div id="tp-inflight-empty" class="tp-empty">No plans in progress.</div>
+          <div id="tp-inflight-empty" class="tp-empty">No analyses in progress.</div>
         </div>
 
         <div class="tp-section">
           <div class="tp-section-header">
-            <h3>Generated Plans</h3>
+            <h3>Generated Reports</h3>
             <span class="tp-count" id="tp-files-count">0</span>
           </div>
           <div id="tp-files-list" class="tp-list"></div>
-          <div id="tp-files-empty" class="tp-empty">No plans generated yet.</div>
+          <div id="tp-files-empty" class="tp-empty">No reports generated yet.</div>
         </div>
       </section>
 
@@ -241,7 +255,7 @@
 
           <div class="profile-section">
             <h3>Strategy Defaults</h3>
-            <p class="profile-hint">These pre-fill the Analyzer and apply when no override is specified.</p>
+            <p class="profile-hint">These pre-fill the Options Finder and apply when no override is specified.</p>
             <div class="profile-grid">
               <div class="profile-strategy">
                 <div class="profile-strategy-label">Bull Put Spread</div>

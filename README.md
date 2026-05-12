@@ -65,12 +65,13 @@ python3 -m uvicorn app.main:app
 
 Open **http://localhost:8000**.
 
-**The app has four sections:**
+**The app has five sections:**
 
 - **Chat** — AI-powered chat with all 11 skills available as tools. Toggle the AI switch off to run scripts without spending API tokens (Check and Analyze still work).
 - **Portfolio** — Add, edit, check, close, and delete option positions. "Check All" runs monitors for every open position and classifies each into a zone (SAFE → ACT NOW). After each check, positions show actionable suggestions — profit-taking thresholds are configurable in the Profile tab, with gamma risk warnings near expiry and defensive guidance based on zone.
-- **Analyzer** — Run selector scripts directly (no AI tokens). Pick a ticker and strategy, click "Find Trade", or use "Compare All" to run all selectors in parallel with market context. Auto-suggests the best strategy based on 20-day trend, ATM IV level, and 52-week price position. After each analysis, click "View Chain" to see the full option chain for that expiry — recommended strikes are highlighted.
-- **Profile** — Configure your name (displayed in the sidebar), strategy defaults (delta, DTE range, spread width), and profit-taking rules. Settings persist server-side in `profile.json` and pre-fill the Analyzer inputs.
+- **Options Finder** — Run selector scripts directly (no AI tokens). Pick a ticker and strategy, click "Find Trade", or use "Compare All" to run all selectors in parallel with market context. Auto-suggests the best strategy based on 20-day trend, ATM IV level, and 52-week price position. After each analysis, click "View Chain" to see the full option chain for that expiry — recommended strikes are highlighted.
+- **Analysis** — Run the `options-trade-plan` skill or one of eight vendored analyst skills (`trade-analyze`, `trade-thesis`, `trade-risk`, `trade-fundamental`, `trade-technical`, `trade-sentiment`, `trade-earnings`, `trade-options`) as an async background job. Pick a skill from the dropdown, enter a ticker, get a self-contained HTML report. Requires the `claude` CLI on the server PATH (uses your Claude Code subscription, not API tokens). See [Acknowledgements](#acknowledgements) for the upstream source of the `trade-*` skills.
+- **Profile** — Configure your name (displayed in the sidebar), strategy defaults (delta, DTE range, spread width), and profit-taking rules. Settings persist server-side in `profile.json` and pre-fill the Options Finder inputs.
 
 **Requirements:** Python 3.10+, an [Anthropic API key](https://console.anthropic.com) with credits.
 
@@ -602,3 +603,13 @@ Benchmark results (with_skill vs without_skill):
 - **Input validation** — ticker format validated (1-5 uppercase letters), numeric fields bounded, chat message roles restricted to user/assistant.
 - **Subprocess calls** — all scripts run with `shell=False` (no shell injection). Ticker validated before execution.
 - **XSS** — assistant messages sanitized with DOMPurify before rendering.
+
+---
+
+## Acknowledgements
+
+The **Analysis** tab is powered by the `ai-trading-analyst` plugin, which vendors eight analyst skills (`trade-analyze`, `trade-thesis`, `trade-risk`, `trade-fundamental`, `trade-technical`, `trade-sentiment`, `trade-earnings`, `trade-options`) and the `generate_trade_html.py` renderer from:
+
+> **[zubair-trabzada/ai-trading-claude](https://github.com/zubair-trabzada/ai-trading-claude)** — Zubair Trabzada · MIT License
+
+The snapshot pinned in this repo and the list of skills omitted (and why) are documented in [`.claude/local-marketplace/plugins/ai-trading-analyst/NOTICE`](.claude/local-marketplace/plugins/ai-trading-analyst/NOTICE). The upstream license text is preserved at [`.claude/local-marketplace/plugins/ai-trading-analyst/LICENSE`](.claude/local-marketplace/plugins/ai-trading-analyst/LICENSE).

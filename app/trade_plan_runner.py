@@ -1,12 +1,14 @@
-"""Background job runner for the `options-trade-plan` skill via the `claude` CLI."""
+"""Background job runner for analyst skills (`options-trade-plan`, `trade-*`) via the `claude` CLI."""
 
 import asyncio
+import json
 import logging
 import os
 import shutil
 import time
 import uuid
 from dataclasses import dataclass, asdict, field
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -22,9 +24,90 @@ _SEMAPHORE: Optional[asyncio.Semaphore] = None
 
 _PRUNE_AFTER_SEC = 15 * 60  # Drop finished jobs from the in-memory list after 15 min
 
-# (ticker, expiry-or-timeframe, bias) → (output_filename, completed_at_epoch)
+# (skill_name, ticker, expiry-or-timeframe, bias) → (output_filename, completed_at_epoch)
 _PLAN_CACHE: dict[tuple, tuple[str, float]] = {}
 _PLAN_CACHE_TTL_SEC = 30 * 60
+
+
+# Each skill entry has:
+#   filename_prefix — appears in both the prompt instruction and the file regex.
+#   supports        — which optional inputs (timeframe / expiry / portfolio_size /
+#                     bias) are meaningful. Unsupported inputs are silently dropped
+#                     so the frontend can post a uniform payload.
+#   lead            — the opening sentence of the wrapper prompt.
+#   rendering       — how this skill should produce HTML. See _build_prompt.
+#                       "inline_html"  → skill writes HTML directly (default).
+#                       "force_inline_html" → SKILL.md says markdown; wrapper
+#                                             overrides it to inline HTML.
+#                       "vendored_script_html" → skill writes JSON to /tmp then
+#                                                runs our vendored renderer.
+#
+# `trade-quick` is intentionally excluded — its SKILL.md is terminal-only.
+SKILL_REGISTRY: dict[str, dict] = {
+    "options-trade-plan": {
+        "filename_prefix": "trade_plan_",
+        "supports": {"timeframe", "expiry", "portfolio_size", "bias"},
+        "lead": "Generate an options trade plan for {ticker}",
+        "rendering": "inline_html",
+    },
+    "trade-analyze": {
+        "filename_prefix": "trade_analysis_",
+        "supports": set(),
+        "lead": "Run a full multi-dimensional stock analysis for {ticker}",
+        "rendering": "vendored_script_html",
+    },
+    "trade-thesis": {
+        "filename_prefix": "trade_thesis_",
+        "supports": {"portfolio_size"},
+        "lead": "Generate a complete investment thesis for {ticker}",
+        "rendering": "force_inline_html",
+    },
+    "trade-risk": {
+        "filename_prefix": "trade_risk_",
+        "supports": {"portfolio_size"},
+        "lead": "Run a risk assessment and position-sizing analysis for {ticker}",
+        "rendering": "force_inline_html",
+    },
+    "trade-fundamental": {
+        "filename_prefix": "trade_fundamental_",
+        "supports": set(),
+        "lead": "Run a fundamental analysis of {ticker}",
+        "rendering": "inline_html",
+    },
+    "trade-technical": {
+        "filename_prefix": "trade_technical_",
+        "supports": set(),
+        "lead": "Run a technical analysis of {ticker}",
+        "rendering": "force_inline_html",
+    },
+    "trade-sentiment": {
+        "filename_prefix": "trade_sentiment_",
+        "supports": set(),
+        "lead": "Run a sentiment and momentum analysis of {ticker}",
+        "rendering": "force_inline_html",
+    },
+    "trade-earnings": {
+        "filename_prefix": "trade_earnings_",
+        "supports": set(),
+        "lead": "Run a pre-earnings analysis of {ticker}",
+        "rendering": "force_inline_html",
+    },
+    "trade-options": {
+        "filename_prefix": "trade_options_",
+        "supports": {"timeframe", "expiry", "bias"},
+        "lead": "Run an options strategy analysis of {ticker}",
+        "rendering": "inline_html",
+    },
+}
+
+DEFAULT_SKILL = "options-trade-plan"
+
+# Resolved at import: path to the vendored HTML renderer used by trade-analyze.
+_VENDORED_RENDERER = str(
+    Path(config.PROJECT_ROOT)
+    / ".claude" / "local-marketplace" / "plugins" / "ai-trading-analyst"
+    / "scripts" / "generate_trade_html.py"
+)
 
 
 @dataclass
@@ -34,12 +117,48 @@ class Job:
     timeframe: Optional[str]
     status: str  # "running" | "done" | "error"
     started_at: float
+    skill_name: str = DEFAULT_SKILL
     finished_at: Optional[float] = None
     output_filename: Optional[str] = None
     error: Optional[str] = None
+    # Usage metrics parsed from `claude -p --output-format json` envelope.
+    # All optional — older Claude Code versions or stderr-only failures may
+    # leave them unset, and the rest of the system should still function.
+    cost_usd: Optional[float] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    cache_read_tokens: Optional[int] = None
+    cache_creation_tokens: Optional[int] = None
+    num_turns: Optional[int] = None
+    duration_ms: Optional[int] = None  # API-side duration reported by claude
+    model: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def _extract_usage(stdout_bytes: bytes) -> dict:
+    """Parse `claude -p --output-format json` stdout into a metrics dict.
+
+    Returns {} if parsing fails or fields are missing — never raises. The job
+    flow tolerates absent metrics; only the UI display degrades.
+    """
+    try:
+        envelope = json.loads(stdout_bytes.decode("utf-8", errors="replace"))
+    except (json.JSONDecodeError, ValueError):
+        return {}
+    if not isinstance(envelope, dict):
+        return {}
+    usage = envelope.get("usage") or {}
+    return {
+        "cost_usd": envelope.get("total_cost_usd"),
+        "input_tokens": usage.get("input_tokens"),
+        "output_tokens": usage.get("output_tokens"),
+        "cache_read_tokens": usage.get("cache_read_input_tokens"),
+        "cache_creation_tokens": usage.get("cache_creation_input_tokens"),
+        "num_turns": envelope.get("num_turns"),
+        "duration_ms": envelope.get("duration_api_ms") or envelope.get("duration_ms"),
+    }
 
 
 def claude_bin() -> Optional[str]:
@@ -53,46 +172,107 @@ def _semaphore() -> asyncio.Semaphore:
     return _SEMAPHORE
 
 
-def _build_prompt(ticker: str, timeframe: Optional[str], expiry: Optional[str],
-                  portfolio_size: Optional[str], bias: Optional[str]) -> str:
-    lead = f"Generate an options trade plan for {ticker}"
-    if expiry:
+def _expected_filename(skill_name: str, ticker: str, expiry: Optional[str]) -> str:
+    prefix = SKILL_REGISTRY[skill_name]["filename_prefix"]
+    date_part = expiry or date.today().isoformat()
+    return f"{prefix}{ticker}_{date_part}.html"
+
+
+def _build_prompt(skill_name: str, ticker: str, timeframe: Optional[str],
+                  expiry: Optional[str], portfolio_size: Optional[str],
+                  bias: Optional[str]) -> str:
+    spec = SKILL_REGISTRY[skill_name]
+    supports = spec["supports"]
+    lead = spec["lead"].format(ticker=ticker)
+
+    if "expiry" in supports and expiry:
         lead += f" for expiry {expiry}"
-    elif timeframe:
+    elif "timeframe" in supports and timeframe:
         lead += f" ({timeframe})"
     lead += "."
 
     extras = []
-    if portfolio_size:
+    if "portfolio_size" in supports and portfolio_size:
         extras.append(f"Portfolio size: {portfolio_size}.")
-    if bias:
+    if "bias" in supports and bias:
         extras.append(f"Directional bias: {bias}.")
 
-    tail = "Use the options-trade-plan skill. Write the output HTML to ./trade-plans/ in the current working directory."
+    filename = _expected_filename(skill_name, ticker, expiry)
+    out_path = f"./trade-plans/{filename}"
+    rendering = spec["rendering"]
+
+    common_header = (
+        f"Use the {skill_name} skill. The ONLY deliverable is a single "
+        f"self-contained HTML file at '{out_path}' (path relative to the "
+        f"current working directory). Do not produce any other files."
+    )
+
+    if rendering == "inline_html":
+        tail = (
+            f"{common_header} Render the report as inline HTML with embedded "
+            f"CSS and no external assets, following the editorial style used "
+            f"by the skill itself. Do NOT call any helper scripts under "
+            f"~/.claude/skills/trade/scripts/ — those are intentionally not "
+            f"available in this environment."
+        )
+    elif rendering == "force_inline_html":
+        tail = (
+            f"{common_header} IMPORTANT OUTPUT OVERRIDE: ignore any "
+            f"instruction in the skill prompt that tells you to produce a "
+            f"`.md` (Markdown) file. Do NOT write any `.md` files. Instead, "
+            f"render the entire analysis as inline HTML with embedded CSS "
+            f"and no external assets, matching the self-contained editorial "
+            f"style of the trade-fundamental and trade-options skills. "
+            f"Do NOT call any helper scripts."
+        )
+    elif rendering == "vendored_script_html":
+        tail = (
+            f"{common_header} OUTPUT OVERRIDE: this environment does NOT "
+            f"include `~/.claude/skills/trade/scripts/`. When the skill "
+            f"reaches the HTML rendering step, do NOT call "
+            f"`~/.claude/skills/trade/scripts/generate_trade_html.py`. "
+            f"Use this vendored copy instead, with the absolute output path: "
+            f"`TRADE_HTML_OUT='{out_path}' python3 {_VENDORED_RENDERER}`. "
+            f"You may still write the intermediate JSON payload to "
+            f"/tmp/trade_report_data.json as the script expects. Do NOT leave "
+            f"any `.md` file behind as a separate deliverable — only the HTML."
+        )
+    else:
+        # Defensive default — should never be reached for registered skills.
+        tail = (
+            f"{common_header} Render the report as inline HTML with embedded "
+            f"CSS and no external assets."
+        )
+
     return " ".join([lead, *extras, tail])
 
 
-def _cache_key(ticker: str, timeframe: Optional[str], expiry: Optional[str],
-               bias: Optional[str]) -> tuple:
-    return (ticker, expiry or timeframe or "", bias or "")
+def _cache_key(skill_name: str, ticker: str, timeframe: Optional[str],
+               expiry: Optional[str], bias: Optional[str]) -> tuple:
+    return (skill_name, ticker, expiry or timeframe or "", bias or "")
 
 
 async def submit_job(ticker: str, timeframe: Optional[str] = None,
                      expiry: Optional[str] = None,
                      portfolio_size: Optional[str] = None,
                      bias: Optional[str] = None,
+                     skill_name: str = DEFAULT_SKILL,
                      force: bool = False) -> str:
     """Register a new job and spawn its background task. Returns the job_id.
 
     If a recent identical plan exists in the cache (and the file is still on disk),
     short-circuits with a job marked done immediately. Pass force=True to bypass.
     """
+    if skill_name not in SKILL_REGISTRY:
+        raise ValueError(f"Unknown skill: {skill_name}")
+
     job_id = uuid.uuid4().hex[:12]
     now = time.time()
     job = Job(
         job_id=job_id,
         ticker=ticker,
         timeframe=timeframe,
+        skill_name=skill_name,
         status="running",
         started_at=now,
     )
@@ -100,7 +280,7 @@ async def submit_job(ticker: str, timeframe: Optional[str] = None,
         _JOBS[job_id] = job
 
     if not force:
-        key = _cache_key(ticker, timeframe, expiry, bias)
+        key = _cache_key(skill_name, ticker, timeframe, expiry, bias)
         cached = _PLAN_CACHE.get(key)
         if cached:
             filename, finished_at = cached
@@ -113,11 +293,11 @@ async def submit_job(ticker: str, timeframe: Optional[str] = None,
                 return job_id
             _PLAN_CACHE.pop(key, None)
 
-    asyncio.create_task(_run_job(job_id, ticker, timeframe, expiry, portfolio_size, bias))
+    asyncio.create_task(_run_job(job_id, skill_name, ticker, timeframe, expiry, portfolio_size, bias))
     return job_id
 
 
-async def _run_job(job_id: str, ticker: str, timeframe: Optional[str],
+async def _run_job(job_id: str, skill_name: str, ticker: str, timeframe: Optional[str],
                    expiry: Optional[str], portfolio_size: Optional[str],
                    bias: Optional[str]) -> None:
     if not _CLAUDE_BIN:
@@ -128,9 +308,18 @@ async def _run_job(job_id: str, ticker: str, timeframe: Optional[str],
     trade_plans_dir.mkdir(parents=True, exist_ok=True)
     before = _snapshot(trade_plans_dir)
 
-    prompt = _build_prompt(ticker, timeframe, expiry, portfolio_size, bias)
+    prompt = _build_prompt(skill_name, ticker, timeframe, expiry, portfolio_size, bias)
     model = os.environ.get("TRADE_PLAN_MODEL", "claude-haiku-4-5-20251001")
-    cmd = [_CLAUDE_BIN, "-p", "--model", model, "--permission-mode", "bypassPermissions", prompt]
+    # `--output-format json` makes the CLI emit a single envelope on stdout with
+    # usage/cost/duration fields. The HTML still gets written to disk by the skill
+    # itself, so file detection (snapshot diff below) is unaffected.
+    cmd = [
+        _CLAUDE_BIN, "-p",
+        "--model", model,
+        "--output-format", "json",
+        "--permission-mode", "bypassPermissions",
+        prompt,
+    ]
 
     # Strip ANTHROPIC_API_KEY so the subprocess falls back to the host's
     # claude.ai subscription auth instead of billing the API. The env var
@@ -169,25 +358,70 @@ async def _run_job(job_id: str, ticker: str, timeframe: Optional[str],
 
     after = _snapshot(trade_plans_dir)
     # Detect files added OR modified during this run. The renderer writes a
-    # deterministic filename ({ticker}_{expiry}.html), so a re-run of the same
+    # deterministic filename ({prefix}{ticker}_{date}.html), so a re-run of the same
     # plan overwrites in place — set-difference would miss it.
     candidates = sorted(
         (n for n in after if n not in before or (trade_plans_dir / n).stat().st_mtime >= run_start),
         key=lambda n: (trade_plans_dir / n).stat().st_mtime,
         reverse=True,
     )
-    match = next((n for n in candidates if ticker in n), candidates[0] if candidates else None)
+    prefix = SKILL_REGISTRY[skill_name]["filename_prefix"]
+    match = (
+        next((n for n in candidates if n.startswith(prefix) and ticker in n), None)
+        or next((n for n in candidates if ticker in n), None)
+        or (candidates[0] if candidates else None)
+    )
 
     if not match:
         stdout = (stdout_b or b"").decode("utf-8", errors="replace").strip()
         await _finish(job_id, error="No HTML file produced. " + (stdout[-500:] if stdout else ""))
         return
 
-    _PLAN_CACHE[_cache_key(ticker, timeframe, expiry, bias)] = (match, time.time())
-    await _finish(job_id, output_filename=match)
+    metrics = _extract_usage(stdout_b or b"")
+    wall_ms = int((time.time() - run_start) * 1000)
+    _write_sidecar(trade_plans_dir / match, skill_name, ticker, model, metrics, wall_ms)
+    if metrics:
+        logger.info(
+            "analysis-job done skill=%s ticker=%s cost_usd=%s input=%s output=%s "
+            "cache_read=%s turns=%s api_ms=%s wall_ms=%s",
+            skill_name, ticker,
+            metrics.get("cost_usd"), metrics.get("input_tokens"),
+            metrics.get("output_tokens"), metrics.get("cache_read_tokens"),
+            metrics.get("num_turns"), metrics.get("duration_ms"), wall_ms,
+        )
+
+    _PLAN_CACHE[_cache_key(skill_name, ticker, timeframe, expiry, bias)] = (match, time.time())
+    await _finish(job_id, output_filename=match, model=model, **metrics)
 
 
-async def _finish(job_id: str, output_filename: Optional[str] = None, error: Optional[str] = None) -> None:
+def _write_sidecar(html_path: Path, skill_name: str, ticker: str, model: str,
+                   metrics: dict, wall_ms: int) -> None:
+    """Persist usage metrics next to the HTML so the UI can show them past the
+    in-memory job TTL. Best-effort — failures are logged but don't break the job."""
+    try:
+        sidecar = html_path.with_suffix(html_path.suffix + ".meta.json")
+        payload = {
+            "skill_name": skill_name,
+            "ticker": ticker,
+            "model": model,
+            "completed_at": datetime.now().isoformat(timespec="seconds"),
+            "wall_ms": wall_ms,
+            **{k: v for k, v in metrics.items() if v is not None},
+        }
+        sidecar.write_text(json.dumps(payload, indent=2))
+    except OSError as e:
+        logger.warning("Failed to write sidecar for %s: %s", html_path.name, e)
+
+
+async def _finish(job_id: str, output_filename: Optional[str] = None,
+                  error: Optional[str] = None, model: Optional[str] = None,
+                  cost_usd: Optional[float] = None,
+                  input_tokens: Optional[int] = None,
+                  output_tokens: Optional[int] = None,
+                  cache_read_tokens: Optional[int] = None,
+                  cache_creation_tokens: Optional[int] = None,
+                  num_turns: Optional[int] = None,
+                  duration_ms: Optional[int] = None) -> None:
     async with _JOBS_LOCK:
         job = _JOBS.get(job_id)
         if not job:
@@ -199,6 +433,14 @@ async def _finish(job_id: str, output_filename: Optional[str] = None, error: Opt
         else:
             job.status = "done"
             job.output_filename = output_filename
+            job.model = model
+            job.cost_usd = cost_usd
+            job.input_tokens = input_tokens
+            job.output_tokens = output_tokens
+            job.cache_read_tokens = cache_read_tokens
+            job.cache_creation_tokens = cache_creation_tokens
+            job.num_turns = num_turns
+            job.duration_ms = duration_ms
 
 
 def _snapshot(d: Path) -> set[str]:

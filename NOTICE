@@ -1,0 +1,20 @@
+options-skill-pack
+==================
+
+This project is original work by the maintainer EXCEPT for the vendored
+third-party content described below.
+
+Third-party components
+----------------------
+
+Plugin: ai-trading-analyst
+    Source:     https://github.com/zubair-trabzada/ai-trading-claude
+    Author:     Zubair Trabzada
+    License:    MIT
+    Vendored:   .claude/local-marketplace/plugins/ai-trading-analyst/
+    Files:      8 SKILL.md files under skills/, generate_trade_html.py under scripts/
+    Details:    See ./.claude/local-marketplace/plugins/ai-trading-analyst/NOTICE
+                for the pinned commit SHA, snapshot date, list of skills omitted
+                and the rationale for omission, and the local-modifications policy.
+    Used by:    The Analysis tab in the web app (app/trade_plans.py) and the
+                background job runner (app/trade_plan_runner.py).

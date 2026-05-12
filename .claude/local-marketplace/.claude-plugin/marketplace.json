@@ -145,6 +145,16 @@
       },
       "source": "./plugins/evening-brief-reviewer",
       "category": "finance"
+    },
+    {
+      "name": "ai-trading-analyst",
+      "description": "Vendored bundle of eight AI Trading Analyst skills (trade-analyze, trade-thesis, trade-risk, trade-fundamental, trade-technical, trade-sentiment, trade-earnings, trade-options) plus the generate_trade_html.py renderer, from https://github.com/zubair-trabzada/ai-trading-claude (MIT). Powers the Analysis tab in the web app. trade-quick is omitted because its SKILL.md is terminal-only.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Zubair Trabzada (upstream); vendored by sushant"
+      },
+      "source": "./plugins/ai-trading-analyst",
+      "category": "finance"
     }
   ]
 }

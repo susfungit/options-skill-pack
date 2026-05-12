@@ -29,7 +29,8 @@ if not exist "%PROJECT_ROOT%\.claude" mkdir "%PROJECT_ROOT%\.claude"
   echo     "covered-call-monitor@options-skill-pack": true,
   echo     "cash-secured-put-selector@options-skill-pack": true,
   echo     "cash-secured-put-monitor@options-skill-pack": true,
-  echo     "options-trade-plan@options-skill-pack": true
+  echo     "options-trade-plan@options-skill-pack": true,
+  echo     "ai-trading-analyst@options-skill-pack": true
   echo   },
   echo   "extraKnownMarketplaces": {
   echo     "options-skill-pack": {

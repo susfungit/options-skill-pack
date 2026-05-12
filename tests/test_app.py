@@ -760,3 +760,227 @@ def test_trade_plans_delete_file(client):
 def test_trade_plans_delete_rejects_bad_filename(client):
     resp = client.delete("/api/trade-plans/files/random.html")
     assert resp.status_code == 400
+
+
+# ── Multi-skill (Analysis tab) tests ────────────────────────────────────────
+
+
+def test_filename_re_accepts_every_registered_prefix():
+    """Filename regex must match a sample for every skill in SKILL_REGISTRY."""
+    from app.trade_plans import _FILENAME_RE
+    from app.trade_plan_runner import SKILL_REGISTRY
+
+    for skill, spec in SKILL_REGISTRY.items():
+        name = f"{spec['filename_prefix']}AAPL_2026-05-16.html"
+        assert _FILENAME_RE.match(name), f"{skill}: regex rejected {name}"
+
+
+def test_filename_re_rejects_unknown_prefix():
+    from app.trade_plans import _FILENAME_RE
+    # No registered skill uses this prefix
+    assert not _FILENAME_RE.match("random_AAPL_2026-05-16.html")
+    assert not _FILENAME_RE.match("malicious.html")
+    assert not _FILENAME_RE.match("trade_plan_AAPL.html")  # missing date
+    assert not _FILENAME_RE.match("trade_plan_AAPL_05-16-2026.html")  # bad date format
+
+
+def test_parse_filename_returns_skill_and_metadata():
+    from app.trade_plans import _parse_filename
+    skill, ticker, expiry = _parse_filename("trade_thesis_AAPL_2026-05-16.html")
+    assert skill == "trade-thesis"
+    assert ticker == "AAPL"
+    assert expiry == "2026-05-16"
+
+
+def test_cache_key_includes_skill():
+    """Same ticker + two skills must produce different cache keys."""
+    from app.trade_plan_runner import _cache_key
+    k1 = _cache_key("options-trade-plan", "AAPL", "weekly", None, "neutral")
+    k2 = _cache_key("trade-thesis", "AAPL", "weekly", None, "neutral")
+    assert k1 != k2
+
+
+def test_request_validation_rejects_unknown_skill(client):
+    with patch("app.trade_plans.trade_plan_runner.claude_bin", return_value="/usr/bin/claude"):
+        resp = client.post("/api/trade-plans", json={"ticker": "AAPL", "skill_name": "bogus-skill"})
+    assert resp.status_code == 400
+    assert "unknown skill" in resp.json()["detail"].lower()
+
+
+def test_submit_passes_skill_name_to_runner(client):
+    """Verifies the router threads skill_name into submit_job."""
+    submit_mock = AsyncMock(return_value="xyz789")
+    with patch("app.trade_plans.trade_plan_runner.claude_bin", return_value="/usr/bin/claude"), \
+         patch("app.trade_plans.trade_plan_runner.submit_job", new=submit_mock), \
+         patch("app.trade_plans.trade_plan_runner.list_jobs", new=AsyncMock(return_value=[])):
+        resp = client.post("/api/trade-plans", json={"ticker": "AAPL", "skill_name": "trade-thesis"})
+    assert resp.status_code == 200
+    submit_mock.assert_called_once()
+    assert submit_mock.call_args.kwargs["skill_name"] == "trade-thesis"
+
+
+def test_submit_defaults_skill_name_for_backward_compat(client):
+    """Legacy callers omit skill_name; router must default to options-trade-plan."""
+    submit_mock = AsyncMock(return_value="legacy123")
+    with patch("app.trade_plans.trade_plan_runner.claude_bin", return_value="/usr/bin/claude"), \
+         patch("app.trade_plans.trade_plan_runner.submit_job", new=submit_mock), \
+         patch("app.trade_plans.trade_plan_runner.list_jobs", new=AsyncMock(return_value=[])):
+        resp = client.post("/api/trade-plans", json=_valid_trade_plan_req())
+    assert resp.status_code == 200
+    assert submit_mock.call_args.kwargs["skill_name"] == "options-trade-plan"
+
+
+def test_submit_drops_unsupported_fields(client):
+    """A skill that doesn't support `bias` must still accept the payload but pass bias=None."""
+    submit_mock = AsyncMock(return_value="drop123")
+    with patch("app.trade_plans.trade_plan_runner.claude_bin", return_value="/usr/bin/claude"), \
+         patch("app.trade_plans.trade_plan_runner.submit_job", new=submit_mock), \
+         patch("app.trade_plans.trade_plan_runner.list_jobs", new=AsyncMock(return_value=[])):
+        resp = client.post("/api/trade-plans", json={
+            "ticker": "AAPL", "skill_name": "trade-analyze",
+            "bias": "bullish", "timeframe": "weekly", "portfolio_size": "$500k",
+        })
+    assert resp.status_code == 200
+    kwargs = submit_mock.call_args.kwargs
+    assert kwargs["bias"] is None
+    assert kwargs["timeframe"] is None
+    assert kwargs["portfolio_size"] is None
+
+
+def test_build_prompt_uses_skill_specific_lead_and_filename():
+    from app.trade_plan_runner import _build_prompt
+    prompt = _build_prompt("trade-thesis", "AAPL", None, None, None, None)
+    assert "trade-thesis" in prompt
+    assert "investment thesis" in prompt.lower()
+    assert "trade_thesis_AAPL_" in prompt
+    assert ".html" in prompt
+    # force_inline_html mode: prompt must override the markdown directive and
+    # forbid helper-script calls.
+    assert "do not write any `.md` files" in prompt.lower()
+    assert "do not call any helper scripts" in prompt.lower()
+
+
+def test_build_prompt_for_trade_analyze_points_at_vendored_renderer():
+    """trade-analyze must be told to use the vendored renderer, not the upstream path."""
+    from app.trade_plan_runner import _build_prompt, _VENDORED_RENDERER
+    prompt = _build_prompt("trade-analyze", "AAPL", None, None, None, None)
+    assert _VENDORED_RENDERER in prompt
+    assert "TRADE_HTML_OUT=" in prompt
+    # And must explicitly tell the model NOT to call the upstream script:
+    assert "do NOT call" in prompt
+    assert "~/.claude/skills/trade/scripts/generate_trade_html.py" in prompt
+
+
+def test_trade_quick_not_in_registry():
+    """trade-quick was removed because its SKILL.md is terminal-only."""
+    from app.trade_plan_runner import SKILL_REGISTRY
+    assert "trade-quick" not in SKILL_REGISTRY
+
+
+def test_extract_usage_parses_complete_envelope():
+    from app.trade_plan_runner import _extract_usage
+    envelope = json.dumps({
+        "type": "result",
+        "is_error": False,
+        "result": "ok",
+        "total_cost_usd": 0.0234,
+        "num_turns": 3,
+        "duration_api_ms": 4567,
+        "usage": {
+            "input_tokens": 1234,
+            "output_tokens": 890,
+            "cache_read_input_tokens": 5678,
+            "cache_creation_input_tokens": 0,
+        },
+    }).encode("utf-8")
+    m = _extract_usage(envelope)
+    assert m["cost_usd"] == 0.0234
+    assert m["input_tokens"] == 1234
+    assert m["output_tokens"] == 890
+    assert m["cache_read_tokens"] == 5678
+    assert m["cache_creation_tokens"] == 0
+    assert m["num_turns"] == 3
+    assert m["duration_ms"] == 4567
+
+
+def test_extract_usage_tolerates_garbage():
+    """Older CLI versions or non-JSON stdout must not raise."""
+    from app.trade_plan_runner import _extract_usage
+    assert _extract_usage(b"not json at all") == {}
+    assert _extract_usage(b'"a string is valid json but not a dict"') == {}
+    assert _extract_usage(b"") == {}
+
+
+def test_extract_usage_handles_missing_usage_subobject():
+    from app.trade_plan_runner import _extract_usage
+    envelope = json.dumps({"total_cost_usd": 0.01}).encode()
+    m = _extract_usage(envelope)
+    assert m["cost_usd"] == 0.01
+    assert m["input_tokens"] is None
+
+
+def test_list_files_includes_metrics_from_sidecar(client):
+    from app import config
+    os.makedirs(config.TRADE_PLANS_DIR, exist_ok=True)
+    name = "trade_thesis_AAPL_2026-05-16.html"
+    html_path = os.path.join(config.TRADE_PLANS_DIR, name)
+    sidecar = html_path + ".meta.json"
+    open(html_path, "w").write("<html></html>")
+    open(sidecar, "w").write(json.dumps({
+        "skill_name": "trade-thesis",
+        "cost_usd": 0.0123,
+        "input_tokens": 1500,
+        "output_tokens": 800,
+        "duration_ms": 3200,
+    }))
+
+    resp = client.get("/api/trade-plans/files")
+    assert resp.status_code == 200
+    matching = [f for f in resp.json()["files"] if f["filename"] == name]
+    assert matching
+    assert matching[0]["metrics"]["cost_usd"] == 0.0123
+    assert matching[0]["metrics"]["input_tokens"] == 1500
+
+
+def test_delete_file_also_removes_sidecar(client):
+    from app import config
+    os.makedirs(config.TRADE_PLANS_DIR, exist_ok=True)
+    name = "trade_thesis_AAPL_2026-05-16.html"
+    html_path = os.path.join(config.TRADE_PLANS_DIR, name)
+    sidecar = html_path + ".meta.json"
+    open(html_path, "w").write("<html></html>")
+    open(sidecar, "w").write("{}")
+
+    resp = client.delete(f"/api/trade-plans/files/{name}")
+    assert resp.status_code == 200
+    assert not os.path.exists(html_path)
+    assert not os.path.exists(sidecar)
+
+
+def test_list_files_handles_missing_or_corrupt_sidecar(client):
+    """A corrupt or missing sidecar must not break file listing."""
+    from app import config
+    os.makedirs(config.TRADE_PLANS_DIR, exist_ok=True)
+    name = "trade_plan_AAPL_2026-05-16.html"
+    html_path = os.path.join(config.TRADE_PLANS_DIR, name)
+    open(html_path, "w").write("<html></html>")
+    # Corrupt sidecar
+    open(html_path + ".meta.json", "w").write("not valid json {")
+
+    resp = client.get("/api/trade-plans/files")
+    assert resp.status_code == 200
+    matching = [f for f in resp.json()["files"] if f["filename"] == name]
+    assert matching
+    # File listing succeeds; metrics simply absent.
+    assert "metrics" not in matching[0]
+
+
+def test_build_prompt_options_trade_plan_backward_compat():
+    """Existing flow: expiry + portfolio_size + bias all appear in the prompt."""
+    from app.trade_plan_runner import _build_prompt
+    prompt = _build_prompt("options-trade-plan", "AAPL", "weekly", "2026-05-16", "$500k", "neutral")
+    assert "options-trade-plan" in prompt
+    assert "for expiry 2026-05-16" in prompt
+    assert "$500k" in prompt
+    assert "neutral" in prompt
+    assert "trade_plan_AAPL_2026-05-16.html" in prompt
