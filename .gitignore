@@ -62,3 +62,7 @@ trade-plans/
 morning-briefs/*.json
 morning-briefs/*.html
 !morning-briefs/recommendations.example.json
+
+# Generated PMCC weekend scans (personal analysis output)
+pmcc-scans/*.json
+pmcc-scans/*.html

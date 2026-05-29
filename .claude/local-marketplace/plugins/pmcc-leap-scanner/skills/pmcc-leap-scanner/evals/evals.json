@@ -1,0 +1,53 @@
+{
+  "skill_name": "pmcc-leap-scanner",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run a weekend scanner for poor man's covered call candidates.",
+      "expected_output": "A ranked table of PMCC candidates from the built-in universe. Each candidate shows a deep-ITM LEAP call (>=0.80 delta, long-dated) as the long leg and a modeled ~30-delta short call, plus net debit, extrinsic, and a recovery/yield ratio used for ranking. Should note how many tickers were skipped.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "ranked_table_present",
+          "description": "Response contains a ranked list/table of PMCC candidates across multiple tickers"
+        },
+        {
+          "name": "has_leap_leg",
+          "description": "Each candidate shows a deep-ITM long-dated LEAP call with ~0.80+ delta as the long leg"
+        },
+        {
+          "name": "has_short_leg",
+          "description": "Each candidate shows a modeled short call (strike, delta, credit) to sell against the LEAP"
+        },
+        {
+          "name": "has_ranking_metric",
+          "description": "Candidates are ranked by a PMCC yield/recovery metric (short-call income vs LEAP extrinsic)"
+        },
+        {
+          "name": "reports_skipped",
+          "description": "Response mentions how many tickers were skipped or why, rather than silently dropping them"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Scan AAPL, NVDA, and MSFT for PMCC setups. I want at least 0.85 delta on the LEAP.",
+      "expected_output": "Scans only the three named tickers using a 0.85 LEAP delta target instead of the 0.80 default. Returns candidates (or skip reasons) for each, with a risk checklist covering earnings and dividend/early-assignment risk on the short call.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "respects_ticker_list",
+          "description": "Only AAPL, NVDA, MSFT are scanned, not the full universe"
+        },
+        {
+          "name": "respects_delta_override",
+          "description": "Uses 0.85 LEAP delta target rather than the default 0.80"
+        },
+        {
+          "name": "has_risk_checklist",
+          "description": "Response includes a risk checklist covering at least earnings and dividend/early-assignment risk"
+        }
+      ]
+    }
+  ]
+}

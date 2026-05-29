@@ -24,7 +24,8 @@ cat > "$SETTINGS_FILE" <<EOF
     "options-trade-plan@options-skill-pack": true,
     "morning-brief-generator@options-skill-pack": true,
     "evening-brief-reviewer@options-skill-pack": true,
-    "ai-trading-analyst@options-skill-pack": true
+    "ai-trading-analyst@options-skill-pack": true,
+    "pmcc-leap-scanner@options-skill-pack": true
   },
   "extraKnownMarketplaces": {
     "options-skill-pack": {

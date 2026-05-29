@@ -1,0 +1,8 @@
+{
+  "name": "pmcc-leap-scanner",
+  "version": "1.0.0",
+  "description": "Weekend scanner that sweeps a universe of tickers for poor man's covered call (PMCC) candidates — deep-ITM long-dated LEAP calls to use as stock substitutes.",
+  "author": {
+    "name": "sushant"
+  }
+}

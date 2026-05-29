@@ -613,3 +613,26 @@ The **Analysis** tab is powered by the `ai-trading-analyst` plugin, which vendor
 > **[zubair-trabzada/ai-trading-claude](https://github.com/zubair-trabzada/ai-trading-claude)** — Zubair Trabzada · MIT License
 
 The snapshot pinned in this repo and the list of skills omitted (and why) are documented in [`.claude/local-marketplace/plugins/ai-trading-analyst/NOTICE`](.claude/local-marketplace/plugins/ai-trading-analyst/NOTICE). The upstream license text is preserved at [`.claude/local-marketplace/plugins/ai-trading-analyst/LICENSE`](.claude/local-marketplace/plugins/ai-trading-analyst/LICENSE).
+
+
+### pmcc-leap-scanner
+
+Weekend scanner that sweeps many tickers for **poor man's covered call (PMCC)** candidates — deep-ITM, long-dated **LEAP calls** (~0.80+ delta) to buy as a stock substitute, paired with a modeled ~0.30-delta short call to sell against them.
+
+**Trigger phrases** — "scan for PMCC candidates", "poor man's covered call scanner", "weekend LEAP scan", "find deep ITM LEAP calls", "which stocks are good for a PMCC"
+
+**What it does:**
+1. For each ticker, pick the longest LEAP expiry in the 330-730 DTE window
+2. Select the deep-ITM call closest to the target delta (>= 0.80) as the long leg
+3. Model a ~30-45 DTE, ~0.30-delta short call as the income leg
+4. Gate on liquidity (open interest, bid-ask spread) and reject LEAPs whose extrinsic exceeds ~15% of strike
+5. Rank candidates by annualized recovery ratio (short-call income / LEAP extrinsic) and list skipped tickers with reasons
+
+**Parameters** (defaults): `tickers` (built-in `universe.json`), `leap_delta` 0.80, `leap_dte_min/max` 330/730, `short_delta` 0.30, `min_oi` 100, `max_extrinsic_pct` 0.15, `max_spread_pct` 0.15.
+
+**Run standalone:**
+```bash
+python3 .claude/local-marketplace/plugins/pmcc-leap-scanner/skills/pmcc-leap-scanner/scan_pmcc.py AAPL NVDA MSFT
+# scan the built-in universe and write an HTML report to pmcc-scans/
+python3 .claude/local-marketplace/plugins/pmcc-leap-scanner/skills/pmcc-leap-scanner/scan_pmcc.py --html
+```

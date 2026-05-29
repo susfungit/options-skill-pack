@@ -588,6 +588,66 @@ Present the close-now option alongside roll candidates. For iron condors, note t
 
 # ── Derived exports (single source of truth: TOOL_REGISTRY) ───────────────────
 
+
+def _scan_pmcc_args(tool_input: dict) -> list:
+    """Build CLI args for the PMCC scanner (ticker list + optional overrides)."""
+    args = []
+    for t in (tool_input.get("tickers") or []):
+        args.append(str(t).upper())
+    for field, flag in (
+        ("leap_delta", "--leap-delta"),
+        ("leap_dte_min", "--leap-dte-min"),
+        ("leap_dte_max", "--leap-dte-max"),
+        ("short_delta", "--short-delta"),
+        ("min_oi", "--min-oi"),
+        ("top", "--top"),
+    ):
+        if field in tool_input:
+            args.extend([flag, str(tool_input[field])])
+    return args
+
+
+TOOL_REGISTRY["scan_pmcc_candidates"] = {
+    "description": (
+        "Scan many tickers' option chains for poor man's covered call (PMCC) candidates: "
+        "deep-ITM, long-dated LEAP calls (~0.80+ delta) usable as a stock substitute, paired "
+        "with a modeled ~0.30-delta short call to sell against them. Returns a ranked candidate "
+        "list plus skipped tickers with reasons. With no tickers, scans the built-in universe."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "tickers": {
+                "type": "array",
+                "items": {"type": "string", "pattern": "^[A-Z]{1,5}$"},
+                "description": "Tickers to scan (omit to scan the built-in universe.json list)",
+            },
+            "leap_delta": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "Target delta for the LEAP long leg (default 0.80)"},
+            "leap_dte_min": {"type": "integer", "minimum": 1, "maximum": 1095, "description": "Minimum DTE for the LEAP (default 330)"},
+            "leap_dte_max": {"type": "integer", "minimum": 1, "maximum": 1095, "description": "Maximum DTE for the LEAP (default 730)"},
+            "short_delta": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "Delta for the modeled short call (default 0.30)"},
+            "min_oi": {"type": "integer", "minimum": 0, "description": "Minimum LEAP open interest (default 100)"},
+            "top": {"type": "integer", "minimum": 1, "maximum": 100, "description": "Max candidates to return (default 25)"},
+        },
+        "required": [],
+    },
+    "plugin": "pmcc-leap-scanner",
+    "skill": "pmcc-leap-scanner",
+    "script": "scan_pmcc.py",
+    "args": _scan_pmcc_args,
+    "guidance": (
+        "Interpretation guidance for the PMCC scan: 'candidates' is ranked by annual_recovery_ratio "
+        "(annualized short-call income / LEAP extrinsic) — higher means the short calls pay off the "
+        "time value bought faster. Each candidate's LEAP leg is the deep-ITM long call (delta>=~0.80) "
+        "to BUY; short_call is the ~0.30-delta call to SELL against it. net_debit is the capital outlay; "
+        "max_profit/return_on_debit_pct assume the stock finishes at/above the short strike. Present a "
+        "ranked table, flag earnings before LEAP expiry and ex-dividend dates (early-assignment risk on "
+        "the short call), note this is a bullish-to-neutral strategy, and report how many tickers were "
+        "skipped and why (the 'skipped' list). Never invent strikes or premiums not in the data."
+    ),
+}
+
+
 TOOLS = [
     {
         "name": name,

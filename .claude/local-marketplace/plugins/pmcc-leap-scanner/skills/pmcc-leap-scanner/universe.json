@@ -1,0 +1,11 @@
+{
+  "_comment": "Default ticker universe for the PMCC weekend scanner. Edit freely. These are liquid, optionable large caps that typically have deep, tradeable LEAP chains. Pass explicit tickers on the command line to override this list for a single run.",
+  "tickers": [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AMD", "AVGO", "NFLX",
+    "CRM", "ADBE", "ORCL", "QCOM", "INTC", "CSCO", "MU", "TXN", "AMAT", "PLTR",
+    "JPM", "BAC", "GS", "V", "MA", "DIS", "HD", "WMT", "COST", "NKE",
+    "XOM", "CVX", "UNH", "JNJ", "PFE", "MRK", "ABBV", "KO", "PEP", "MCD",
+    "BA", "CAT", "GE", "F", "GM", "UBER", "SHOP", "COIN", "SQ", "PYPL",
+    "SPY", "QQQ", "IWM", "DIA"
+  ]
+}

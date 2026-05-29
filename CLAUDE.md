@@ -10,6 +10,9 @@ An options trading toolkit with two interfaces:
 
 Strategies supported: bull put spread, bear call spread, iron condor, covered call, cash-secured put. Each has a selector (find trades) and monitor (check health). The spread-roller handles rolling any spread.
 
+- **pmcc-leap-scanner** - the first multi-ticker programmatic scanner: sweeps a ticker universe for poor man's covered call (PMCC) LEAP candidates and outputs a ranked JSON list (+ optional HTML report to `pmcc-scans/`). Standalone script: `.claude/local-marketplace/plugins/pmcc-leap-scanner/skills/pmcc-leap-scanner/scan_pmcc.py`. Registered in `TOOL_REGISTRY` as `scan_pmcc_candidates` (custom `_scan_pmcc_args` builder for the ticker-list arg).
+
+
 ## Commands
 
 ```bash

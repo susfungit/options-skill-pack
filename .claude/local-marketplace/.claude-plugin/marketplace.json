@@ -68,7 +68,7 @@
     },
     {
       "name": "spread-roller",
-      "description": "Finds roll targets for bull put spreads and iron condors — shows close cost, calendar and diagonal roll candidates ranked by net credit.",
+      "description": "Finds roll targets for bull put spreads and iron condors \u2014 shows close cost, calendar and diagonal roll candidates ranked by net credit.",
       "version": "1.0.0",
       "author": {
         "name": "sushant"
@@ -128,7 +128,7 @@
     },
     {
       "name": "morning-brief-generator",
-      "description": "Produces THE MORNING BRIEF — a daily pre-market options intelligence report (v3.4) with sourced live-quote table, mandatory carry-forward, JSON recommendations index, and editorial HTML output. Enforces anti-fabrication gates (Step 0 Part E table, Step 6 #12 source citation).",
+      "description": "Produces THE MORNING BRIEF \u2014 a daily pre-market options intelligence report (v3.4) with sourced live-quote table, mandatory carry-forward, JSON recommendations index, and editorial HTML output. Enforces anti-fabrication gates (Step 0 Part E table, Step 6 #12 source citation).",
       "version": "1.0.0",
       "author": {
         "name": "sushant"
@@ -154,6 +154,16 @@
         "name": "Zubair Trabzada (upstream); vendored by sushant"
       },
       "source": "./plugins/ai-trading-analyst",
+      "category": "finance"
+    },
+    {
+      "name": "pmcc-leap-scanner",
+      "description": "Weekend scanner that screens many tickers for poor man's covered call (PMCC) candidates \u2014 deep-ITM long-dated LEAP calls usable as a stock substitute.",
+      "version": "1.0.0",
+      "author": {
+        "name": "sushant"
+      },
+      "source": "./plugins/pmcc-leap-scanner",
       "category": "finance"
     }
   ]
