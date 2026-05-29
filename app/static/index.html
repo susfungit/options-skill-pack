@@ -151,6 +151,38 @@
           <p>Pick a ticker and strategy to analyze</p>
           <p class="empty-sub">Runs selector scripts directly — no AI tokens used</p>
         </div>
+
+        <!-- PMCC Scanner (multi-ticker) -->
+        <div class="pmcc-controls">
+          <h3>PMCC Scanner</h3>
+          <p class="pmcc-sub">Scans multiple tickers for deep-ITM LEAP / poor man's covered call candidates. Up to 8 tickers.</p>
+          <div class="form-row">
+            <div class="form-group" style="flex:1;min-width:220px;">
+              <label>Tickers (comma-separated)</label>
+              <input type="text" id="pmcc-tickers" placeholder="MSFT, AAPL, NVDA" style="text-transform:uppercase">
+            </div>
+            <div class="form-group">
+              <label>LEAP Delta</label>
+              <input type="text" id="pmcc-leap-delta" inputmode="decimal" pattern="^0?\.\d{1,2}$" placeholder="0.80" maxlength="4">
+            </div>
+            <div class="form-group">
+              <label>Short Delta</label>
+              <input type="text" id="pmcc-short-delta" inputmode="decimal" pattern="^0?\.\d{1,2}$" placeholder="0.30" maxlength="4">
+            </div>
+            <div class="form-group">
+              <label>Max Extrinsic %</label>
+              <input type="number" id="pmcc-max-extrinsic" inputmode="numeric" min="1" max="100" step="1" placeholder="15" style="width:70px">
+            </div>
+            <div class="form-group">
+              <label>Min OI</label>
+              <input type="number" id="pmcc-min-oi" inputmode="numeric" min="0" step="1" placeholder="100" style="width:70px">
+            </div>
+            <div class="form-group" style="align-self:flex-end;">
+              <button class="btn-analyze" id="btn-pmcc-scan" onclick="runPmccScan()">Scan PMCC</button>
+            </div>
+          </div>
+          <div id="pmcc-results"></div>
+        </div>
       </section>
 
       <!-- Analysis Panel (formerly Trade Plans) -->

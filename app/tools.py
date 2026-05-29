@@ -600,6 +600,7 @@ def _scan_pmcc_args(tool_input: dict) -> list:
         ("leap_dte_max", "--leap-dte-max"),
         ("short_delta", "--short-delta"),
         ("min_oi", "--min-oi"),
+        ("max_extrinsic_pct", "--max-extrinsic-pct"),
         ("top", "--top"),
     ):
         if field in tool_input:
@@ -627,6 +628,7 @@ TOOL_REGISTRY["scan_pmcc_candidates"] = {
             "leap_dte_max": {"type": "integer", "minimum": 1, "maximum": 1095, "description": "Maximum DTE for the LEAP (default 730)"},
             "short_delta": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "description": "Delta for the modeled short call (default 0.30)"},
             "min_oi": {"type": "integer", "minimum": 0, "description": "Minimum LEAP open interest (default 100)"},
+            "max_extrinsic_pct": {"type": "number", "exclusiveMinimum": 0, "maximum": 1, "description": "Reject LEAPs whose time value exceeds this fraction of strike (default 0.15)"},
             "top": {"type": "integer", "minimum": 1, "maximum": 100, "description": "Max candidates to return (default 25)"},
         },
         "required": [],
@@ -819,7 +821,8 @@ _RESULT_CACHE_TTL = 30.0
 
 
 def _cache_key(tool_name: str, tool_input: dict) -> tuple:
-    return (tool_name, tuple(sorted(tool_input.items())))
+    items = ((k, tuple(v) if isinstance(v, list) else v) for k, v in tool_input.items())
+    return (tool_name, tuple(sorted(items)))
 
 
 def execute_tool(tool_name: str, tool_input: dict) -> str:

@@ -154,6 +154,48 @@ async def analyze(request: Request, req: AnalyzeRequest):
     return result
 
 
+# ── PMCC scanner (multi-ticker) ────────────────────────────────────────────────
+
+class PmccScanRequest(BaseModel):
+    tickers: list[str] = Field(..., min_length=1, max_length=8)
+    leap_delta: Optional[float] = Field(None, gt=0, lt=1)
+    leap_dte_min: Optional[int] = Field(None, ge=1, le=1095)
+    leap_dte_max: Optional[int] = Field(None, ge=1, le=1095)
+    short_delta: Optional[float] = Field(None, gt=0, lt=1)
+    min_oi: Optional[int] = Field(None, ge=0)
+    max_extrinsic_pct: Optional[float] = Field(None, gt=0, le=1)
+    top: Optional[int] = Field(None, ge=1, le=100)
+
+
+@router.post("/api/analyze/pmcc")
+@limiter.limit("10/minute")
+async def analyze_pmcc(request: Request, req: PmccScanRequest):
+    tickers = [t.upper() for t in req.tickers]
+    for t in tickers:
+        if not TICKER_RE.match(t):
+            raise HTTPException(status_code=400, detail=f"Invalid ticker: {t}")
+
+    tool_input = {"tickers": tickers}
+    for field in ("leap_delta", "leap_dte_min", "leap_dte_max", "short_delta", "min_oi", "max_extrinsic_pct", "top"):
+        value = getattr(req, field)
+        if value is not None:
+            tool_input[field] = value
+
+    result_json = execute_tool("scan_pmcc_candidates", tool_input)
+    result = json.loads(result_json)
+
+    _log_search(
+        ticker=",".join(tickers),
+        strategy="pmcc",
+        params={k: v for k, v in tool_input.items() if k != "tickers"},
+        summary={
+            "candidates": len(result.get("candidates", [])) if isinstance(result, dict) else 0,
+            "skipped": len(result.get("skipped", [])) if isinstance(result, dict) else 0,
+        },
+    )
+    return result
+
+
 # ── Compare mode ──────────────────────────────────────────────────────────────
 
 class CompareRequest(BaseModel):

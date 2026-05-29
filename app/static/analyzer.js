@@ -163,6 +163,122 @@ function clearAnalysis() {
   lastAnalysis = null;
 }
 
+// ── PMCC Scanner (multi-ticker) ────────────────────────────────────────────────
+
+async function runPmccScan() {
+  const raw = document.getElementById('pmcc-tickers').value || '';
+  const tickers = raw.split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
+  const results = document.getElementById('pmcc-results');
+
+  if (tickers.length === 0) {
+    results.innerHTML = '<div class="az-error">Enter at least one ticker.</div>';
+    return;
+  }
+  if (tickers.length > 8) {
+    results.innerHTML = '<div class="az-error">Up to 8 tickers per scan.</div>';
+    return;
+  }
+
+  const body = { tickers };
+  const leapDelta = document.getElementById('pmcc-leap-delta').value;
+  const shortDelta = document.getElementById('pmcc-short-delta').value;
+  const maxExtrinsic = document.getElementById('pmcc-max-extrinsic').value;
+  const minOi = document.getElementById('pmcc-min-oi').value;
+  if (leapDelta) body.leap_delta = parseFloat(leapDelta);
+  if (shortDelta) body.short_delta = parseFloat(shortDelta);
+  if (maxExtrinsic) body.max_extrinsic_pct = parseFloat(maxExtrinsic) / 100;  // UI shows whole %, API wants a fraction
+  if (minOi) body.min_oi = parseInt(minOi);
+
+  const btn = document.getElementById('btn-pmcc-scan');
+  btn.disabled = true;
+  btn.textContent = 'Scanning...';
+  results.innerHTML = '<div class="az-loading">Scanning option chains (this can take a few seconds per ticker)...</div>';
+
+  try {
+    const res = await fetch('/api/analyze/pmcc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.error) {
+      results.innerHTML = `<div class="az-error">${esc(data.error)}</div>`;
+    } else if (data.detail) {
+      results.innerHTML = `<div class="az-error">${esc(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail))}</div>`;
+    } else {
+      renderPmccResult(data);
+    }
+  } catch (err) {
+    results.innerHTML = `<div class="az-error">${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Scan PMCC';
+  }
+}
+
+function renderPmccResult(data) {
+  const results = document.getElementById('pmcc-results');
+  const candidates = data.candidates || [];
+  const skipped = data.skipped || [];
+
+  let html = '';
+
+  if (candidates.length === 0) {
+    html += '<div class="pmcc-empty">No PMCC candidates passed the screen.</div>';
+  } else {
+    const rows = candidates.map(c => {
+      const leap = c.leap || {};
+      const sc = c.short_call || {};
+      const roiClass = (c.return_on_debit_pct || 0) >= 0 ? 'pnl-pos' : 'pnl-neg';
+      return `
+        <tr>
+          <td class="pmcc-ticker">${esc(c.ticker)}</td>
+          <td>$${num(c.stock_price)}</td>
+          <td>${esc(leap.expiry || '')} <span class="pmcc-dim">${leap.dte != null ? leap.dte + 'd' : ''}</span></td>
+          <td>$${num(leap.strike)}</td>
+          <td>${num(leap.delta, 2)}</td>
+          <td>$${num(leap.mid)}</td>
+          <td>${leap.extrinsic_pct != null ? (leap.extrinsic_pct * 100).toFixed(1) + '%' : '—'}</td>
+          <td>$${num(sc.strike)} <span class="pmcc-dim">Δ${num(sc.delta, 2)}</span></td>
+          <td>$${num(sc.mid)}</td>
+          <td>$${num(c.net_debit)}</td>
+          <td class="${roiClass}">${num(c.return_on_debit_pct, 1)}%</td>
+          <td>$${num(c.breakeven)}</td>
+          <td>${num(c.annual_recovery_ratio, 2)}</td>
+        </tr>`;
+    }).join('');
+
+    html += `
+      <div class="pmcc-results-header">Ranked candidates (${candidates.length})</div>
+      <div class="pmcc-table-wrap">
+        <table class="pmcc-table">
+          <thead>
+            <tr>
+              <th>Ticker</th><th>Spot</th><th>LEAP Exp</th><th>Strike</th><th>Δ</th><th>Debit</th><th>Extr%</th>
+              <th>Short</th><th>Credit</th><th>Net Debit</th><th>Max ROI</th><th>Breakeven</th><th>Ann. Recov.</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  if (skipped.length > 0) {
+    const items = skipped.map(s => `<li><span class="pmcc-ticker">${esc(s.ticker)}</span> <span class="pmcc-dim">${esc(s.reason)}</span></li>`).join('');
+    html += `
+      <div class="pmcc-skipped">
+        <div class="pmcc-skipped-header">Skipped (${skipped.length})</div>
+        <ul>${items}</ul>
+      </div>`;
+  }
+
+  results.innerHTML = html;
+}
+
+function num(v, digits = 2) {
+  return (v == null || isNaN(v)) ? '—' : Number(v).toFixed(digits);
+}
+
 function renderCompareResult(data) {
   lastAnalysis = null;
   const results = document.getElementById('az-results');

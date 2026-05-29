@@ -11,6 +11,7 @@ from app import tools as _tools_module
 from app.tools import (
     _validate_tool_input,
     _build_args,
+    _cache_key,
     cached_tools,
     execute_tool,
     TOOLS,
@@ -424,6 +425,39 @@ def test_analyze_calls_correct_tool(mock_exec, client):
 def test_analyze_invalid_strategy(client):
     resp = client.post("/api/analyze", json={"ticker": "AAPL", "strategy": "butterfly"})
     assert resp.status_code == 422
+
+
+@patch("app.analyze.execute_tool", return_value='{"candidates": [{"ticker": "MSFT"}], "skipped": []}')
+def test_analyze_pmcc_calls_scanner(mock_exec, client):
+    resp = client.post(
+        "/api/analyze/pmcc",
+        json={"tickers": ["MSFT", "now"], "max_extrinsic_pct": 0.2, "min_oi": 50},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"candidates": [{"ticker": "MSFT"}], "skipped": []}
+    mock_exec.assert_called_once()
+    call_args = mock_exec.call_args
+    assert call_args[0][0] == "scan_pmcc_candidates"
+    # tickers are uppercased and passed as a list; optional filters flow through
+    assert call_args[0][1]["tickers"] == ["MSFT", "NOW"]
+    assert call_args[0][1]["max_extrinsic_pct"] == 0.2
+    assert call_args[0][1]["min_oi"] == 50
+
+
+def test_analyze_pmcc_empty_tickers(client):
+    resp = client.post("/api/analyze/pmcc", json={"tickers": []})
+    assert resp.status_code == 422
+
+
+def test_analyze_pmcc_invalid_ticker(client):
+    resp = client.post("/api/analyze/pmcc", json={"tickers": ["NOTVALID"]})
+    assert resp.status_code == 400
+
+
+def test_cache_key_handles_list_values():
+    # PMCC passes a list under "tickers"; the key must stay hashable (usable as a dict key)
+    key = _cache_key("scan_pmcc_candidates", {"tickers": ["MSFT", "NOW"], "top": 5})
+    {key: 1}  # would raise TypeError: unhashable type if the list leaked into the key
 
 
 # ── Zone classification boundary tests ──────────────────────────────────────
