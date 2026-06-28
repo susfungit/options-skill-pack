@@ -1,8 +1,16 @@
 services:
   app:
     build: .
+    # Publish to the host loopback only. The container still binds 0.0.0.0
+    # internally (see Dockerfile), but the host port is not reachable off-box.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    environment:
+      # The app fails closed when APP_API_KEY is unset and its bind host is not
+      # loopback (the container binds 0.0.0.0). The loopback-only publish above
+      # makes running without auth safe, so we opt in explicitly here. Remove
+      # this and set APP_API_KEY in app/.env to require authentication.
+      ALLOW_NO_AUTH: "1"
     env_file:
       - path: app/.env
         required: false

@@ -37,9 +37,51 @@ document.getElementById('az-delta').addEventListener('blur', function() {
   this.value = Math.min(0.99, Math.max(0, v)).toFixed(2);
 });
 
+// ── Auth gate ────────────────────────────────────────────────────────────────
+
+// Resolves once the session is authenticated (or auth is disabled). Shows the
+// login overlay and waits for a successful POST /api/login when a key is required.
+async function ensureAuthenticated() {
+  let status;
+  try {
+    status = await (await fetch('/api/auth/status')).json();
+  } catch {
+    return; // Network/parse issue — let the app load and surface errors normally.
+  }
+  if (!status.auth_required || status.authenticated) return;
+
+  const overlay = document.getElementById('login-overlay');
+  const form = document.getElementById('login-form');
+  const keyInput = document.getElementById('login-key');
+  const errEl = document.getElementById('login-error');
+  overlay.style.display = 'flex';
+  keyInput.focus();
+
+  await new Promise((resolve) => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errEl.style.display = 'none';
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + keyInput.value },
+      });
+      if (res.ok) {
+        overlay.style.display = 'none';
+        keyInput.value = '';
+        resolve();
+      } else {
+        errEl.textContent = 'Invalid API key. Try again.';
+        errEl.style.display = 'block';
+        keyInput.select();
+      }
+    });
+  });
+}
+
 // ── Startup ──────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
+  await ensureAuthenticated();
   renderMarketStatus();
   loadPortfolio();
   await loadModels();

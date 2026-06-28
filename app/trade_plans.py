@@ -150,7 +150,10 @@ async def get_file(request: Request, name: str):
     path = _resolve_plan_path(name)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path, media_type="text/html")
+    # These reports are self-generated HTML, but serve them with a strict CSP so
+    # that even an injected <script> in a report can't execute or call out.
+    headers = {"Content-Security-Policy": "script-src 'none'; sandbox"}
+    return FileResponse(path, media_type="text/html", headers=headers)
 
 
 @router.delete("/api/trade-plans/files/{name}")
