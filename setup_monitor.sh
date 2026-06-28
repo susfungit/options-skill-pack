@@ -28,7 +28,8 @@ if [ -f monitor_config.json ]; then
   echo "✓ monitor_config.json already exists — skipping"
 else
   cp monitor_config.example.json monitor_config.json
-  echo "✓ Created monitor_config.json from template"
+  chmod 600 monitor_config.json  # may hold SMTP/Pushover credentials
+  echo "✓ Created monitor_config.json from template (perms 600)"
   echo ""
   echo "  Configure your notification channels in monitor_config.json:"
   echo ""

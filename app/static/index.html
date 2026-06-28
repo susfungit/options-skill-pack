@@ -512,6 +512,25 @@
     </div>
   </div>
 
+  <!-- Login overlay (shown only when the server requires an API key) -->
+  <div id="login-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal" style="max-width:400px;">
+      <div class="modal-header">
+        <h2>SIGN IN</h2>
+      </div>
+      <form id="login-form" style="padding:18px 22px 22px;">
+        <div class="form-group" style="margin-bottom:12px;">
+          <label for="login-key">API Key</label>
+          <input type="password" id="login-key" autocomplete="current-password" placeholder="APP_API_KEY" autofocus>
+        </div>
+        <div id="login-error" style="display:none;color:var(--danger,#e5484d);font-size:12px;margin-bottom:12px;"></div>
+        <div class="form-actions">
+          <button type="submit" class="btn-add" style="width:100%;justify-content:center;">Sign in</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="/static/utils.js"></script>
   <script src="/static/chat.js"></script>
   <script src="/static/portfolio.js"></script>

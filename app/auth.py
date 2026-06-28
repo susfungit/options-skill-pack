@@ -42,15 +42,46 @@ def _valid_session_token(token: str) -> bool:
     return hmac.compare_digest(sig, expected)
 
 
+def valid_api_key(bearer: str) -> bool:
+    """Constant-time check of a bearer key against the configured APP_API_KEY."""
+    if not _APP_API_KEY or not bearer:
+        return False
+    return hmac.compare_digest(bearer, _APP_API_KEY)
+
+
+def is_authenticated(request: Request) -> bool:
+    """True if auth is disabled, or the request carries a valid key/session."""
+    if not _APP_API_KEY:
+        return True
+    bearer = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    cookie = request.cookies.get(_COOKIE_NAME, "")
+    return valid_api_key(bearer) or _valid_session_token(cookie)
+
+
+def set_session_cookie(response) -> None:
+    """Attach a fresh signed session cookie to a response."""
+    response.set_cookie(
+        _COOKIE_NAME, _make_session_token(),
+        httponly=True, samesite="strict", max_age=_SESSION_TTL,
+        secure=os.environ.get("SECURE_COOKIES", "").lower() in ("1", "true"),
+    )
+
+
+# Paths reachable without authentication. `/` serves the SPA shell (no session
+# granted), `/api/login` exchanges a key for a session, `/api/auth/status` lets
+# the front-end discover whether a login is needed.
+_PUBLIC_PATHS = {"/", "/health", "/api/login", "/api/auth/status"}
+
+
 async def auth_middleware(request: Request, call_next):
     if not _APP_API_KEY:
         return await call_next(request)
-    path = request.url.path
-    if path == "/" or path.startswith("/static") or path == "/health":
+    # Use the ASGI scope path, not request.url.path, to avoid the Host-header
+    # URL-parsing issue in older Starlette releases.
+    path = request.scope["path"]
+    if path in _PUBLIC_PATHS or path == "/static" or path.startswith("/static/"):
         return await call_next(request)
-    bearer = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-    cookie = request.cookies.get(_COOKIE_NAME, "")
-    if hmac.compare_digest(bearer, _APP_API_KEY) or _valid_session_token(cookie):
+    if is_authenticated(request):
         return await call_next(request)
     logger.warning("Auth failure: %s %s from %s", request.method, path, request.client.host if request.client else "unknown")
     return JSONResponse(status_code=401, content={"detail": "Invalid or missing API key"})

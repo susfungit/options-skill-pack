@@ -1,8 +1,12 @@
-fastapi==0.115.0
+fastapi>=0.138.1
+# Pin the Starlette floor directly: FastAPI's dependency range is wide, and the
+# patched release (resolves the Host-header URL-parsing CVE + the 2026 batch)
+# is only pulled in if we require it explicitly.
+starlette>=1.3.1
 uvicorn==0.30.0
 anthropic==0.42.0
 yfinance==0.2.31
 pytz==2024.1
-python-dotenv==1.0.0
+python-dotenv>=1.2.2
 slowapi==0.1.9
 sse-starlette==1.8.2

@@ -18,6 +18,17 @@ logger = logging.getLogger("options_skill_pack")
 
 _CLAUDE_BIN: Optional[str] = shutil.which("claude")
 
+# Tools the trade-plan / trade-* skills are permitted to use in `-p` mode.
+# Replaces a blanket `--permission-mode bypassPermissions`. Bash is needed to
+# run the bundled Python selector/renderer scripts; Read/Write/Edit for report
+# files; Glob/Grep for locating skill assets; WebSearch/WebFetch for live market
+# news and quotes; Task to fan out to analyst subagents; TodoWrite for the
+# skills that track multi-step progress. Override with the ALLOWED_TOOLS env var.
+_ALLOWED_TOOLS: str = os.environ.get(
+    "TRADE_PLAN_ALLOWED_TOOLS",
+    "Bash,Read,Write,Edit,Glob,Grep,WebSearch,WebFetch,Task,TodoWrite",
+)
+
 _JOBS: dict[str, "Job"] = {}
 _JOBS_LOCK = asyncio.Lock()
 _SEMAPHORE: Optional[asyncio.Semaphore] = None
@@ -317,12 +328,21 @@ async def _run_job(job_id: str, skill_name: str, ticker: str, timeframe: Optiona
     # `--output-format json` makes the CLI emit a single envelope on stdout with
     # usage/cost/duration fields. The HTML still gets written to disk by the skill
     # itself, so file detection (snapshot diff below) is unaffected.
+    #
+    # Instead of `--permission-mode bypassPermissions` (which auto-approves every
+    # tool, so a prompt-injected run could do anything), we pass an explicit
+    # allowlist of exactly what the trade-plan / trade-* skills need: run the
+    # bundled Python selector scripts, read/write the report files, fetch market
+    # data over the web, and fan out to subagents. Tools outside this list are
+    # denied (there is no interactive approver in `-p` mode).
+    #
+    # The prompt goes in via stdin, NOT as a trailing positional: `--allowed-tools`
+    # is variadic and would otherwise swallow the prompt as another tool name.
     cmd = [
         _CLAUDE_BIN, "-p",
         "--model", model,
         "--output-format", "json",
-        "--permission-mode", "bypassPermissions",
-        prompt,
+        "--allowed-tools", _ALLOWED_TOOLS,
     ]
 
     # Strip ANTHROPIC_API_KEY so the subprocess falls back to the host's
@@ -336,13 +356,14 @@ async def _run_job(job_id: str, skill_name: str, ticker: str, timeframe: Optiona
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 cwd=config.PROJECT_ROOT,
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=sub_env,
             )
             try:
                 stdout_b, stderr_b = await asyncio.wait_for(
-                    proc.communicate(), timeout=config.CLAUDE_CLI_TIMEOUT_SEC
+                    proc.communicate(input=prompt.encode()), timeout=config.CLAUDE_CLI_TIMEOUT_SEC
                 )
             except asyncio.TimeoutError:
                 proc.kill()

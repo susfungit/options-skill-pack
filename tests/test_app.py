@@ -1018,3 +1018,67 @@ def test_build_prompt_options_trade_plan_backward_compat():
     assert "$500k" in prompt
     assert "neutral" in prompt
     assert "trade_plan_AAPL_2026-05-16.html" in prompt
+
+
+# ── Auth (P1 security fixes) ────────────────────────────────────────────────
+
+_TEST_KEY = "test-secret-key"
+
+
+@pytest.fixture
+def auth_client(monkeypatch):
+    """A TestClient with auth enabled. Patches both the auth module global and
+    main.py's imported snapshot of it."""
+    monkeypatch.setattr("app.auth._APP_API_KEY", _TEST_KEY)
+    monkeypatch.setattr("app.main._APP_API_KEY", _TEST_KEY)
+    from app.main import app
+    from fastapi.testclient import TestClient
+    return TestClient(app)
+
+
+def test_index_grants_no_session(auth_client):
+    """Loading / must NOT mint a session cookie (the old auth-bypass bug)."""
+    resp = auth_client.get("/")
+    assert resp.status_code == 200
+    assert "osp_session" not in resp.cookies
+    assert "set-cookie" not in {k.lower() for k in resp.headers}
+
+
+def test_protected_route_requires_login(auth_client):
+    """/api/profile is 401 without auth, 200 only after POST /api/login."""
+    # No credentials → blocked.
+    assert auth_client.get("/api/profile").status_code == 401
+
+    # Wrong key → login rejected, still blocked.
+    bad = auth_client.post("/api/login", headers={"Authorization": "Bearer wrong"})
+    assert bad.status_code == 401
+    assert auth_client.get("/api/profile").status_code == 401
+
+    # Correct key → login succeeds, cookie set, route now reachable.
+    ok = auth_client.post("/api/login", headers={"Authorization": f"Bearer {_TEST_KEY}"})
+    assert ok.status_code == 200
+    assert "osp_session" in ok.cookies
+    assert auth_client.get("/api/profile").status_code == 200
+
+
+def test_bearer_key_authenticates_directly(auth_client):
+    """A valid bearer key on a protected route works without a prior login."""
+    resp = auth_client.get("/api/profile", headers={"Authorization": f"Bearer {_TEST_KEY}"})
+    assert resp.status_code == 200
+
+
+def test_host_header_trick_does_not_bypass_auth(auth_client):
+    """A crafted Host header can't make a protected route look like /static."""
+    resp = auth_client.get("/api/profile", headers={"Host": "testserver/static"})
+    assert resp.status_code == 401
+
+
+def test_auth_status_reports_state(auth_client):
+    """/api/auth/status is public and reflects whether the caller is logged in."""
+    before = auth_client.get("/api/auth/status")
+    assert before.status_code == 200
+    assert before.json() == {"auth_required": True, "authenticated": False}
+
+    auth_client.post("/api/login", headers={"Authorization": f"Bearer {_TEST_KEY}"})
+    after = auth_client.get("/api/auth/status").json()
+    assert after["authenticated"] is True
