@@ -26,6 +26,8 @@ In both cases, extract the TICKER symbol and proceed with the full analysis belo
 
 Use WebSearch to find fundamental data for TICKER. Run multiple targeted searches.
 
+**Search discipline (bounded effort).** Run the six targeted searches below, plus at most 2–3 follow-up searches to fill specific high-value gaps. Do NOT loop indefinitely re-searching for the same metric. If, after these searches, core fundamental data is still unavailable — common for newly-public, recently-listed, or thinly-covered companies (e.g. a name that listed in the last few quarters and has no trailing P/E, no multi-year financials, and no analyst estimates) — STOP gathering immediately. Treat the missing items as explicit data gaps, score those dimensions conservatively per the rules below, and proceed straight to rendering the report. A timely report that names its data gaps is the required outcome; exhaustively hunting for data that does not exist will run past the system time limit and is itself a failure.
+
 **Search 1 — Valuation Metrics**
 Query: `"<TICKER> stock valuation P/E P/S P/B PEG EV/EBITDA 2026"`
 Gather:

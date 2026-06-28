@@ -55,6 +55,9 @@ AUTOMATION_PLAN.md
 MORNING_BRIEF_OPTIMIZATION_PLAN.md
 BRIEF_SCHEDULING_PLAN.md
 
+# Security remediation plan (local dev artifact — never commit)
+SECURITY_FIXES_PLAN.md
+
 # Generated options trade plans (personal analysis output)
 trade-plans/
 

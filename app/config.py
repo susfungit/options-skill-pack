@@ -10,7 +10,10 @@ TRADE_PLANS_DIR = os.path.join(PROJECT_ROOT, "trade-plans")
 ANALYZER_HISTORY_PATH = os.path.join(PROJECT_ROOT, "analyzer_history.json")
 ANALYZER_HISTORY_CAP = 1000
 
-CLAUDE_CLI_TIMEOUT_SEC = int(os.environ.get("CLAUDE_CLI_TIMEOUT_SEC", "600"))
+# 900s headroom: normal analyst runs finish in 140-290s, but data-sparse tickers
+# (e.g. newly-public names with no fundamental history) or several concurrent jobs
+# sharing one Claude subscription's rate limits can stretch a run well past 600s.
+CLAUDE_CLI_TIMEOUT_SEC = int(os.environ.get("CLAUDE_CLI_TIMEOUT_SEC", "900"))
 TRADE_PLAN_MAX_CONCURRENT = int(os.environ.get("TRADE_PLAN_MAX_CONCURRENT", "5"))
 
 DEFAULT_MODEL = "claude-sonnet-4-6"

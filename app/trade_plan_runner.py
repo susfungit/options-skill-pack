@@ -204,7 +204,11 @@ def _build_prompt(skill_name: str, ticker: str, timeframe: Optional[str],
     common_header = (
         f"Use the {skill_name} skill. The ONLY deliverable is a single "
         f"self-contained HTML file at '{out_path}' (path relative to the "
-        f"current working directory). Do not produce any other files."
+        f"current working directory). Do not produce any other files. "
+        f"OUTPUT PATH OVERRIDE: the skill's own instructions may name a different "
+        f"output file (e.g. an UPPERCASE name like TRADE-FUNDAMENTAL-<TICKER>.html "
+        f"in the project root) — IGNORE that. Write ONLY to '{out_path}' and "
+        f"nowhere else."
     )
 
     if rendering == "inline_html":
@@ -373,6 +377,11 @@ async def _run_job(job_id: str, skill_name: str, ticker: str, timeframe: Optiona
     )
 
     if not match:
+        # The skill may have written to the project root under its own hardcoded
+        # filename instead of trade-plans/. Recover it before declaring failure.
+        match = _recover_stray_html(skill_name, ticker, expiry, run_start)
+
+    if not match:
         stdout = (stdout_b or b"").decode("utf-8", errors="replace").strip()
         await _finish(job_id, error="No HTML file produced. " + (stdout[-500:] if stdout else ""))
         return
@@ -445,6 +454,44 @@ async def _finish(job_id: str, output_filename: Optional[str] = None,
 
 def _snapshot(d: Path) -> set[str]:
     return {p.name for p in d.glob("*.html")} if d.exists() else set()
+
+
+def _recover_stray_html(skill_name: str, ticker: str, expiry: Optional[str],
+                        run_start: float) -> Optional[str]:
+    """Recover an analyst HTML that the skill wrote to the project root instead
+    of trade-plans/.
+
+    Some analyst SKILL.md files hardcode an UPPERCASE output filename in the CWD
+    (e.g. TRADE-FUNDAMENTAL-<TICKER>.html). The wrapper prompt overrides that, but
+    the model occasionally follows the skill anyway, leaving the file in the
+    project root where the normal snapshot diff misses it. If that happened, move
+    the stray file into trade-plans/ under the canonical name and return it.
+    Returns None if nothing recoverable is found. Best-effort — never raises.
+    """
+    root = Path(config.PROJECT_ROOT)
+    trade_plans_dir = Path(config.TRADE_PLANS_DIR)
+    try:
+        strays = [
+            p for p in root.glob("*.html")
+            if ticker in p.name.upper() and p.stat().st_mtime >= run_start
+        ]
+    except OSError:
+        return None
+    if not strays:
+        return None
+    src = max(strays, key=lambda p: p.stat().st_mtime)
+    dest = trade_plans_dir / _expected_filename(skill_name, ticker, expiry)
+    try:
+        src.replace(dest)  # atomic on the same filesystem; overwrites a stale dest
+    except OSError as e:
+        logger.warning("Failed to relocate stray %s -> %s: %s", src.name, dest.name, e)
+        return None
+    logger.warning(
+        "Recovered stray analyst HTML written to project root: %s -> trade-plans/%s "
+        "(skill=%s ignored the output-path override)",
+        src.name, dest.name, skill_name,
+    )
+    return dest.name
 
 
 async def list_jobs() -> list[dict]:
